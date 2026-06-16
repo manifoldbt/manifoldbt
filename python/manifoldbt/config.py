@@ -103,7 +103,13 @@ class ExecutionConfig:
 
 
 @dataclass
-class FeeConfig:
+class VenueFees:
+    """Fee schedule for a single venue (exchange).
+
+    The same fields as a flat (single-venue) :class:`FeeConfig`. Used as the
+    value type of :attr:`FeeConfig.per_venue` to express per-exchange fees.
+    """
+
     maker_fee_bps: float = 0.0
     taker_fee_bps: float = 0.0
     funding_rate_column: Optional[str] = None
@@ -121,6 +127,79 @@ class FeeConfig:
             "min_fee": self.min_fee,
             "default_fill_type": self.default_fill_type,
         }
+
+
+@dataclass
+class FeeConfig:
+    """Transaction-cost configuration.
+
+    The flat fields below describe the *default* venue, applied to any symbol
+    not present in ``symbol_venue``. Per-venue fees are opt-in via ``per_venue``
+    (named fee schedules) plus ``symbol_venue`` (which symbol trades where).
+    Single-venue configs are unchanged — leaving ``per_venue``/``symbol_venue``
+    empty serializes to the exact same JSON as before.
+    """
+
+    maker_fee_bps: float = 0.0
+    taker_fee_bps: float = 0.0
+    funding_rate_column: Optional[str] = None
+    borrow_rate_annual_bps: float = 0.0
+    min_fee: float = 0.0
+    default_fill_type: str = "Taker"
+    """Default fill type for fee calculation: "Maker" or "Taker" (conservative)."""
+    per_venue: Dict[str, VenueFees] = field(default_factory=dict)
+    """Named per-venue fee overrides, keyed by venue name (e.g. ``"binance"``)."""
+    symbol_venue: Dict[int, str] = field(default_factory=dict)
+    """Maps a ``SymbolId`` (integer) to the name of the venue it executes on.
+    Symbols absent from this map use the default-venue fields above."""
+
+    def to_json_dict(self) -> dict:
+        d: dict = {
+            "maker_fee_bps": self.maker_fee_bps,
+            "taker_fee_bps": self.taker_fee_bps,
+            "funding_rate_column": self.funding_rate_column,
+            "borrow_rate_annual_bps": self.borrow_rate_annual_bps,
+            "min_fee": self.min_fee,
+            "default_fill_type": self.default_fill_type,
+        }
+        # Emit per-venue keys only when populated so single-venue configs stay
+        # byte-identical to the legacy flat shape (matches Rust serde flatten).
+        if self.per_venue:
+            d["per_venue"] = {
+                name: (v.to_json_dict() if isinstance(v, VenueFees) else dict(v))
+                for name, v in self.per_venue.items()
+            }
+        if self.symbol_venue:
+            d["symbol_venue"] = {
+                str(sid): name for sid, name in self.symbol_venue.items()
+            }
+        return d
+
+    @classmethod
+    def multi_venue(
+        cls,
+        default: Optional[VenueFees] = None,
+        venues: Optional[Dict[str, VenueFees]] = None,
+        symbol_venue: Optional[Dict[int, str]] = None,
+    ) -> "FeeConfig":
+        """Build a per-venue fee config.
+
+        Args:
+            default: Fee schedule for symbols without a venue mapping.
+            venues: Named per-venue fee schedules (e.g. ``{"binance": VenueFees(...)}``).
+            symbol_venue: Maps integer ``SymbolId`` to a venue name in ``venues``.
+        """
+        d = default or VenueFees()
+        return cls(
+            maker_fee_bps=d.maker_fee_bps,
+            taker_fee_bps=d.taker_fee_bps,
+            funding_rate_column=d.funding_rate_column,
+            borrow_rate_annual_bps=d.borrow_rate_annual_bps,
+            min_fee=d.min_fee,
+            default_fill_type=d.default_fill_type,
+            per_venue=venues or {},
+            symbol_venue=symbol_venue or {},
+        )
 
     @classmethod
     def binance_perps(cls) -> "FeeConfig":

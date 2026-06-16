@@ -4,6 +4,8 @@ Simple RSI mean-reversion:
 - RSI computed on Binance BTC perp data
 - Trades executed at dYdX BTC-USD prices
 - Both loaded via universe dict — no special config needed
+- Per-venue fees: each symbol is charged its own exchange's fee schedule
+  (see FeeConfig.multi_venue below)
 
 Prerequisite:
     Binance perp data (bars_1m/201.arrow) + dYdX data (dydx/1h/BTC-USD.arrow)
@@ -59,7 +61,21 @@ config = mbt.BacktestConfig(
     initial_capital=10_000,
     warmup_bars=30,
     execution=mbt.ExecutionConfig(signal_delay=1),
-    fees=mbt.FeeConfig(maker_fee_bps=1.0, taker_fee_bps=2.5),
+    # Per-venue fees: each symbol pays the fee schedule of the exchange it
+    # executes on. Fills happen on dYdX (the execution venue), so the dYdX
+    # taker fee is what actually hits this strategy; the Binance entry is
+    # signal-only. Symbols without a mapping fall back to `default`.
+    fees=mbt.FeeConfig.multi_venue(
+        default=mbt.VenueFees(maker_fee_bps=1.0, taker_fee_bps=2.5),
+        venues={
+            "dydx": mbt.VenueFees(maker_fee_bps=2.0, taker_fee_bps=5.0),
+            "binance": mbt.VenueFees(maker_fee_bps=1.0, taker_fee_bps=2.5),
+        },
+        symbol_venue={
+            "dydx:BTC-USD:perp": "dydx",        # execution venue (fills here)
+            "binance:BTC-USDT:perp": "binance",  # signal source only
+        },
+    ),
     slippage=Slippage.fixed_bps(2),
 )
 

@@ -34,6 +34,7 @@ from manifoldbt.config import (
     ExecutionConfig,
     FeeConfig,
     OrderConfig,
+    VenueFees,
     resolve_universe,
 )
 from manifoldbt.exceptions import (
@@ -108,6 +109,11 @@ def _print_pro_summary() -> None:
 
 import atexit
 atexit.register(_print_pro_summary)
+
+
+def license_info() -> tuple:
+    """Get license info: (tier, email). tier is "Pro" or "Community", email is str or None."""
+    return _license_info()
 
 
 def _is_pro() -> bool:
@@ -269,6 +275,22 @@ def _prepare_config(config: BacktestConfig, strategy, store: DataStore) -> Backt
 
         if cfg.provider and not cfg.signal_source:
             cfg.signal_source = cfg.provider
+
+    # --- Resolve per-venue fee mapping: symbol_venue keys may be symbol names ---
+    # Users key symbol_venue by name (e.g. "dydx:BTC-USD:perp" or "BTC-USDT:perp")
+    # for ergonomics; the engine needs integer SymbolIds. Resolve them here using
+    # the same name→id mapping as the universe.
+    fees = getattr(cfg, "fees", None)
+    if fees is not None and getattr(fees, "symbol_venue", None):
+        resolved_sv = {}
+        for key, venue in fees.symbol_venue.items():
+            if isinstance(key, int):
+                resolved_sv[key] = venue
+            elif cfg.symbol_names and key in cfg.symbol_names:
+                resolved_sv[int(cfg.symbol_names[key])] = venue
+            else:
+                resolved_sv[int(store.resolve_symbol(key))] = venue
+        fees.symbol_venue = resolved_sv
 
     # Merge orders from strategy into execution config
     if strategy and hasattr(strategy, '_orders') and strategy._orders:
@@ -1140,6 +1162,7 @@ __all__ = [
     "BacktestConfig",
     "ExecutionConfig",
     "FeeConfig",
+    "VenueFees",
     "OrderConfig",
     # Helpers
     "date_to_ns",

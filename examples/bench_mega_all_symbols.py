@@ -20,9 +20,12 @@ strategy = (
     .size(mbt.when(trend > 0.0, 0.5, 0.0))
 )
 
-# -- Config: 21 crypto symbols, 3 years, 1h bars --------------------------------
-# SOL (3) starts 2024 only — excluded
-universe = [s for s in range(1, 23) if s != 3]
+# -- Config: all available Binance perp symbols, 3 years, 1h bars -----------------
+universe = {"binance": [
+    "BTC-USDT:perp", "ETH-USDT:perp", "LTC-USDT:perp", "BNB-USDT:perp",
+    "DOT-USDT:perp", "XRP-USDT:perp", "ADA-USDT:perp", "LINK-USDT:perp",
+    "DOGE-USDT:perp", "AVAX-USDT:perp",
+]}
 start, end = time_range("2022-01-01", "2025-01-01")
 
 config = mbt.BacktestConfig(
@@ -56,4 +59,4 @@ elapsed = time.perf_counter() - t0
 print(result.profile_summary())
 print(f"\nWall clock: {elapsed:.3f}s")
 print(f"Trades: {result.trade_count}")
-print(f"Symbols: {len(universe)}")
+print(f"Symbols: {len(universe['binance'])}")
