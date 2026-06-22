@@ -27,6 +27,7 @@ from manifoldbt._native import (
     py_run_stochastic as _run_stochastic_native,
     run_portfolio as _run_portfolio_native,
     py_ingest as _ingest_native,
+    py_import_csv as _import_csv_native,
 )
 from manifoldbt._serde import scalar_value_to_json
 from manifoldbt.config import (
@@ -524,6 +525,54 @@ def ingest(
             display.stop()
 
     return store
+
+
+def import_csv(
+    path: str,
+    symbol: str,
+    symbol_id: int,
+    *,
+    interval: str = "1m",
+    data_root: str = "data",
+    metadata_db: str = "metadata/metadata.sqlite",
+    exchange: str = "CSV",
+    asset_class: str = "crypto_spot",
+) -> DataStore:
+    """Import bars from a CSV file into the Arrow IPC store. Free on all tiers.
+
+    Auto-detects standard (``timestamp,open,high,low,close,volume``),
+    MetaTrader 4, and MetaTrader 5 exports. Returns a :class:`DataStore` ready
+    for :func:`run` — the same store ``bt.ingest`` writes to.
+
+    Example::
+
+        store = bt.import_csv(
+            "EURUSD_1m.csv", symbol="EURUSD", symbol_id=1,
+            interval="1m", asset_class="forex",
+        )
+        result = bt.run(strategy, config, store)
+
+    Args:
+        path: Path to the CSV file (standard / MT4 / MT5 format).
+        symbol: Ticker name (e.g. ``"EURUSD"``, ``"BTCUSDT"``).
+        symbol_id: Unique integer ID for this symbol in the store.
+        interval: Bar interval of the rows (``"1m"``, ``"5m"``, ``"1h"``, ``"1d"``, ...).
+        data_root: Store directory (default ``"data"``).
+        metadata_db: Metadata SQLite path.
+        exchange: Exchange label for metadata (default ``"CSV"``).
+        asset_class: ``crypto_spot``, ``crypto_perp``, ``equity``, ``future``,
+            ``option``, ``forex``, or ``index``.
+    """
+    return _import_csv_native(
+        csv_path=str(path),
+        symbol=symbol,
+        symbol_id=symbol_id,
+        interval=interval,
+        data_root=data_root,
+        metadata_db=metadata_db,
+        exchange=exchange,
+        asset_class=asset_class,
+    )
 
 
 def _ingest_single(
@@ -1135,6 +1184,7 @@ __all__ = [
     "SweepResult",
     # Data ingestion
     "ingest",
+    "import_csv",
     # Run functions
     "run",
     "run_sweep",
