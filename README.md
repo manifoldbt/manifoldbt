@@ -82,7 +82,7 @@ store = mbt.import_csv("EURUSD_1m.csv", symbol="EURUSD", symbol_id=1,
                        interval="1m", asset_class="forex")
 ```
 
-**Exchange connectors** — Binance, Hyperliquid, dYdX, Bitstamp (free); Databento, Massive (Pro):
+**Exchange connectors** — Binance, Bybit, Hyperliquid, dYdX, Bitstamp (free); Databento, Massive (Pro):
 
 ```python
 store = mbt.ingest(provider="binance", symbol="BTCUSDT", symbol_id=1,
@@ -146,7 +146,7 @@ Full API reference, indicator list, configuration guide, and best practices:
 | Monte Carlo | 1K sims | Unlimited |
 | Walk-Forward | - | Anchored + Rolling |
 | Parameter Stability | - | Yes |
-| Crypto connectors (Binance, Hyperliquid) | Yes | Yes |
+| Crypto connectors (Binance, Bybit, Hyperliquid) | Yes | Yes |
 | Databento & Massive connectors | - | Yes |
 | Safety checks (lookahead, exposure) | - | Yes |
 | Tearsheets & export | - | Yes |
