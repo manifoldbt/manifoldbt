@@ -217,6 +217,9 @@ def tearsheet(
     Returns the HTML string. Opens in browser when ``show=True``,
     writes to disk when ``save`` is given.
     """
+    from manifoldbt import _require_pro
+    _require_pro("Tearsheets & export")
+
     _ = benchmark  # reserved for future benchmark overlay support
     strategy_name = title or auto_title(result, "Backtest")
     metrics = result.metrics if hasattr(result, "metrics") else {}

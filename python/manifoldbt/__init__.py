@@ -135,14 +135,6 @@ def _require_pro(feature: str) -> None:
     raise SystemExit(0)
 
 
-def _gate_pro(feature: str) -> bool:
-    """Check Pro license. Returns True if Pro, False if Community (with warning)."""
-    if _is_pro():
-        return True
-    _warn_pro(feature)
-    return False
-
-
 def _classify_error(exc: Exception) -> Exception:
     """Wrap a Rust ValueError/RuntimeError in a more specific exception."""
     msg = str(exc)
@@ -814,8 +806,10 @@ def run_walk_forward(
     Returns:
         Dict with ``folds`` and ``best_params_per_fold``.
     """
-    if not _gate_pro("Walk-forward optimization"):
-        return {"folds": [], "best_params_per_fold": []}
+    # Pro gate (friendly message + clean exit). Real enforcement lives natively
+    # in `py_run_walk_forward` (check_feature("walk_forward")), so this cannot be
+    # bypassed by calling the native function directly.
+    _require_pro("Walk-forward optimization")
     config = _prepare_config(config, strategy, store)
     wf_json = json.dumps(_convert_param_grid_in_config(wf_config))
     return _run_walk_forward_native(strategy.to_json(), wf_json, config.to_json(), store)

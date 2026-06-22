@@ -9,6 +9,9 @@ import numpy as np
 
 _EMPTY_TS = np.array([], dtype="datetime64[ns]")
 
+# Pro-gated feature label (see _require_pro). Single source to avoid drift.
+_SAFETY_PRO_FEATURE = "Safety checks (lookahead, exposure)"
+
 
 @dataclass
 class LookaheadReport:
@@ -277,6 +280,9 @@ def detect_lookahead(
     Returns:
         DiagnosticsResult with ``.passed``, ``.assert_clean()``, ``print()``.
     """
+    from manifoldbt import _require_pro
+    _require_pro(_SAFETY_PRO_FEATURE)
+
     from manifoldbt.plot._convert import trades_arrays
     from manifoldbt._native import (
         load_and_align as _load_and_align,
@@ -509,6 +515,9 @@ def risk_check(
         print(report)
         report.assert_clean()
     """
+    from manifoldbt import _require_pro
+    _require_pro(_SAFETY_PRO_FEATURE)
+
     from manifoldbt.plot._convert import positions_arrays
 
     pos = positions_arrays(result)
@@ -796,6 +805,9 @@ def check_exposure_stability(
         print(report)
         report.assert_clean()
     """
+    from manifoldbt import _require_pro
+    _require_pro(_SAFETY_PRO_FEATURE)
+
     from manifoldbt._native import (
         load_and_align as _load_and_align,
         run_on_aligned as _run_on_aligned,
