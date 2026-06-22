@@ -70,6 +70,32 @@ result = mbt.run(strategy, config, store)
 print(result.summary())
 ```
 
+## Loading data
+
+Bring your own data, or pull it from a built-in connector — both return a
+`DataStore` ready for `mbt.run(...)`.
+
+**CSV** — free on all tiers, auto-detects standard / MetaTrader 4 / MetaTrader 5:
+
+```python
+store = mbt.import_csv("EURUSD_1m.csv", symbol="EURUSD", symbol_id=1,
+                       interval="1m", asset_class="forex")
+```
+
+**Exchange connectors** — Binance, Hyperliquid, dYdX, Bitstamp (free); Databento, Massive (Pro):
+
+```python
+store = mbt.ingest(provider="binance", symbol="BTCUSDT", symbol_id=1,
+                   start="2024-01-01T00:00:00Z", end="2025-01-01T00:00:00Z")
+```
+
+Or from the CLI:
+
+```bash
+manifoldbt import-csv data.csv --symbol EURUSD --symbol-id 1 --interval 1m
+manifoldbt ingest --provider binance --symbol BTCUSDT --symbol-id 1 --start ... --end ...
+```
+
 ## Examples
 
 | # | Example | What it shows |
@@ -86,6 +112,13 @@ print(result.summary())
 | 09 | [3D Surface](examples/09_surface_3d.py) | Parameter surface plot |
 | 10 | [Monte Carlo](examples/10_monte_carlo.py) | Permutation-based robustness |
 | 11 | [Portfolio](examples/11_portfolio.py) | Multi-strategy portfolio |
+| 12 | [Diagnostics](examples/12_diagnostics.py) | Lookahead & exposure safety checks |
+| 13 | [Stochastic Simulation](examples/13_stochastic_simulation.py) | SDE path simulation (GBM, Heston, …) |
+| 14 | [Multi-Timeframe](examples/14_multi_timeframe.py) | Combining signals across timeframes |
+| 15 | [Cross-Exchange](examples/15_cross_exchange.py) | Signal on one venue, execute on another |
+| 16 | [Exogenous Data](examples/16_hashrate_exogene.py) | External series (e.g. hashrate) as a signal |
+| 17 | [Per-Venue Fees](examples/17_per_venue_fees.py) | Per-venue funding & borrow costs |
+| 18 | [CSV Import](examples/18_csv_import.py) | Load OHLCV from CSV (standard / MT4 / MT5) |
 
 ## Performance
 
