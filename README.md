@@ -6,7 +6,8 @@
 <p align="center">
   <a href="https://www.manifoldbt.com">Website</a> &middot;
   <a href="https://www.manifoldbt.com/docs/documentation.html">Documentation</a> &middot;
-  <a href="examples/">Examples</a>
+  <a href="examples/">Examples</a> &middot;
+  <a href="https://discord.gg/bvU6Wjc72d">Discord</a>
 </p>
 
 ---
@@ -65,7 +66,8 @@ config = mbt.BacktestConfig(
     warmup_bars=30,
 )
 
-store = mbt.DataStore(data_root="data", metadata_db="metadata/metadata.sqlite")
+store = mbt.ingest(provider="binance", symbol="BTCUSDT", symbol_id=1,
+                   start="2022-01-01T00:00:00Z", end="2025-01-01T00:00:00Z", interval="1h")
 result = mbt.run(strategy, config, store)
 print(result.summary())
 ```
