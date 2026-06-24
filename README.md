@@ -1,4 +1,8 @@
 <p align="center">
+  <img src="assets/logo.png" width="110" alt="ManifoldBT logo">
+</p>
+
+<p align="center">
   <strong>ManifoldBT</strong><br>
   Rust-powered backtesting engine for quantitative research
 </p>
