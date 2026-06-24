@@ -8,10 +8,13 @@
 </p>
 
 <p align="center">
+  <a href="https://discord.gg/bvU6Wjc72d"><img src="https://img.shields.io/badge/Discord-join%20the%20community-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
+</p>
+
+<p align="center">
   <a href="https://www.manifoldbt.com">Website</a> &middot;
   <a href="https://www.manifoldbt.com/docs/documentation.html">Documentation</a> &middot;
-  <a href="examples/">Examples</a> &middot;
-  <a href="https://discord.gg/bvU6Wjc72d">Discord</a>
+  <a href="examples/">Examples</a>
 </p>
 
 ---
