@@ -744,6 +744,7 @@ def run_sweep_lite(
     store: DataStore,
     *,
     max_parallelism: int = 0,
+    device: str = "cpu",
 ) -> List["BatchResultLite"]:
     """Run a parameter sweep returning only metrics (no Arrow output).
 
@@ -756,6 +757,14 @@ def run_sweep_lite(
         config: Backtest configuration.
         store: Data store.
         max_parallelism: Maximum threads. 0 = all available cores.
+        device: ``"cpu"`` (default) or ``"cuda"``/``"gpu"``. The GPU path
+            accelerates single-asset, AtClose + FixedBps sweeps and produces
+            results numerically identical to the CPU path. **Pro-only**: a
+            Community license raises ``PermissionError`` for ``device="cuda"``
+            (Community keeps the full-speed CPU sweep with no restriction).
+            Requires a build with ``--features cuda`` and a CUDA device; for any
+            unsupported strategy/config (or when no GPU is present at runtime) it
+            silently falls back to the CPU sweep, so results are never affected.
 
     Returns:
         One :class:`BatchResultLite` per combo (Cartesian product order).
@@ -774,6 +783,7 @@ def run_sweep_lite(
             cfg.to_json(),
             store,
             max_parallelism,
+            device,
         )
     except (ValueError, RuntimeError) as exc:
         raise _classify_error(exc) from exc
