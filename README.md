@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo.png" width="110" alt="ManifoldBT logo">
+  <img src="https://raw.githubusercontent.com/Jimmy7892/manifoldbt/master/assets/logo.png" width="110" alt="ManifoldBT logo">
 </p>
 
 <p align="center">
@@ -14,7 +14,7 @@
 <p align="center">
   <a href="https://www.manifoldbt.com">Website</a> &middot;
   <a href="https://www.manifoldbt.com/docs/documentation.html">Documentation</a> &middot;
-  <a href="examples/">Examples</a>
+  <a href="https://github.com/Jimmy7892/manifoldbt/tree/master/examples">Examples</a>
 </p>
 
 ---
@@ -109,25 +109,25 @@ manifoldbt ingest --provider binance --symbol BTCUSDT --symbol-id 1 --start ... 
 
 | # | Example | What it shows |
 |---|---------|---------------|
-| 00 | [Template](examples/00_template.py) | Minimal starting point |
-| 01 | [Trend Following](examples/01_trend_following.py) | EMA crossover, volume filter, stop-loss |
-| 02 | [Mean Reversion](examples/02_mean_reversion.py) | EMA crossover with parameter sweep |
-| 03 | [Multi-Asset Momentum](examples/03_multi_asset_momentum.py) | Cross-asset signals |
-| 04 | [Linear Regression](examples/04_linear_regression.py) | Regression-based signal |
-| 05 | [Statistical Arbitrage](examples/05_stat_arb.py) | Pairs trading, spread z-score |
-| 06 | [Full Visualization](examples/06_full_visualization.py) | Tearsheet and charts |
-| 07 | [Walk-Forward](examples/07_walk_forward.py) | Out-of-sample validation |
-| 08 | [2D Sweep](examples/08_sweep_2d_heatmap.py) | Parameter grid heatmap |
-| 09 | [3D Surface](examples/09_surface_3d.py) | Parameter surface plot |
-| 10 | [Monte Carlo](examples/10_monte_carlo.py) | Permutation-based robustness |
-| 11 | [Portfolio](examples/11_portfolio.py) | Multi-strategy portfolio |
-| 12 | [Diagnostics](examples/12_diagnostics.py) | Lookahead & exposure safety checks |
-| 13 | [Stochastic Simulation](examples/13_stochastic_simulation.py) | SDE path simulation (GBM, Heston, …) |
-| 14 | [Multi-Timeframe](examples/14_multi_timeframe.py) | Combining signals across timeframes |
-| 15 | [Cross-Exchange](examples/15_cross_exchange.py) | Signal on one venue, execute on another |
-| 16 | [Exogenous Data](examples/16_hashrate_exogene.py) | External series (e.g. hashrate) as a signal |
-| 17 | [Per-Venue Fees](examples/17_per_venue_fees.py) | Per-venue funding & borrow costs |
-| 18 | [CSV Import](examples/18_csv_import.py) | Load OHLCV from CSV (standard / MT4 / MT5) |
+| 00 | [Template](https://github.com/Jimmy7892/manifoldbt/blob/master/examples/00_template.py) | Minimal starting point |
+| 01 | [Trend Following](https://github.com/Jimmy7892/manifoldbt/blob/master/examples/01_trend_following.py) | EMA crossover, volume filter, stop-loss |
+| 02 | [Mean Reversion](https://github.com/Jimmy7892/manifoldbt/blob/master/examples/02_mean_reversion.py) | EMA crossover with parameter sweep |
+| 03 | [Multi-Asset Momentum](https://github.com/Jimmy7892/manifoldbt/blob/master/examples/03_multi_asset_momentum.py) | Cross-asset signals |
+| 04 | [Linear Regression](https://github.com/Jimmy7892/manifoldbt/blob/master/examples/04_linear_regression.py) | Regression-based signal |
+| 05 | [Statistical Arbitrage](https://github.com/Jimmy7892/manifoldbt/blob/master/examples/05_stat_arb.py) | Pairs trading, spread z-score |
+| 06 | [Full Visualization](https://github.com/Jimmy7892/manifoldbt/blob/master/examples/06_full_visualization.py) | Tearsheet and charts |
+| 07 | [Walk-Forward](https://github.com/Jimmy7892/manifoldbt/blob/master/examples/07_walk_forward.py) | Out-of-sample validation |
+| 08 | [2D Sweep](https://github.com/Jimmy7892/manifoldbt/blob/master/examples/08_sweep_2d_heatmap.py) | Parameter grid heatmap |
+| 09 | [3D Surface](https://github.com/Jimmy7892/manifoldbt/blob/master/examples/09_surface_3d.py) | Parameter surface plot |
+| 10 | [Monte Carlo](https://github.com/Jimmy7892/manifoldbt/blob/master/examples/10_monte_carlo.py) | Permutation-based robustness |
+| 11 | [Portfolio](https://github.com/Jimmy7892/manifoldbt/blob/master/examples/11_portfolio.py) | Multi-strategy portfolio |
+| 12 | [Diagnostics](https://github.com/Jimmy7892/manifoldbt/blob/master/examples/12_diagnostics.py) | Lookahead & exposure safety checks |
+| 13 | [Stochastic Simulation](https://github.com/Jimmy7892/manifoldbt/blob/master/examples/13_stochastic_simulation.py) | SDE path simulation (GBM, Heston, …) |
+| 14 | [Multi-Timeframe](https://github.com/Jimmy7892/manifoldbt/blob/master/examples/14_multi_timeframe.py) | Combining signals across timeframes |
+| 15 | [Cross-Exchange](https://github.com/Jimmy7892/manifoldbt/blob/master/examples/15_cross_exchange.py) | Signal on one venue, execute on another |
+| 16 | [Exogenous Data](https://github.com/Jimmy7892/manifoldbt/blob/master/examples/16_hashrate_exogene.py) | External series (e.g. hashrate) as a signal |
+| 17 | [Per-Venue Fees](https://github.com/Jimmy7892/manifoldbt/blob/master/examples/17_per_venue_fees.py) | Per-venue funding & borrow costs |
+| 18 | [CSV Import](https://github.com/Jimmy7892/manifoldbt/blob/master/examples/18_csv_import.py) | Load OHLCV from CSV (standard / MT4 / MT5) |
 
 ## Performance
 
@@ -164,4 +164,4 @@ Full API reference, indicator list, configuration guide, and best practices:
 
 Apache 2.0 with Commons Clause. The source is available, free to use,
 modify and self-host. Reselling the software or offering it as a paid
-hosted service is not permitted. See [LICENSE](LICENSE) for the full text.
+hosted service is not permitted. See [LICENSE](https://github.com/Jimmy7892/manifoldbt/blob/master/LICENSE) for the full text.

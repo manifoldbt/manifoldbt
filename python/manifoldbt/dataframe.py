@@ -98,8 +98,15 @@ def arrow_to_series(
     if backend == "polars":
         import polars as pl
 
-        if hasattr(array, "to_pylist"):
-            return pl.Series(name=name, values=array.to_pylist())
+        try:
+            import pyarrow as pa
+        except ImportError:
+            pa = None
+        # Zero-copy: hand the Arrow buffers straight to polars instead of boxing
+        # every value into a Python object via to_pylist() (copies the whole
+        # column). pl.from_arrow shares the underlying buffers.
+        if pa is not None and isinstance(array, (pa.Array, pa.ChunkedArray)):
+            return pl.from_arrow(array).rename(name)
         return pl.Series(name=name, values=list(array))
 
     return array

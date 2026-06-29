@@ -13,6 +13,27 @@ _EMPTY_TS = np.array([], dtype="datetime64[ns]")
 _SAFETY_PRO_FEATURE = "Safety checks (lookahead, exposure)"
 
 
+def _prepare_for_diagnostics(config, strategy, store):
+    """Mirror ``run()``'s config/store preparation for the diagnostics path.
+
+    ``run()`` resolves the config and store before serializing
+    (``_cap_output_resolution`` -> ``_resolve_store`` -> ``_prepare_config``).
+    Diagnostics must do the same: in particular a dict ``universe`` has to be
+    resolved to a ``List[SymbolId]`` first, otherwise ``config.to_json()`` emits
+    a JSON map and the Rust loader rejects it ("invalid type: map, expected a
+    sequence"). Returns the prepared ``(config, store)``.
+    """
+    from manifoldbt import (
+        _cap_output_resolution,
+        _resolve_store,
+        _prepare_config,
+    )
+    config = _cap_output_resolution(config)
+    store = _resolve_store(config, store)
+    config = _prepare_config(config, strategy, store)
+    return config, store
+
+
 @dataclass
 class LookaheadReport:
     """Result of a single look-ahead bias test."""
@@ -288,6 +309,10 @@ def detect_lookahead(
         load_and_align as _load_and_align,
         run_on_aligned as _run_on_aligned,
     )
+
+    # Resolve config/store exactly like run() (notably dict universe -> ids),
+    # otherwise config.to_json() emits a map the Rust loader rejects.
+    config, store = _prepare_for_diagnostics(config, strategy, store)
 
     period = config.time_range_end - config.time_range_start
 
@@ -812,6 +837,10 @@ def check_exposure_stability(
         load_and_align as _load_and_align,
         run_on_aligned as _run_on_aligned,
     )
+
+    # Resolve config/store exactly like run() (notably dict universe -> ids),
+    # otherwise config.to_json() emits a map the Rust loader rejects.
+    config, store = _prepare_for_diagnostics(config, strategy, store)
 
     period = config.time_range_end - config.time_range_start
 

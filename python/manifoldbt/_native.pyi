@@ -5,9 +5,17 @@ import pyarrow as pa
 
 
 class DataStore:
-    """Parquet data store with SQLite metadata."""
+    """Bar data store (Parquet by default, or Arrow IPC via ``arrow_dir``) with SQLite metadata."""
 
-    def __init__(self, data_root: str, metadata_db: str = "metadata/metadata.sqlite") -> None: ...
+    def __init__(
+        self,
+        data_root: str,
+        metadata_db: str = "metadata/metadata.sqlite",
+        dataset: str = "bars_1m",
+        mega: Optional[str] = None,
+        arrow_dir: Optional[str] = None,
+    ) -> None: ...
+    def dataset(self) -> str: ...
     def data_root(self) -> str: ...
     def metadata_db(self) -> str: ...
     def active_version(self, dataset: str) -> str: ...
