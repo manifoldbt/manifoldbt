@@ -1,7 +1,7 @@
 """manifoldbt: Fast research backtesting with Rust core + Python DSL."""
 import copy
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import importlib as _importlib
 
@@ -158,13 +158,36 @@ _AC_SUFFIX_MAP = {
     "index": "Index",
 }
 
+# Symbol-name resolution is a pure function of (metadata_db, provider, name):
+# SymbolIds are static once registered, so the (name→id) mapping never changes
+# for a given metadata DB within a process. Every run()/run_sweep() call used to
+# re-resolve — opening a fresh sqlite3 connection per symbol (~0.27ms each, i.e.
+# the dominant slice of the per-call Python floor, and ~Nx that for an N-symbol
+# universe). Memoising it collapses that to a dict hit. The DB path is part of
+# the key so two stores on different metadata DBs never collide.
+_RESOLVE_CACHE: Dict[Tuple[Any, str, str], int] = {}
+
+
 def _resolve_normalized(sym: str, provider: str, store) -> int:
     """Resolve a normalized symbol name like 'BTC-USDT:perp' on a provider to SymbolId.
 
     Tries: 1) normalized parse → metadata lookup by (base, quote, asset_class, provider)
            2) fallback to raw ticker match
+
+    Result is memoised per (metadata_db, provider, name) — see ``_RESOLVE_CACHE``.
     """
-    import sqlite3, os
+    import sqlite3
+
+    try:
+        meta_db = store.metadata_db()
+    except Exception:
+        meta_db = None
+
+    ckey = (meta_db, provider, sym) if meta_db is not None else None
+    if ckey is not None:
+        cached = _RESOLVE_CACHE.get(ckey)
+        if cached is not None:
+            return cached
 
     # Parse normalized name: "BTC-USDT:perp" → base=BTC, quote=USDT, ac=CryptoPerpetual
     if ":" in sym:
@@ -178,9 +201,9 @@ def _resolve_normalized(sym: str, provider: str, store) -> int:
     else:
         base, quote = pair, ""
 
-    if ac_db:
+    resolved = None
+    if ac_db and meta_db is not None:
         # Try metadata lookup by (base, quote, asset_class, provider)
-        meta_db = store.metadata_db()
         conn = sqlite3.connect(meta_db)
         row = conn.execute(
             "SELECT id FROM symbols WHERE base_currency=? COLLATE NOCASE "
@@ -190,16 +213,21 @@ def _resolve_normalized(sym: str, provider: str, store) -> int:
         ).fetchone()
         conn.close()
         if row:
-            return row[0]
+            resolved = row[0]
 
-    # Fallback: try raw ticker match
-    try:
-        return store.resolve_symbol(sym)
-    except Exception:
-        raise ValueError(
-            f"Symbol '{sym}' not found on provider '{provider}'. "
-            f"Searched: base={base}, quote={quote}, class={ac_db}"
-        )
+    if resolved is None:
+        # Fallback: try raw ticker match
+        try:
+            resolved = store.resolve_symbol(sym)
+        except Exception:
+            raise ValueError(
+                f"Symbol '{sym}' not found on provider '{provider}'. "
+                f"Searched: base={base}, quote={quote}, class={ac_db}"
+            )
+
+    if ckey is not None:
+        _RESOLVE_CACHE[ckey] = resolved
+    return resolved
 
 
 def _resolve_source_dict(source, store):
