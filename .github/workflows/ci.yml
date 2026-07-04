@@ -1,0 +1,44 @@
+name: CI
+
+# Verifies the published package layout on every push and PR: this repository
+# ships the Python package, its docs and assets, and nothing else. Anything
+# outside the expected set of file types is flagged so stray artefacts do not
+# make it into a release.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify package layout
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check file types
+        run: |
+          set -e
+          # Expected file types for the Python package, its docs and assets.
+          allowed='py|pyi|typed|md|txt|rst|toml|cfg|ini|yml|yaml|json|csv|png|jpg|jpeg|gif|svg|ico|webp|html|css|js|ipynb|sh|in'
+          allowed_names='LICENSE|NOTICE|AUTHORS|CHANGELOG|Makefile'
+          flag="$RUNNER_TEMP/unexpected"; : > "$flag"
+          find . -path ./.git -prune -o -type f -print | sed 's|^\./||' | while IFS= read -r f; do
+            b=${f##*/}
+            case "$b" in .*) continue ;; esac                 # dotfiles are fine
+            case "$b" in
+              *.*) printf '%s' "${b##*.}" | grep -qiE "^($allowed)$" && continue ;;
+              *)   printf '%s' "$b"       | grep -qE  "^($allowed_names)$" && continue ;;
+            esac
+            printf '%s\n' "$f" >> "$flag"
+          done
+          if [ -s "$flag" ]; then
+            echo "::error::Unexpected file types in the published package (Python package, docs and assets expected)."
+            cat "$flag"
+            exit 1
+          fi
+          echo "OK: package layout verified."
