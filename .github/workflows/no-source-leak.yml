@@ -1,0 +1,40 @@
+name: No source leak
+
+# Safety net for the PUBLIC mirror (github.com/Jimmy7892/manifoldbt).
+# This repository must only ever contain the pure-Python package: the Rust
+# engine source lives in the private repo and is NEVER published here. This
+# workflow fails loudly if any Rust artefact appears on ANY branch or PR, so an
+# accidental direct push of private source is caught immediately instead of
+# lingering as a leak. It is deployed only in the public repo (it would fail by
+# design in the private one); the sync workflow never overwrites .github/, so it
+# persists across releases. If the public repo is ever recreated, re-add it.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    name: Reject Rust source
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fail if any Rust source is present
+        run: |
+          set -e
+          rust_files="$(find . -path ./.git -prune -o -type f \
+            \( -name '*.rs' -o -name 'Cargo.toml' -o -name 'Cargo.lock' \) -print)"
+          crates_dirs="$(find . -path ./.git -prune -o -type d -name crates -print)"
+          if [ -n "${rust_files}${crates_dirs}" ]; then
+            echo "::error::Rust source detected in the PUBLIC repo. This mirror is Python-only; the engine source must never be published here."
+            echo "----- offending paths -----"
+            [ -n "$rust_files" ]  && echo "$rust_files"
+            [ -n "$crates_dirs" ] && echo "$crates_dirs"
+            exit 1
+          fi
+          echo "OK: no Rust source, no crates/ directory, no Cargo manifest in the public tree."
