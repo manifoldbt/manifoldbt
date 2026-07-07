@@ -246,6 +246,10 @@ class BacktestConfig:
     rng_seed: Optional[int] = None
     trading_days_per_year: float = 365.25
     """Annualisation factor: 365.25 for crypto/futures, 252 for equities."""
+    risk_free_rate: float = 0.0
+    """Annual risk-free rate used in Sharpe/Sortino (excess return). Default 0.0
+    = raw Sharpe (consistent with raptorbt/vectorbt and most reporting). Set a
+    non-zero rate (e.g. 0.025) for an excess-return Sharpe."""
     output_resolution: Any = None
     """Downsample output timeseries (equity, positions).
     None = auto (uses resample_to if set, else bar_interval; min 1h).
@@ -313,6 +317,7 @@ class BacktestConfig:
             "data_version": self.data_version,
             "rng_seed": self.rng_seed,
             "trading_days_per_year": self.trading_days_per_year,
+            "risk_free_rate": self.risk_free_rate,
         }
         if self.output_resolution is not None:
             d["output_resolution"] = self.output_resolution

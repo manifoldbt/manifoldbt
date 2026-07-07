@@ -251,6 +251,43 @@ def _resolve_source_dict(source, store):
     return None
 
 
+# _prepare_config() deepcopies the user's config (so it is never mutated) and
+# re-resolves every name on each call. Both are pure functions of the config
+# CONTENT, the strategy's order overrides and the store's metadata DB, so the
+# prepared JSON is memoised on that content fingerprint — same pattern as
+# _RESOLVE_CACHE (content keys, never object identity/heap address). The
+# deepcopy alone is ~75us per call, the dominant slice of the per-call Python
+# floor on small backtests.
+_PREPARED_CFG_CACHE: Dict[Tuple[str, str, Any], str] = {}
+_PREPARED_CFG_CACHE_MAX = 256
+
+
+def _prepared_config_json(config: BacktestConfig, strategy, store: DataStore) -> str:
+    """Content-memoised equivalent of ``_prepare_config(...).to_json()``."""
+    try:
+        meta_db = store.metadata_db()
+    except Exception:
+        meta_db = None
+    if meta_db is None:
+        return _prepare_config(config, strategy, store).to_json()
+
+    orders = getattr(strategy, "_orders", None) if strategy is not None else None
+    try:
+        orders_key = json.dumps(orders, sort_keys=True, default=str) if orders else ""
+        key = (config.to_json(), orders_key, meta_db)
+    except (TypeError, ValueError):
+        # Unserialisable config content — skip memoisation, never fail.
+        return _prepare_config(config, strategy, store).to_json()
+
+    cached = _PREPARED_CFG_CACHE.get(key)
+    if cached is None:
+        cached = _prepare_config(config, strategy, store).to_json()
+        if len(_PREPARED_CFG_CACHE) >= _PREPARED_CFG_CACHE_MAX:
+            _PREPARED_CFG_CACHE.clear()
+        _PREPARED_CFG_CACHE[key] = cached
+    return cached
+
+
 def _prepare_config(config: BacktestConfig, strategy, store: DataStore) -> BacktestConfig:
     """Prepare config for execution: resolve symbols, convert deprecated fields."""
     cfg = copy.deepcopy(config)
@@ -642,8 +679,8 @@ def run(
     try:
         config = _cap_output_resolution(config)
         store = _resolve_store(config, store)
-        cfg = _prepare_config(config, strategy, store)
-        raw = _run_native(strategy.to_json(), cfg.to_json(), store)
+        cfg_json = _prepared_config_json(config, strategy, store)
+        raw = _run_native(strategy.to_json(), cfg_json, store)
         return Result(raw)
     except (ValueError, RuntimeError) as exc:
         raise _classify_error(exc) from exc
@@ -674,7 +711,7 @@ def run_sweep(
     try:
         config = _cap_output_resolution(config)
         store = _resolve_store(config, store)
-        cfg = _prepare_config(config, strategy, store)
+        cfg_json = _prepared_config_json(config, strategy, store)
         grid_json = json.dumps({
             name: [scalar_value_to_json(v) for v in values]
             for name, values in param_grid.items()
@@ -682,7 +719,7 @@ def run_sweep(
         raw_results = _run_sweep_native(
             strategy.to_json(),
             grid_json,
-            cfg.to_json(),
+            cfg_json,
             store,
             max_parallelism,
         )
@@ -800,7 +837,7 @@ def run_sweep_lite(
     try:
         config = _cap_output_resolution(config)
         store = _resolve_store(config, store)
-        cfg = _prepare_config(config, strategy, store)
+        cfg_json = _prepared_config_json(config, strategy, store)
         grid_json = json.dumps({
             name: [scalar_value_to_json(v) for v in values]
             for name, values in param_grid.items()
@@ -808,7 +845,7 @@ def run_sweep_lite(
         return _run_sweep_lite_native(
             strategy.to_json(),
             grid_json,
-            cfg.to_json(),
+            cfg_json,
             store,
             max_parallelism,
             device,

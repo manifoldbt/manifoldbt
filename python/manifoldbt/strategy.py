@@ -63,6 +63,8 @@ class Strategy:
         self._constraints = constraints or []
         self._description = description
         self._orders: Optional[Dict[str, Any]] = None
+        # Memoised to_json() (invalidated by every builder mutation below).
+        self._json_cache: Optional[str] = None
 
     # ------------------------------------------------------------------
     # Fluent builder API
@@ -81,11 +83,13 @@ class Strategy:
     def signal(self, name: str, expr: Expr) -> "Strategy":
         """Add a named signal expression (returns self for chaining)."""
         self.signals[name] = expr
+        self._json_cache = None
         return self
 
     def size(self, expr: Expr) -> "Strategy":
         """Set the position sizing expression (returns self for chaining)."""
         self.position_sizing = expr
+        self._json_cache = None
         return self
 
     def param(
@@ -104,6 +108,7 @@ class Strategy:
             description: Human-readable description.
         """
         self._parameters[name] = _param(name, default=default, range=range, description=description)
+        self._json_cache = None
         return self
 
     def stop_loss(self, pct: float) -> "Strategy":
@@ -115,6 +120,7 @@ class Strategy:
         if self._orders is None:
             self._orders = {}
         self._orders["stop_loss"] = {"stop_pct": pct}
+        self._json_cache = None
         return self
 
     def take_profit(self, pct: float) -> "Strategy":
@@ -126,6 +132,7 @@ class Strategy:
         if self._orders is None:
             self._orders = {}
         self._orders["take_profit"] = {"profit_pct": pct}
+        self._json_cache = None
         return self
 
     def trailing_stop(self, pct: float, use_high: bool = True) -> "Strategy":
@@ -138,11 +145,13 @@ class Strategy:
         if self._orders is None:
             self._orders = {}
         self._orders["trailing_stop"] = {"trail_pct": pct, "use_high": use_high}
+        self._json_cache = None
         return self
 
     def describe(self, text: str) -> "Strategy":
         """Set strategy description (returns self for chaining)."""
         self._description = text
+        self._json_cache = None
         return self
 
     @property
@@ -199,5 +208,11 @@ class Strategy:
         }
 
     def to_json(self) -> str:
-        """Serialize to a JSON string matching Rust ``StrategyDef``."""
-        return json.dumps(self.to_json_dict())
+        """Serialize to a JSON string matching Rust ``StrategyDef``.
+
+        Memoised: builder mutations reset the cache, so repeated runs of the
+        same strategy skip the (O(expression tree)) re-serialisation.
+        """
+        if self._json_cache is None:
+            self._json_cache = json.dumps(self.to_json_dict())
+        return self._json_cache
