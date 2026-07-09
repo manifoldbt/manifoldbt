@@ -14,8 +14,21 @@ without needing a Pro license or real market data.
 import json
 import sqlite3
 
+import pytest
+
 import manifoldbt as bt
 from manifoldbt.diagnostics import _prepare_for_diagnostics
+from manifoldbt.exceptions import LicenseError
+
+
+def test_detect_lookahead_gated_on_community(monkeypatch):
+    """Look-ahead detection is Pro: Community gets a clean LicenseError before any
+    work (the analysis itself is enforced natively; this is the friendly UX gate).
+    """
+    monkeypatch.setattr(bt, "_is_pro", lambda: False)
+    with pytest.raises(LicenseError):
+        # Raises before touching strategy/config/store, so None args are fine.
+        bt.diagnostics.detect_lookahead(None, None, None)
 
 
 def _make_metadata_db(path):

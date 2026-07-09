@@ -127,12 +127,59 @@ def _is_pro() -> bool:
 
 
 def _require_pro(feature: str) -> None:
-    """Print Pro warning and exit cleanly if not Pro."""
+    """Raise LicenseError if the current license is not Pro.
+
+    This used to ``raise SystemExit(0)``, which reads as a clean exit in a
+    ``.py`` script but, in Jupyter/IPython, aborts the current cell with a bare
+    ``SystemExit: 0`` (plus a spurious "To exit, use ..." warning) and silently
+    skips the rest of the cell. ``LicenseError`` is a normal, catchable
+    exception: a single clean traceback in a notebook, a real error in scripts.
+    """
     if _is_pro():
         return
-    print(f"\n\033[38;5;214m[!] {feature} -- Pro feature\033[0m")
-    print("\033[38;5;214m  -> upgrade at www.manifoldbt.com\033[0m")
-    raise SystemExit(0)
+    raise LicenseError(
+        f"'{feature}' is a Pro feature. Upgrade to Pro at www.manifoldbt.com"
+    )
+
+
+def _require_pro_for_gpu(device, feature: str) -> None:
+    """Gate GPU acceleration (``device="cuda"``/``"gpu"``) behind Pro.
+
+    GPU paths are also enforced natively, but that surfaces a ``PermissionError``
+    with a full traceback (GPU sweep) or a bare ``ValueError`` (stochastic). Gating
+    in Python first gives every GPU entry point the same clean ``LicenseError`` as
+    the other Pro features. No-op for CPU or for Pro users.
+    """
+    if isinstance(device, str) and device.lower() in ("cuda", "gpu"):
+        _require_pro(feature)
+
+
+# Community fan-out budget: sweeps and batches may run up to this many backtests
+# per call for free; beyond it requires Pro. Single run() is never affected.
+# Keep in sync with the native bt_license::COMMUNITY_MAX_SWEEP_COMBOS.
+_COMMUNITY_MAX_COMBOS = 500
+
+
+def _grid_combos(param_grid) -> int:
+    """Number of Cartesian combinations produced by a sweep param grid."""
+    n = 1
+    for values in param_grid.values():
+        n *= max(1, len(values))
+    return n
+
+
+def _require_pro_over_combos(n_combos: int, what: str) -> None:
+    """Raise LicenseError if a fan-out exceeds the Community combination limit.
+
+    No-op at or below the limit, or for Pro users. Mirrors the native
+    ``require_combo_limit`` so Community and Pro see identical behaviour.
+    """
+    if n_combos <= _COMMUNITY_MAX_COMBOS or _is_pro():
+        return
+    raise LicenseError(
+        f"{what} with {n_combos} runs exceeds the Community limit of "
+        f"{_COMMUNITY_MAX_COMBOS}. Upgrade to Pro at www.manifoldbt.com"
+    )
 
 
 def _classify_error(exc: Exception) -> Exception:
@@ -516,7 +563,8 @@ def ingest(
 ) -> DataStore:
     """Ingest bars from a data provider into the Arrow IPC store.
 
-    Providers: ``"binance"``, ``"hyperliquid"`` (free), ``"databento"``, ``"massive"`` (Pro).
+    Providers (free): ``"binance"``, ``"bybit"``, ``"hyperliquid"``, ``"dydx"``,
+    ``"bitstamp"``. Pro: ``"databento"``, ``"massive"``.
 
     Returns a :class:`DataStore` ready for :func:`run`.
 
@@ -708,6 +756,7 @@ def run_sweep(
     Returns:
         A :class:`SweepResult` with ``.to_df()``, ``.best()``, ``.plot_metric()``.
     """
+    _require_pro_over_combos(_grid_combos(param_grid), "Parameter sweep")
     try:
         config = _cap_output_resolution(config)
         store = _resolve_store(config, store)
@@ -749,6 +798,7 @@ def run_batch(
     Returns:
         One :class:`Result` per strategy, in input order.
     """
+    _require_pro_over_combos(len(strategies), "Batch backtesting")
     try:
         config = _prepare_config(config, None, store)
         config = _cap_output_resolution(config)
@@ -787,6 +837,7 @@ def run_batch_lite(
     Returns:
         One :class:`BatchResultLite` per strategy (name, metrics, equity, trade_count).
     """
+    _require_pro_over_combos(len(strategies), "Batch backtesting")
     try:
         config = _prepare_config(config, None, store)
         config = _cap_output_resolution(config)
@@ -834,6 +885,8 @@ def run_sweep_lite(
     Returns:
         One :class:`BatchResultLite` per combo (Cartesian product order).
     """
+    _require_pro_over_combos(_grid_combos(param_grid), "Parameter sweep")
+    _require_pro_for_gpu(device, "GPU sweep")
     try:
         config = _cap_output_resolution(config)
         store = _resolve_store(config, store)
@@ -913,6 +966,10 @@ def run_sweep_2d(
     Returns:
         Dict with ``metric_grid`` (2D list), ``x_values``, ``y_values``, etc.
     """
+    _require_pro_over_combos(
+        len(sweep_config.get("x_values", [])) * len(sweep_config.get("y_values", [])),
+        "2D parameter sweep",
+    )
     config = _prepare_config(config, strategy, store)
     sweep_json = json.dumps(_convert_scalar_values_in_sweep(sweep_config))
     return _run_sweep_2d_native(strategy.to_json(), sweep_json, config.to_json(), store)
@@ -939,6 +996,7 @@ def run_stability(
     Returns:
         Dict with ``stability_score``, ``metric_values``, ``mean_metric``, ``std_metric``.
     """
+    _require_pro_over_combos(len(stability_config.get("values", [])), "Parameter stability analysis")
     config = _prepare_config(config, strategy, store)
     stab_json = json.dumps(_convert_scalar_values_in_stability(stability_config))
     return _run_stability_native(strategy.to_json(), stab_json, config.to_json(), store)
@@ -1025,6 +1083,7 @@ def run_stochastic(
         ... )
         >>> result = mbt.run_stochastic(model, s0=100, n_paths=5000)
     """
+    _require_pro_for_gpu(device, "GPU stochastic simulation")
     config: Dict[str, Any] = {
         "s0": s0,
         "n_paths": n_paths,

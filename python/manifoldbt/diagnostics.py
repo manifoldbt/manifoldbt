@@ -9,9 +9,6 @@ import numpy as np
 
 _EMPTY_TS = np.array([], dtype="datetime64[ns]")
 
-# Pro-gated feature label (see _require_pro). Single source to avoid drift.
-_SAFETY_PRO_FEATURE = "Safety checks (lookahead, exposure)"
-
 
 def _prepare_for_diagnostics(config, strategy, store):
     """Mirror ``run()``'s config/store preparation for the diagnostics path.
@@ -95,178 +92,6 @@ class DiagnosticsResult:
 
 
 # ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
-
-def _ts_as_int64(arr: np.ndarray) -> np.ndarray:
-    """View a datetime64 array as int64, or return as-is if already numeric."""
-    return arr.view(np.int64) if arr.dtype.kind == "M" else arr
-
-
-def _filter_overlap(base_ts: np.ndarray, ext_ts: np.ndarray) -> np.ndarray:
-    """Return indices of *ext* trades within the base period."""
-    if len(ext_ts) == 0 or len(base_ts) == 0:
-        return np.array([], dtype=np.int64)
-    cutoff = _ts_as_int64(base_ts)[-1]
-    return np.nonzero(_ts_as_int64(ext_ts) <= cutoff)[0]
-
-
-def _compare_trades(
-    trades_base: Dict[str, np.ndarray],
-    trades_ext: Dict[str, np.ndarray],
-    overlap_indices: np.ndarray,
-    n_compare: int,
-    tolerance: float,
-) -> tuple:
-    """Compare trades pairwise. Returns (mismatched_count, details_list)."""
-    strict_fields = ["signal_timestamp", "execution_timestamp", "symbol_id", "side"]
-    float_fields = ["quantity", "fill_price", "fees"]
-    details: List[Dict[str, Any]] = []
-    mismatched = 0
-
-    for i in range(n_compare):
-        ext_i = overlap_indices[i]
-        mismatch = _find_mismatch(
-            trades_base, trades_ext, i, ext_i,
-            strict_fields, float_fields, tolerance,
-        )
-        if mismatch:
-            mismatched += 1
-            if len(details) < 20:
-                details.append(mismatch)
-
-    return mismatched, details
-
-
-def _find_mismatch(
-    base: dict, ext: dict, i: int, ext_i: int,
-    strict_fields: list, float_fields: list, tolerance: float,
-) -> dict | None:
-    """Check one trade pair for mismatches. Returns detail dict or None."""
-    for f in strict_fields:
-        if f not in base or f not in ext:
-            continue
-        if base[f][i] != ext[f][ext_i]:
-            return {"index": i, "field": f,
-                    "base": base[f][i], "extended": ext[f][ext_i]}
-
-    for f in float_fields:
-        if f not in base or f not in ext:
-            continue
-        bv, ev = float(base[f][i]), float(ext[f][ext_i])
-        if not np.isclose(bv, ev, atol=tolerance, rtol=tolerance):
-            return {"index": i, "field": f, "base": bv, "extended": ev}
-
-    return None
-
-
-def _run_split_test(
-    strategy, config, store, split_ns: int, tolerance: float,
-    trades_full: dict, full_ts: np.ndarray, method: str,
-) -> LookaheadReport:
-    """Run strategy on [start, split] and compare against the full run."""
-    from manifoldbt import run
-    from manifoldbt.plot._convert import trades_arrays
-
-    short_config = copy.deepcopy(config)
-    short_config.time_range_end = split_ns
-    try:
-        result_short = run(strategy, short_config, store)
-    except (ValueError, RuntimeError):
-        # Some symbols may lack data for the truncated range — skip.
-        return LookaheadReport(
-            passed=True, total_trades_base=0,
-            total_trades_overlap=0, mismatched=0, method=method,
-        )
-
-    trades_short = trades_arrays(result_short)
-    short_ts = trades_short.get("execution_timestamp", _EMPTY_TS.copy())
-    n_short = len(short_ts)
-
-    if n_short == 0:
-        return LookaheadReport(
-            passed=True, total_trades_base=0,
-            total_trades_overlap=0, mismatched=0, method=method,
-        )
-
-    overlap = _filter_overlap(short_ts, full_ts)
-    n_overlap = len(overlap)
-
-    if n_short != n_overlap:
-        return LookaheadReport(
-            passed=False, total_trades_base=n_short,
-            total_trades_overlap=n_overlap,
-            mismatched=abs(n_short - n_overlap), method=method,
-            details=[{"index": 0, "field": "trade_count",
-                      "base": n_short, "extended": n_overlap}],
-        )
-
-    mismatched, details = _compare_trades(
-        trades_short, trades_full, overlap, n_short, tolerance,
-    )
-
-    return LookaheadReport(
-        passed=(mismatched == 0), total_trades_base=n_short,
-        total_trades_overlap=n_overlap, mismatched=mismatched,
-        method=method, details=details,
-    )
-
-
-def _run_aligned_split_test(
-    strategy, config, aligned, split_ns: int, tolerance: float,
-    trades_full: dict, full_ts: np.ndarray, method: str,
-) -> LookaheadReport:
-    """Run strategy on sliced aligned data [start, split] and compare."""
-    from manifoldbt.plot._convert import trades_arrays
-    from manifoldbt._native import run_on_aligned as _run_on_aligned
-
-    short_config = copy.deepcopy(config)
-    short_config.time_range_end = split_ns
-    try:
-        sliced = aligned.slice(config.time_range_start, split_ns)
-        result_short = _run_on_aligned(
-            strategy.to_json(), short_config.to_json(), sliced,
-        )
-    except (ValueError, RuntimeError):
-        return LookaheadReport(
-            passed=True, total_trades_base=0,
-            total_trades_overlap=0, mismatched=0, method=method,
-        )
-
-    trades_short = trades_arrays(result_short)
-    short_ts = trades_short.get("execution_timestamp", _EMPTY_TS.copy())
-    n_short = len(short_ts)
-
-    if n_short == 0:
-        return LookaheadReport(
-            passed=True, total_trades_base=0,
-            total_trades_overlap=0, mismatched=0, method=method,
-        )
-
-    overlap = _filter_overlap(short_ts, full_ts)
-    n_overlap = len(overlap)
-
-    if n_short != n_overlap:
-        return LookaheadReport(
-            passed=False, total_trades_base=n_short,
-            total_trades_overlap=n_overlap,
-            mismatched=abs(n_short - n_overlap), method=method,
-            details=[{"index": 0, "field": "trade_count",
-                      "base": n_short, "extended": n_overlap}],
-        )
-
-    mismatched, details = _compare_trades(
-        trades_short, trades_full, overlap, n_short, tolerance,
-    )
-
-    return LookaheadReport(
-        passed=(mismatched == 0), total_trades_base=n_short,
-        total_trades_overlap=n_overlap, mismatched=mismatched,
-        method=method, details=details,
-    )
-
-
-# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -301,45 +126,33 @@ def detect_lookahead(
     Returns:
         DiagnosticsResult with ``.passed``, ``.assert_clean()``, ``print()``.
     """
+    # Pro feature. Friendly UX gate first (clean LicenseError in notebooks); the
+    # analysis itself is enforced natively (`safety_checks`) so it can't be
+    # bypassed by editing this file.
     from manifoldbt import _require_pro
-    _require_pro(_SAFETY_PRO_FEATURE)
+    _require_pro("Look-ahead bias detection")
 
-    from manifoldbt.plot._convert import trades_arrays
-    from manifoldbt._native import (
-        load_and_align as _load_and_align,
-        run_on_aligned as _run_on_aligned,
-    )
+    from manifoldbt._native import py_detect_lookahead as _native_detect
 
     # Resolve config/store exactly like run() (notably dict universe -> ids),
     # otherwise config.to_json() emits a map the Rust loader rejects.
     config, store = _prepare_for_diagnostics(config, strategy, store)
 
-    period = config.time_range_end - config.time_range_start
+    # All the run + comparison logic lives in Rust now; this is a thin wrapper
+    # that rebuilds the report objects from the native JSON.
+    raw = _native_detect(strategy.to_json(), config.to_json(), store, mode, tolerance)
 
-    # Load data ONCE for the full range.
-    aligned = _load_and_align(config.to_json(), store)
-
-    # Full run on pre-loaded data (no disk I/O).
-    result_full = _run_on_aligned(strategy.to_json(), config.to_json(), aligned)
-    trades_full = trades_arrays(result_full)
-    full_ts = trades_full.get("execution_timestamp", _EMPTY_TS.copy())
-
-    reports: List[LookaheadReport] = []
-
-    if mode in ("all", "extension"):
-        split = config.time_range_start + int(period * 2 / 3)
-        reports.append(_run_aligned_split_test(
-            strategy, config, aligned, split, tolerance,
-            trades_full, full_ts, method="extension",
-        ))
-
-    if mode in ("all", "truncation"):
-        split = config.time_range_start + int(period / 3)
-        reports.append(_run_aligned_split_test(
-            strategy, config, aligned, split, tolerance,
-            trades_full, full_ts, method="truncation",
-        ))
-
+    reports = [
+        LookaheadReport(
+            passed=r["passed"],
+            total_trades_base=r["total_trades_base"],
+            total_trades_overlap=r["total_trades_overlap"],
+            mismatched=r["mismatched"],
+            method=r["method"],
+            details=r["details"],
+        )
+        for r in raw
+    ]
     return DiagnosticsResult(reports=reports)
 
 
@@ -540,9 +353,6 @@ def risk_check(
         print(report)
         report.assert_clean()
     """
-    from manifoldbt import _require_pro
-    _require_pro(_SAFETY_PRO_FEATURE)
-
     from manifoldbt.plot._convert import positions_arrays
 
     pos = positions_arrays(result)
@@ -830,9 +640,6 @@ def check_exposure_stability(
         print(report)
         report.assert_clean()
     """
-    from manifoldbt import _require_pro
-    _require_pro(_SAFETY_PRO_FEATURE)
-
     from manifoldbt._native import (
         load_and_align as _load_and_align,
         run_on_aligned as _run_on_aligned,

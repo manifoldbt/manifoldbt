@@ -3,8 +3,19 @@ import json
 import os
 import time
 
+import pytest
+
 import manifoldbt as bt
 from manifoldbt import run_sweep, run_with_parquet
+
+# The golden fixtures are 1-minute bars; on a Community license the engine caps
+# resolution to daily, so these runs produce zero trades and the assertions are
+# meaningless. CI unlocks via BT_UNLOCKED=1 (debug builds); locally this needs
+# an activated Pro license.
+pytestmark = pytest.mark.skipif(
+    bt.license_info()[0] != "Pro",
+    reason="requires Pro (sub-daily resolution); activate a license or use a BT_UNLOCKED dev build",
+)
 
 
 def test_sweep_returns_one_result_per_combo(golden_buy_hold_dir):

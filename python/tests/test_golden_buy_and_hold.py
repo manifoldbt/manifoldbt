@@ -6,8 +6,19 @@ to the Rust-only golden test fixtures.
 import json
 import os
 
+import pytest
+
 import manifoldbt as bt
 from manifoldbt import run_with_parquet
+
+# The golden fixtures were generated at full (Pro) resolution; the Community
+# resolution cap changes the equity-point count and the comparison is
+# meaningless. CI unlocks via BT_UNLOCKED=1 (debug builds); locally this needs
+# an activated Pro license.
+pytestmark = pytest.mark.skipif(
+    bt.license_info()[0] != "Pro",
+    reason="requires Pro (fixtures generated at sub-daily resolution); activate a license or use a BT_UNLOCKED dev build",
+)
 
 
 def test_golden_buy_and_hold_matches_fixtures(golden_buy_hold_dir):
