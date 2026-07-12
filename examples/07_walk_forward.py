@@ -15,10 +15,11 @@ from manifoldbt.indicators import close, ema
 from manifoldbt.helpers import time_range, Slippage, Interval
 
 # -- Strategy with tunable parameters ----------------------------------------
-# Indicators use concrete defaults; the Rust sweep engine replaces param()
-# references at runtime with each grid value.
-fast = ema(close, 12)
-slow = ema(close, 26)
+# The sweep engine substitutes each grid value into the param() references at
+# runtime. The period MUST be param("..."): a hardcoded int compiles every
+# combo to the same strategy, so the sweep becomes a silent no-op.
+fast = ema(close, mbt.param("fast", default=12))
+slow = ema(close, mbt.param("slow", default=26))
 
 signal = mbt.when(fast > slow, 1.0, mbt.when(fast < slow, -1.0, 0.0))
 
@@ -27,8 +28,6 @@ strategy = (
     .signal("fast", fast)
     .signal("slow", slow)
     .size(signal * 0.25)
-    .param("fast", default=12, range=(5, 30))
-    .param("slow", default=26, range=(20, 60))
     .describe("EMA crossover with walk-forward parameter optimization")
 )
 
@@ -78,14 +77,20 @@ if __name__ == "__main__":
     elapsed = time.perf_counter() - t0
 
     folds = result.get("folds", [])
-    best_params = result.get("best_params_per_fold", [])
+    metric = wf_config["optimize_metric"]
 
-    for i, (fold, params) in enumerate(zip(folds, best_params)):
-        train = fold.get("train_metric", 0)
-        test = fold.get("test_metric", 0)
-        print(f"  Fold {i+1}: train={train:+.3f}  test={test:+.3f}  params={params}")
+    def unwrap(params):
+        # best_params values are ScalarValue dicts, e.g. {"Int64": 20} -> 20
+        return {k: (next(iter(v.values())) if isinstance(v, dict) else v)
+                for k, v in params.items()}
+
+    for i, fold in enumerate(folds):
+        is_m = fold["is_metrics"][metric]
+        oos_m = fold["oos_metrics"][metric]
+        params = unwrap(fold["best_params"])
+        print(f"  Fold {i+1}: IS {metric}={is_m:+.3f}  OOS {metric}={oos_m:+.3f}  params={params}")
 
     print(f"\n{len(folds)} folds in {elapsed:.2f}s")
 
     if folds:
-        mbt.plot.walk_forward({"metric": "sharpe", "folds": folds}, show=True)
+        mbt.plot.walk_forward({"optimize_metric": metric, "folds": folds}, show=True)
