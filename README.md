@@ -32,14 +32,14 @@ Write strategies in a fluent Python DSL — execute them on a vectorized Rust en
 ## Installation
 
 ```bash
-pip install manifoldbt
+pip install manifoldbt              # engine only: backtests, sweeps, metrics
+pip install manifoldbt[plot]        # + interactive charts and native windows (show=True)
+pip install manifoldbt[all]         # everything: plots, windows, PNG export, pandas/polars
 ```
 
-With all extras (plotting, pandas, polars):
-
-```bash
-pip install manifoldbt[all]
-```
+The base install stays light (no browser, no GUI) for scripts, servers and CI.
+`[plot]` adds plotly and a native window backend; `[all]` also pulls kaleido for
+static PNG/SVG export (which bundles a headless Chromium).
 
 ## Quick Start
 
