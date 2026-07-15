@@ -1,28 +1,76 @@
-"""Charts for research analysis results (sweep, walk-forward, stability)."""
+"""Charts for research analysis results (sweep, walk-forward, stability) — plotly."""
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.ticker as mticker
-from matplotlib.axes import Axes
-from matplotlib.figure import Figure
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 from manifoldbt.plot._theme import (
     ACCENT,
-    ACCENT_ALT,
+    BORDER,
+    CS_CORRELATION,
+    CS_SEQUENTIAL,
     DARK_GRAY,
     GRAY,
-    GREEN,
+    MONO_FAMILY,
     ORANGE,
-    RED,
     WHITE,
     theme_context,
 )
 from manifoldbt.plot._convert import daily_returns_array, equity_with_dates
-from manifoldbt.plot._utils import finalize, format_pct, get_or_create_ax
+from manifoldbt.plot._utils import finalize, new_figure
+
+
+def _rgba(hex_color: str, alpha: float) -> str:
+    h = hex_color.lstrip("#")
+    return f"rgba({int(h[0:2], 16)},{int(h[2:4], 16)},{int(h[4:6], 16)},{alpha})"
+
+
+def _extract_val(v):
+    """Extract numeric values from ScalarValue dicts like {'Float64': 1.23}."""
+    if isinstance(v, dict):
+        for val in v.values():
+            return val
+    return v
+
+
+def _grid_window_size(nx: int, ny: int, plot: int = 720, cbar: int = 160,
+                      top: int = 70) -> tuple:
+    """Window size matching the grid aspect (square grid -> square-ish window)."""
+    if nx >= ny:
+        pw, ph = plot, plot * ny / max(nx, 1)
+    else:
+        pw, ph = plot * nx / max(ny, 1), plot
+    return (int(pw + cbar), int(ph + top))
+
+
+def _plateau_best(grid: np.ndarray):
+    """Plateau-optimal cell: Gaussian blur finds the center of the best stable
+    region, not a lucky spike (overfit-resistant). sigma = ~5% of each axis."""
+    from scipy.ndimage import gaussian_filter
+
+    sigma_y = max(1.0, grid.shape[0] * 0.05)
+    sigma_x = max(1.0, grid.shape[1] * 0.05)
+    smoothed = gaussian_filter(
+        np.nan_to_num(grid, nan=np.nanmin(grid)),
+        sigma=(sigma_y, sigma_x),
+    )
+    return np.unravel_index(np.argmax(smoothed), smoothed.shape)
+
+
+def _stats_annotation(fig, text: str) -> None:
+    """Monospace stats box in the top-right corner."""
+    fig.add_annotation(
+        x=0.98, y=0.95, xref="paper", yref="paper",
+        xanchor="right", yanchor="top", align="left",
+        text=text.replace("\n", "<br>"), showarrow=False,
+        font=dict(family=MONO_FAMILY, size=11, color=GRAY),
+        bgcolor="rgba(17,17,22,0.9)", bordercolor=BORDER, borderwidth=1,
+        borderpad=6,
+    )
 
 
 # ── 2D Parameter Sweep Heatmap ──────────────────────────────────────────────
@@ -31,7 +79,7 @@ from manifoldbt.plot._utils import finalize, format_pct, get_or_create_ax
 def heatmap_2d(
     sweep_result: Dict[str, Any],
     *,
-    ax: Optional[Axes] = None,
+    ax=None,
     annotate: bool = True,
     fmt: str = ".3f",
     highlight_best: bool = True,
@@ -39,105 +87,73 @@ def heatmap_2d(
     figsize: Tuple[float, float] = (10, 8),
     show: bool = False,
     save: Optional[Union[str, Path]] = None,
-) -> Figure:
+) -> go.Figure:
     """2D parameter sweep heatmap from ``run_sweep_2d()`` result.
 
     Expected keys: metric_grid, x_values, y_values, x_param, y_param, metric.
     """
     with theme_context():
-        fig, ax_ = get_or_create_ax(ax, figsize)
-
         grid = np.array(sweep_result["metric_grid"], dtype=np.float64)
-        x_vals_raw = sweep_result["x_values"]
-        y_vals_raw = sweep_result["y_values"]
+        x_vals = [_extract_val(v) for v in sweep_result["x_values"]]
+        y_vals = [_extract_val(v) for v in sweep_result["y_values"]]
         x_param = sweep_result.get("x_param", "x")
         y_param = sweep_result.get("y_param", "y")
         metric = sweep_result.get("metric", "metric")
-
-        # Extract numeric values from ScalarValue dicts like {'Float64': 1.23}
-        def _extract_val(v):
-            if isinstance(v, dict):
-                for val in v.values():
-                    return val
-            return v
-
-        x_vals = [_extract_val(v) for v in x_vals_raw]
-        y_vals = [_extract_val(v) for v in y_vals_raw]
-
-        cmap = plt.get_cmap("bt_sequential")
-        im = ax_.imshow(
-            grid, cmap=cmap, aspect="auto", interpolation="nearest",
-            origin="lower",
-        )
-
-        # Adaptive tick labels: show max ~10 ticks per axis
-        max_ticks = 10
         nx, ny = len(x_vals), len(y_vals)
 
-        x_step = max(1, nx // max_ticks)
-        x_tick_idx = list(range(0, nx, x_step))
-        ax_.set_xticks(x_tick_idx)
-        ax_.set_xticklabels([f"{x_vals[i]:.2f}" for i in x_tick_idx], rotation=45, ha="right", fontsize=9)
-
-        y_step = max(1, ny // max_ticks)
-        y_tick_idx = list(range(0, ny, y_step))
-        ax_.set_yticks(y_tick_idx)
-        ax_.set_yticklabels([f"{y_vals[i]:.2f}" for i in y_tick_idx], fontsize=9)
-
-        ax_.set_xlabel(x_param, fontsize=10, labelpad=8)
-        ax_.set_ylabel(y_param, fontsize=10, labelpad=8)
-
-        # Only annotate if grid is small enough to be readable
+        text = None
         if annotate and nx * ny <= 100:
-            for yi in range(grid.shape[0]):
-                for xi in range(grid.shape[1]):
-                    val = grid[yi, xi]
-                    if np.isnan(val):
-                        continue
-                    norm = (val - np.nanmin(grid)) / (np.nanmax(grid) - np.nanmin(grid) + 1e-12)
-                    txt_color = "white" if norm > 0.6 or norm < 0.4 else "#1a1a1a"
-                    ax_.text(
-                        xi, yi, f"{val:{fmt}}",
-                        ha="center", va="center", fontsize=8, color=txt_color,
-                    )
+            text = np.vectorize(lambda v: "" if np.isnan(v) else f"{v:{fmt}}")(grid)
 
+        fig = new_figure(figsize)
+        fig.add_trace(go.Heatmap(
+            z=grid, x=x_vals, y=y_vals,
+            colorscale=CS_SEQUENTIAL,
+            text=text, texttemplate="%{text}" if text is not None else None,
+            textfont=dict(size=9),
+            hovertemplate=(
+                f"{x_param} %{{x}}<br>{y_param} %{{y}}<br>"
+                f"{metric} %{{z:{fmt}}}<extra></extra>"
+            ),
+            colorbar=dict(outlinewidth=0, thickness=12),
+            hoverongaps=False,
+        ))
+
+        best_label = None
         if highlight_best:
-            from scipy.ndimage import gaussian_filter
-
-            # Plateau-optimal: Gaussian blur finds the center of the best
-            # stable region, not a lucky spike (overfit-resistant).
-            # sigma = ~5% of each axis → favors broad plateaus.
-            sigma_y = max(1.0, grid.shape[0] * 0.05)
-            sigma_x = max(1.0, grid.shape[1] * 0.05)
-            smoothed = gaussian_filter(
-                np.nan_to_num(grid, nan=np.nanmin(grid)),
-                sigma=(sigma_y, sigma_x),
-            )
-            best_idx = np.unravel_index(np.argmax(smoothed), smoothed.shape)
+            best_idx = _plateau_best(grid)
             best_val = grid[best_idx]
             best_x = x_vals[best_idx[1]]
             best_y = y_vals[best_idx[0]]
 
-            rect = plt.Rectangle(
-                (best_idx[1] - 0.5, best_idx[0] - 0.5), 1, 1,
-                linewidth=2.5, edgecolor="white", facecolor="none",
+            # Cell outline around the plateau-best combo
+            dx = (x_vals[1] - x_vals[0]) / 2 if nx > 1 else 0.5
+            dy = (y_vals[1] - y_vals[0]) / 2 if ny > 1 else 0.5
+            fig.add_shape(
+                type="rect",
+                x0=best_x - dx, x1=best_x + dx, y0=best_y - dy, y1=best_y + dy,
+                line=dict(color="white", width=2.5),
             )
-            ax_.add_patch(rect)
             best_label = f"best: {best_val:{fmt}} ({x_param}={best_x:.0f}, {y_param}={best_y:.0f})"
-            ax_.text(
-                best_idx[1], best_idx[0], f"{best_val:{fmt}}",
-                ha="center", va="center", fontsize=9, color="white", fontweight="bold",
-                bbox={"boxstyle": "round,pad=0.2", "facecolor": "black", "alpha": 0.7, "edgecolor": "white"},
-            )
 
         combos = nx * ny
-        main_title = title or f"{metric} -- Parameter Sweep ({combos:,} combos)"
-        if highlight_best:
-            ax_.set_title(f"{main_title}\n{best_label}", fontsize=11)
-        else:
-            ax_.set_title(main_title)
-        fig.colorbar(im, ax=ax_, shrink=0.7)
-        return finalize(fig, show=show, save=save)
+        main_title = title or f"{metric} — Parameter Sweep ({combos:,} combos)"
+        if best_label:
+            main_title = f"{main_title}<br><span style='font-size:11px;color:{GRAY}'>{best_label}</span>"
+        fig.update_layout(title_text=main_title, hovermode="closest")
+        fig.update_xaxes(title_text=x_param, showspikes=False, constrain="domain")
+        fig.update_yaxes(title_text=y_param, showspikes=False)
+
+        # Square cells: lock the y/x pixel ratio to the data spacing so the grid
+        # keeps its true aspect (a 100x100 sweep is a square), even on resize.
+        if nx > 1 and ny > 1:
+            dx = (float(x_vals[-1]) - float(x_vals[0])) / (nx - 1)
+            dy = (float(y_vals[-1]) - float(y_vals[0])) / (ny - 1)
+            if dx > 0 and dy > 0:
+                fig.update_yaxes(scaleanchor="x", scaleratio=dx / dy,
+                                 constrain="domain")
+        return finalize(fig, show=show, save=save,
+                        window_size=_grid_window_size(nx, ny))
 
 
 # ── 3D Surface Plot ─────────────────────────────────────────────────────────
@@ -153,82 +169,75 @@ def surface_3d(
     azim: float = -45,
     show: bool = False,
     save: Optional[Union[str, Path]] = None,
-) -> Figure:
+) -> go.Figure:
     """3D surface plot from a 2D parameter sweep result.
 
-    Same input format as ``heatmap_2d``:
-    Expected keys: metric_grid, x_values, y_values, x_param, y_param, metric.
+    Same input format as ``heatmap_2d``. ``elev``/``azim`` are kept for
+    backward compatibility and mapped to the plotly camera.
     """
-    from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
-
     with theme_context():
-        fig = plt.figure(figsize=figsize)
-        ax = fig.add_subplot(111, projection="3d")
-
         grid = np.array(sweep_result["metric_grid"], dtype=np.float64)
-        x_vals_raw = sweep_result["x_values"]
-        y_vals_raw = sweep_result["y_values"]
+        x_vals = np.array([_extract_val(v) for v in sweep_result["x_values"]], dtype=np.float64)
+        y_vals = np.array([_extract_val(v) for v in sweep_result["y_values"]], dtype=np.float64)
         x_param = sweep_result.get("x_param", "x")
         y_param = sweep_result.get("y_param", "y")
         metric = sweep_result.get("metric", "metric")
 
-        def _extract_val(v):
-            if isinstance(v, dict):
-                for val in v.values():
-                    return val
-            return v
+        fig = new_figure(figsize)
+        fig.add_trace(go.Surface(
+            x=x_vals, y=y_vals, z=grid,
+            colorscale=CS_SEQUENTIAL, opacity=0.98,
+            colorbar=dict(title=dict(text=metric, side="right"),
+                          outlinewidth=0, thickness=13, len=0.6),
+            lighting=dict(ambient=0.75, diffuse=0.5, roughness=0.9, specular=0.1),
+            contours=dict(z=dict(show=True, usecolormap=True, project_z=True,
+                                 width=1)),
+            hovertemplate=(
+                f"{x_param} %{{x:.2f}}<br>{y_param} %{{y:.2f}}<br>"
+                f"{metric} %{{z:.3f}}<extra></extra>"
+            ),
+        ))
 
-        x_vals = np.array([_extract_val(v) for v in x_vals_raw], dtype=np.float64)
-        y_vals = np.array([_extract_val(v) for v in y_vals_raw], dtype=np.float64)
-
-        X, Y = np.meshgrid(x_vals, y_vals)
-
-        cmap = plt.get_cmap("bt_sequential")
-        surf = ax.plot_surface(
-            X, Y, grid,
-            cmap=cmap, alpha=0.9, linewidth=0, antialiased=True,
-            rstride=max(1, grid.shape[0] // 80),
-            cstride=max(1, grid.shape[1] // 80),
-        )
-
+        best_label = None
         if highlight_best:
-            from scipy.ndimage import gaussian_filter
-
-            sigma_y = max(1.0, grid.shape[0] * 0.05)
-            sigma_x = max(1.0, grid.shape[1] * 0.05)
-            smoothed = gaussian_filter(
-                np.nan_to_num(grid, nan=np.nanmin(grid)),
-                sigma=(sigma_y, sigma_x),
-            )
-            best_idx = np.unravel_index(np.argmax(smoothed), smoothed.shape)
+            best_idx = _plateau_best(grid)
             best_val = grid[best_idx]
             bx = x_vals[best_idx[1]]
             by = y_vals[best_idx[0]]
-            ax.scatter([bx], [by], [best_val], color="white", s=80, zorder=5,
-                       edgecolors="black", linewidths=1.5)
+            fig.add_trace(go.Scatter3d(
+                x=[bx], y=[by], z=[best_val], mode="markers",
+                marker=dict(color="white", size=6,
+                            line=dict(color="black", width=2)),
+                name="best", showlegend=False,
+                hovertemplate=f"best {metric} %{{z:.3f}}<extra></extra>",
+            ))
             best_label = f"best: {best_val:.3f} ({x_param}={bx:.0f}, {y_param}={by:.0f})"
 
-        # Force dark panes (matplotlib 3D ignores rc theme)
-        pane_color = (0.1, 0.1, 0.1, 0.9)
-        ax.xaxis.set_pane_color(pane_color)
-        ax.yaxis.set_pane_color(pane_color)
-        ax.zaxis.set_pane_color(pane_color)
-        for axis in (ax.xaxis, ax.yaxis, ax.zaxis):
-            axis.label.set_color("white")
-            axis.set_tick_params(colors="white")
-        ax.set_xlabel(x_param, fontsize=10, labelpad=10)
-        ax.set_ylabel(y_param, fontsize=10, labelpad=10)
-        ax.set_zlabel(metric, fontsize=10, labelpad=10)
-        ax.view_init(elev=elev, azim=azim)
+        # Map matplotlib elev/azim to a plotly camera eye position
+        r = 1.9
+        elev_rad = np.deg2rad(elev)
+        azim_rad = np.deg2rad(azim)
+        eye = dict(
+            x=r * np.cos(elev_rad) * np.cos(azim_rad),
+            y=r * np.cos(elev_rad) * np.sin(azim_rad),
+            z=r * np.sin(elev_rad),
+        )
 
         combos = len(x_vals) * len(y_vals)
-        main_title = title or f"{metric} -- Surface ({combos:,} combos)"
-        if highlight_best:
-            ax.set_title(f"{main_title}\n{best_label}", fontsize=11)
-        else:
-            ax.set_title(main_title)
-        fig.colorbar(surf, ax=ax, shrink=0.5, pad=0.1)
+        main_title = title or f"{metric} — Surface ({combos:,} combos)"
+        if best_label:
+            main_title = f"{main_title}<br><span style='font-size:11px;color:{GRAY}'>{best_label}</span>"
 
+        fig.update_layout(
+            title_text=main_title,
+            scene=dict(
+                xaxis_title=x_param, yaxis_title=y_param, zaxis_title=metric,
+                aspectmode="manual",
+                aspectratio=dict(x=1.25, y=1.25, z=0.85),
+                camera=dict(eye=eye),
+            ),
+            margin=dict(l=0, r=0, t=60, b=0),
+        )
         return finalize(fig, show=show, save=save)
 
 
@@ -240,14 +249,14 @@ def walk_forward(
     *,
     mode: str = "auto",
     full_result=None,
-    ax: Optional[Axes] = None,
+    ax=None,
     is_color: str = ACCENT,
     oos_color: str = ORANGE,
     title: Optional[str] = None,
     figsize: Tuple[float, float] = (10, 5),
     show: bool = False,
     save: Optional[Union[str, Path]] = None,
-) -> Figure:
+) -> go.Figure:
     """Walk-forward analysis chart.
 
     Args:
@@ -265,129 +274,136 @@ def walk_forward(
         mode = "equity" if has_equity else "bars"
 
     if mode == "equity":
-        return _walk_forward_equity(wf_result, folds, ax=ax, is_color=is_color,
-                                     oos_color=oos_color, title=title, figsize=figsize,
-                                     show=show, save=save)
+        return _walk_forward_equity(wf_result, folds, is_color=is_color,
+                                    oos_color=oos_color, title=title, figsize=figsize,
+                                    show=show, save=save)
     elif mode == "stitched":
         return _walk_forward_stitched(wf_result, folds, full_result=full_result,
-                                       ax=ax, is_color=is_color,
-                                       oos_color=oos_color, title=title, figsize=figsize,
-                                       show=show, save=save)
+                                      is_color=is_color,
+                                      oos_color=oos_color, title=title, figsize=figsize,
+                                      show=show, save=save)
     else:
-        return _walk_forward_bars(wf_result, folds, ax=ax, is_color=is_color,
-                                   oos_color=oos_color, title=title, figsize=figsize,
-                                   show=show, save=save)
+        return _walk_forward_bars(wf_result, folds, is_color=is_color,
+                                  oos_color=oos_color, title=title, figsize=figsize,
+                                  show=show, save=save)
 
 
-def _walk_forward_equity(wf_result, folds, *, ax, is_color, oos_color, title, figsize, show, save):
+def _fold_metric(fold, key, optimize_metric):
+    val = fold.get(key)
+    if isinstance(val, dict):
+        return val.get(optimize_metric, val.get("sharpe", 0))
+    return val if val is not None else 0
+
+
+def _walk_forward_equity(wf_result, folds, *, is_color, oos_color, title, figsize, show, save):
     """Equity curve per fold: IS (blue) + OOS (orange) side by side."""
-    from matplotlib.gridspec import GridSpec
-
     optimize_metric = wf_result.get("optimize_metric", "sharpe")
     n = len(folds)
 
     with theme_context():
-        fig = plt.figure(figsize=figsize)
-        gs = GridSpec(1, n, figure=fig, wspace=0.08)
-        fig.suptitle(title or f"Walk-Forward Analysis ({optimize_metric})", fontsize=10)
+        fig = make_subplots(
+            rows=1, cols=n, horizontal_spacing=0.02,
+            subplot_titles=[
+                f"Fold {f.get('fold_index', f.get('fold', i)) + 1}"
+                for i, f in enumerate(folds)
+            ],
+        )
 
         for i, fold in enumerate(folds):
-            ax_ = fig.add_subplot(gs[0, i])
+            col = i + 1
             is_eq = fold.get("is_equity", [])
             oos_eq = fold.get("oos_equity", [])
 
             if is_eq:
-                is_x = np.arange(len(is_eq))
-                ax_.plot(is_x, is_eq, color=is_color, linewidth=1.2, alpha=0.8)
+                fig.add_trace(go.Scatter(
+                    y=is_eq, mode="lines",
+                    line=dict(color=is_color, width=1.2), opacity=0.8,
+                    showlegend=False, hoverinfo="skip",
+                ), row=1, col=col)
 
             if oos_eq:
-                oos_x = np.arange(len(is_eq), len(is_eq) + len(oos_eq))
-                ax_.plot(oos_x, oos_eq, color=oos_color, linewidth=1.2, alpha=0.8)
+                fig.add_trace(go.Scatter(
+                    x=list(range(len(is_eq), len(is_eq) + len(oos_eq))), y=oos_eq,
+                    mode="lines", line=dict(color=oos_color, width=1.2), opacity=0.8,
+                    showlegend=False, hoverinfo="skip",
+                ), row=1, col=col)
 
             if is_eq and oos_eq:
-                ax_.axvline(x=len(is_eq), color=DARK_GRAY, linewidth=0.8, linestyle="--")
+                fig.add_vline(x=len(is_eq), line_color=DARK_GRAY, line_width=0.8,
+                              line_dash="dash", row=1, col=col)
 
-            # Extract metric values for labels
-            def _get_metric(key):
-                val = fold.get(key)
-                if isinstance(val, dict):
-                    return val.get(optimize_metric, val.get("sharpe", 0))
-                return val if val is not None else 0
-
-            is_m = _get_metric("is_metrics") or _get_metric("is_metric")
-            oos_m = _get_metric("oos_metrics") or _get_metric("oos_metric")
-
-            ax_.text(0.05, 0.92, f"IS: {is_m:.2f}", transform=ax_.transAxes,
-                     fontsize=7, color=is_color, fontfamily="monospace")
-            ax_.text(0.05, 0.82, f"OOS: {oos_m:.2f}", transform=ax_.transAxes,
-                     fontsize=7, color=oos_color, fontfamily="monospace")
-
-            fold_idx = fold.get("fold_index", fold.get("fold", i))
-            ax_.set_title(f"Fold {fold_idx + 1}", fontsize=8)
-            ax_.tick_params(labelsize=6)
-            ax_.grid(True, alpha=0.08)
+            is_m = (_fold_metric(fold, "is_metrics", optimize_metric)
+                    or _fold_metric(fold, "is_metric", optimize_metric))
+            oos_m = (_fold_metric(fold, "oos_metrics", optimize_metric)
+                     or _fold_metric(fold, "oos_metric", optimize_metric))
+            fig.add_annotation(
+                x=0.04, y=0.96, xref=f"x{col if col > 1 else ''} domain",
+                yref=f"y{col if col > 1 else ''} domain",
+                xanchor="left", yanchor="top", showarrow=False, align="left",
+                text=(f"<span style='color:{is_color}'>IS: {is_m:.2f}</span><br>"
+                      f"<span style='color:{oos_color}'>OOS: {oos_m:.2f}</span>"),
+                font=dict(family=MONO_FAMILY, size=10),
+            )
             if i > 0:
-                ax_.set_yticklabels([])
+                fig.update_yaxes(showticklabels=False, row=1, col=col)
 
+        fig.update_layout(
+            title_text=title or f"Walk-Forward Analysis ({optimize_metric})",
+            width=int(figsize[0] * 80), height=int(figsize[1] * 80),
+        )
         return finalize(fig, show=show, save=save)
 
 
-def _walk_forward_bars(wf_result, folds, *, ax, is_color, oos_color, title, figsize, show, save):
+def _walk_forward_bars(wf_result, folds, *, is_color, oos_color, title, figsize, show, save):
     """Grouped bar chart: IS vs OOS metric per fold."""
     optimize_metric = wf_result.get("optimize_metric", "sharpe")
-    n = len(folds)
-    x = np.arange(n)
-    width = 0.35
-
-    def _extract(fold, key):
-        val = fold.get(key)
-        if isinstance(val, dict):
-            return val.get(optimize_metric, val.get("sharpe", 0))
-        return val if val is not None else 0
 
     with theme_context():
-        fig, ax_ = get_or_create_ax(ax, figsize)
+        fig = new_figure(figsize)
 
-        is_vals = [_extract(f, "is_metrics") or _extract(f, "is_metric") for f in folds]
-        oos_vals = [_extract(f, "oos_metrics") or _extract(f, "oos_metric") for f in folds]
+        is_vals = [(_fold_metric(f, "is_metrics", optimize_metric)
+                    or _fold_metric(f, "is_metric", optimize_metric)) for f in folds]
+        oos_vals = [(_fold_metric(f, "oos_metrics", optimize_metric)
+                     or _fold_metric(f, "oos_metric", optimize_metric)) for f in folds]
+        labels = [f"Fold {f.get('fold_index', f.get('fold', i)) + 1}"
+                  for i, f in enumerate(folds)]
 
-        ax_.bar(x - width / 2, is_vals, width, label="In-Sample", color=is_color, alpha=0.65)
-        ax_.bar(x + width / 2, oos_vals, width, label="Out-of-Sample", color=oos_color, alpha=0.65)
-
-        for i, (is_v, oos_v) in enumerate(zip(is_vals, oos_vals)):
-            if is_v != 0:
-                ax_.text(i - width / 2, is_v, f"{is_v:.2f}", ha="center",
-                         va="bottom" if is_v > 0 else "top", fontsize=7, color=is_color)
-            if oos_v != 0:
-                ax_.text(i + width / 2, oos_v, f"{oos_v:.2f}", ha="center",
-                         va="bottom" if oos_v > 0 else "top", fontsize=7, color=oos_color)
-
-        ax_.set_xticks(x)
-        ax_.set_xticklabels([f"Fold {f.get('fold_index', f.get('fold', i)) + 1}" for i, f in enumerate(folds)])
-        ax_.axhline(0, color=DARK_GRAY, linewidth=0.5, linestyle="--")
-        ax_.set_title(title or f"Walk-Forward Analysis ({optimize_metric})")
-        ax_.set_ylabel(optimize_metric.capitalize())
-        ax_.legend(loc="upper right")
+        fig.add_trace(go.Bar(
+            x=labels, y=is_vals, name="In-Sample",
+            marker_color=is_color, opacity=0.65, marker_line_width=0,
+            text=[f"{v:.2f}" if v != 0 else "" for v in is_vals],
+            textposition="outside", textfont=dict(size=10, color=is_color),
+        ))
+        fig.add_trace(go.Bar(
+            x=labels, y=oos_vals, name="Out-of-Sample",
+            marker_color=oos_color, opacity=0.65, marker_line_width=0,
+            text=[f"{v:.2f}" if v != 0 else "" for v in oos_vals],
+            textposition="outside", textfont=dict(size=10, color=oos_color),
+        ))
+        fig.add_hline(y=0, line_color=DARK_GRAY, line_width=0.5, line_dash="dash")
+        fig.update_layout(
+            title_text=title or f"Walk-Forward Analysis ({optimize_metric})",
+            barmode="group", hovermode="closest",
+            legend=dict(x=0.99, y=0.99, xanchor="right"),
+        )
+        fig.update_yaxes(title_text=optimize_metric.capitalize())
+        fig.update_xaxes(showspikes=False, type="category")
         return finalize(fig, show=show, save=save)
 
 
-def _walk_forward_stitched(wf_result, folds, *, full_result=None, ax, is_color, oos_color, title, figsize, show, save):
+def _walk_forward_stitched(wf_result, folds, *, full_result=None, is_color, oos_color, title, figsize, show, save):
     """Stitched OOS equity vs full backtest.
 
     - Orange: OOS segments from each fold, chained end-to-end.
       This is the TRUE out-of-sample performance of the WFO strategy.
     - Blue: full backtest with default params over the same period (no WFO).
-      This is what you'd get without walk-forward optimization.
 
-    If orange ~ blue → no overfitting, WFO adds little.
-    If blue >> orange → full backtest is overfitted.
-    If orange >> blue → WFO optimization adds real value.
-
-    Args:
-        full_result: BacktestResult from bt.run() on the full period.
+    If orange ~ blue: no overfitting, WFO adds little.
+    If blue >> orange: full backtest is overfitted.
+    If orange >> blue: WFO optimization adds real value.
     """
     with theme_context():
-        fig, ax_ = get_or_create_ax(ax, figsize)
+        fig = new_figure(figsize)
 
         # 1. Stitch OOS segments: chain so each starts where previous ended
         stitched = []
@@ -409,7 +425,7 @@ def _walk_forward_stitched(wf_result, folds, *, full_result=None, ax, is_color, 
             fold_boundaries.append(len(stitched))
 
         if not stitched:
-            ax_.set_title("No OOS equity data available")
+            fig.update_layout(title_text="No OOS equity data available")
             return finalize(fig, show=show, save=save)
 
         stitched = np.array(stitched)
@@ -417,36 +433,36 @@ def _walk_forward_stitched(wf_result, folds, *, full_result=None, ax, is_color, 
 
         # 2. Full backtest equity (if provided)
         if full_result is not None:
-            full_eq_raw = full_result.equity_curve
-            full_eq = np.array(full_eq_raw)
+            full_eq = np.array(full_result.equity_curve)
             if len(full_eq) > 0:
-                # Resample to match stitched length
                 indices = np.linspace(0, len(full_eq) - 1, len(stitched), dtype=int)
                 full_resampled = full_eq[indices].astype(float)
-                # Normalize to start at same value as stitched
                 if full_resampled[0] != 0:
                     full_resampled = full_resampled * (stitched[0] / full_resampled[0])
-                ax_.plot(x, full_resampled, color=is_color, linewidth=0.8, alpha=0.4,
-                         label="Full backtest (default params)")
-
-                full_ret = (full_resampled[-1] / full_resampled[0] - 1) * 100
+                fig.add_trace(go.Scatter(
+                    x=x, y=full_resampled, mode="lines",
+                    name="Full backtest (default params)",
+                    line=dict(color=is_color, width=0.8), opacity=0.4,
+                ))
 
         # 3. Plot stitched OOS on top
-        ax_.plot(x, stitched, color=oos_color, linewidth=0.9, alpha=0.85,
-                 label="Walk-forward (stitched OOS)", zorder=3)
+        fig.add_trace(go.Scatter(
+            x=x, y=stitched, mode="lines",
+            name="Walk-forward (stitched OOS)",
+            line=dict(color=oos_color, width=1.0), opacity=0.85,
+        ))
 
         # Fold boundaries
         for b in fold_boundaries[:-1]:
-            ax_.axvline(x=b, color=DARK_GRAY, linewidth=0.5,
-                        linestyle="--", alpha=0.3)
+            fig.add_vline(x=b, line_color=DARK_GRAY, line_width=0.5,
+                          line_dash="dash", opacity=0.3)
 
-        # No floating text - returns are visible from the curves
-
-        ax_.set_title(title or "Walk-Forward: Stitched OOS vs Full Backtest")
-        ax_.set_xlabel("Bars")
-        ax_.set_ylabel("Equity")
-        ax_.legend(loc="upper left", fontsize=8)
-        ax_.grid(True, alpha=0.08)
+        fig.update_layout(
+            title_text=title or "Walk-Forward: Stitched OOS vs Full Backtest",
+            legend=dict(x=0.01, y=0.99),
+        )
+        fig.update_xaxes(title_text="Bars")
+        fig.update_yaxes(title_text="Equity")
         return finalize(fig, show=show, save=save)
 
 
@@ -456,7 +472,7 @@ def _walk_forward_stitched(wf_result, folds, *, full_result=None, ax, is_color, 
 def stability(
     stability_result: Dict[str, Any],
     *,
-    ax: Optional[Axes] = None,
+    ax=None,
     line_color: str = ACCENT,
     band_color: str = ACCENT,
     band_alpha: float = 0.15,
@@ -464,14 +480,14 @@ def stability(
     figsize: Tuple[float, float] = (10, 5),
     show: bool = False,
     save: Optional[Union[str, Path]] = None,
-) -> Figure:
+) -> go.Figure:
     """Parameter stability chart with mean +/- std shaded bands.
 
     Expected keys: values, metric_values, mean_metric, std_metric,
                    param_name, metric, stability_score.
     """
     with theme_context():
-        fig, ax_ = get_or_create_ax(ax, figsize)
+        fig = new_figure(figsize)
 
         param_vals = np.array(stability_result["values"], dtype=np.float64)
         metric_vals = np.array(stability_result["metric_values"], dtype=np.float64)
@@ -481,20 +497,38 @@ def stability(
         metric_name = stability_result.get("metric", "metric")
         score = stability_result.get("stability_score", None)
 
-        ax_.plot(param_vals, metric_vals, color=line_color, linewidth=1.8, marker="o", markersize=4)
-        ax_.axhline(mean, color=band_color, linewidth=1.0, linestyle="--", label=f"Mean: {mean:.3f}")
-        ax_.fill_between(
-            param_vals, mean - std, mean + std,
-            color=band_color, alpha=band_alpha, label=f"\u00b11\u03c3: {std:.3f}",
-        )
+        # ±1σ band
+        fig.add_trace(go.Scatter(
+            x=param_vals, y=np.full(len(param_vals), mean - std), mode="lines",
+            line=dict(width=0), hoverinfo="skip", showlegend=False,
+        ))
+        fig.add_trace(go.Scatter(
+            x=param_vals, y=np.full(len(param_vals), mean + std), mode="lines",
+            line=dict(width=0), fill="tonexty",
+            fillcolor=_rgba(band_color, band_alpha),
+            name=f"±1σ: {std:.3f}", hoverinfo="skip",
+        ))
+        fig.add_hline(y=mean, line_color=band_color, line_width=1.0,
+                      line_dash="dash")
+        fig.add_trace(go.Scatter(
+            x=[None], y=[None], mode="lines", name=f"Mean: {mean:.3f}",
+            line=dict(color=band_color, width=1.0, dash="dash"),
+        ))
+        fig.add_trace(go.Scatter(
+            x=param_vals, y=metric_vals, mode="lines+markers",
+            line=dict(color=line_color, width=1.8),
+            marker=dict(size=6, color=line_color),
+            name=metric_name, showlegend=False,
+            hovertemplate=f"{param_name} %{{x}}: %{{y:.3f}}<extra></extra>",
+        ))
 
-        ax_.set_xlabel(param_name)
-        ax_.set_ylabel(metric_name)
         t = title or f"{metric_name} Stability"
         if score is not None:
             t += f"  (score: {score:.2f})"
-        ax_.set_title(t)
-        ax_.legend(loc="upper right")
+        fig.update_layout(title_text=t,
+                          legend=dict(x=0.99, y=0.99, xanchor="right"))
+        fig.update_xaxes(title_text=param_name)
+        fig.update_yaxes(title_text=metric_name)
         return finalize(fig, show=show, save=save)
 
 
@@ -505,40 +539,72 @@ def correlation_matrix(
     symbols: List[str],
     matrix: List[List[float]],
     *,
-    ax: Optional[Axes] = None,
+    ax=None,
     annotate: bool = True,
     title: str = "Correlation Matrix",
     figsize: Tuple[float, float] = (8, 7),
     show: bool = False,
     save: Optional[Union[str, Path]] = None,
-) -> Figure:
+) -> go.Figure:
     """Symbol correlation matrix heatmap."""
     with theme_context():
-        fig, ax_ = get_or_create_ax(ax, figsize)
-
         mat = np.array(matrix, dtype=np.float64)
+
+        fig = new_figure(figsize, title)
+        fig.add_trace(go.Heatmap(
+            z=mat, x=symbols, y=symbols,
+            colorscale=CS_CORRELATION, zmin=-1, zmax=1,
+            text=np.round(mat, 2) if annotate else None,
+            texttemplate="%{text:.2f}" if annotate else None,
+            textfont=dict(size=10),
+            hovertemplate="%{y} / %{x}: %{z:.2f}<extra></extra>",
+            colorbar=dict(outlinewidth=0, thickness=12),
+        ))
+        fig.update_yaxes(autorange="reversed", showspikes=False,
+                         scaleanchor="x", scaleratio=1, constrain="domain")
+        fig.update_xaxes(tickangle=45, showspikes=False, constrain="domain")
+        fig.update_layout(hovermode="closest")
         n = len(symbols)
-        cmap = plt.get_cmap("bt_correlation")
-        im = ax_.imshow(mat, cmap=cmap, vmin=-1, vmax=1, aspect="equal", interpolation="nearest")
+        return finalize(fig, show=show, save=save,
+                        window_size=_grid_window_size(n, n))
 
-        ax_.set_xticks(range(n))
-        ax_.set_xticklabels(symbols, rotation=45, ha="right")
-        ax_.set_yticks(range(n))
-        ax_.set_yticklabels(symbols)
 
-        if annotate:
-            for yi in range(n):
-                for xi in range(n):
-                    val = mat[yi, xi]
-                    txt_color = DARK_GRAY if yi == xi else ("white" if abs(val) > 0.5 else DARK_GRAY)
-                    ax_.text(
-                        xi, yi, f"{val:.2f}",
-                        ha="center", va="center", fontsize=9, color=txt_color,
-                    )
+# ── Fan chart internals (Monte Carlo + stochastic) ──────────────────────────
 
-        ax_.set_title(title)
-        fig.colorbar(im, ax=ax_, shrink=0.7)
-        return finalize(fig, show=show, save=save)
+
+def _batched_paths_trace(x, paths: np.ndarray, n_sample_paths: int, color: str):
+    """All faded sample paths as ONE trace (None-separated) for performance."""
+    k = min(n_sample_paths, paths.shape[0])
+    if k <= 0:
+        return None
+    n = paths.shape[1]
+    xs = np.empty((k, n + 1), dtype=np.float64)
+    ys = np.empty((k, n + 1), dtype=np.float64)
+    xs[:, :n] = np.asarray(x, dtype=np.float64)
+    ys[:, :n] = paths[:k]
+    xs[:, n] = np.nan
+    ys[:, n] = np.nan
+    return go.Scatter(
+        x=xs.ravel(), y=ys.ravel(), mode="lines",
+        line=dict(color=color, width=0.3), opacity=0.06,
+        hoverinfo="skip", showlegend=False, connectgaps=False,
+    )
+
+
+def _fan_bands(fig, x, pct_lines, percentiles, band_color):
+    """Fill between symmetric percentile bands."""
+    for lo, hi in [(0, -1), (1, -2)]:
+        if lo < len(percentiles) and abs(hi) <= len(percentiles):
+            fig.add_trace(go.Scatter(
+                x=x, y=pct_lines[percentiles[lo]], mode="lines",
+                line=dict(width=0), hoverinfo="skip", showlegend=False,
+            ))
+            fig.add_trace(go.Scatter(
+                x=x, y=pct_lines[percentiles[hi]], mode="lines",
+                line=dict(width=0), fill="tonexty",
+                fillcolor=_rgba(band_color, 0.08),
+                hoverinfo="skip", showlegend=False,
+            ))
 
 
 # ── Monte Carlo Fan ──────────────────────────────────────────────────────────
@@ -551,7 +617,7 @@ def monte_carlo(
     method: str = "bootstrap",
     percentiles: Optional[List[int]] = None,
     n_sample_paths: int = 50,
-    ax: Optional[Axes] = None,
+    ax=None,
     median_color: str = ACCENT,
     band_color: str = ACCENT,
     title: Optional[str] = None,
@@ -559,7 +625,7 @@ def monte_carlo(
     seed: Optional[int] = None,
     show: bool = False,
     save: Optional[Union[str, Path]] = None,
-) -> Figure:
+) -> go.Figure:
     """Monte Carlo fan chart with percentile bands, sample paths, and risk stats.
 
     Args:
@@ -591,13 +657,13 @@ def monte_carlo(
         title = f"Monte Carlo - {n_simulations:,} paths ({method_label})"
 
     with theme_context():
-        fig, ax_ = get_or_create_ax(ax, figsize)
+        fig = new_figure(figsize, title)
 
         rets = daily_returns_array(result)
         _, orig_equity = equity_with_dates(result)
 
         if len(rets) < 2:
-            ax_.set_title(title + " (insufficient data)")
+            fig.update_layout(title_text=title + " (insufficient data)")
             return finalize(fig, show=show, save=save)
 
         rng = np.random.default_rng(seed)
@@ -614,108 +680,86 @@ def monte_carlo(
                 sampled = rng.choice(rets, size=n_days, replace=True)
             paths[i, 1:] = initial * np.cumprod(1.0 + sampled)
 
-        # Compute percentile bands
         x = np.arange(n_days + 1)
         pct_lines = {pct: np.percentile(paths, pct, axis=0) for pct in percentiles}
 
-        # Draw sample paths (faded)
-        if n_sample_paths > 0:
-            for i in range(min(n_sample_paths, n_simulations)):
-                ax_.plot(x, paths[i], color=band_color, linewidth=0.3, alpha=0.06)
+        sample_trace = _batched_paths_trace(x, paths, n_sample_paths, band_color)
+        if sample_trace is not None:
+            fig.add_trace(sample_trace)
+        _fan_bands(fig, x, pct_lines, percentiles, band_color)
 
-        # Fill between symmetric bands
-        for lo, hi in [(0, -1), (1, -2)]:
-            ax_.fill_between(
-                x, pct_lines[percentiles[lo]], pct_lines[percentiles[hi]],
-                color=band_color, alpha=0.08,
-            )
-
-        # Original equity (dashed) — resample to match MC daily resolution
+        # Original equity (dashed), resampled to MC daily resolution
         if len(orig_equity) > n_days * 2:
             indices = np.linspace(0, len(orig_equity) - 1, n_days + 1, dtype=int)
             orig_resampled = np.array(orig_equity)[indices]
         else:
             orig_resampled = np.array(orig_equity[:n_days + 1])
-        orig_x = np.arange(len(orig_resampled))
-        ax_.plot(orig_x, orig_resampled, color="#e8e9ed", linewidth=0.8,
-                 alpha=0.4, linestyle="--", label="Original")
+        fig.add_trace(go.Scatter(
+            x=np.arange(len(orig_resampled)), y=orig_resampled, mode="lines",
+            name="Original", line=dict(color="#e8e9ed", width=0.8, dash="dash"),
+            opacity=0.4,
+        ))
+
+        running_peak = np.maximum.accumulate(paths, axis=1)
+        drawdowns = (paths - running_peak) / running_peak
+        max_dd_per_path = drawdowns.min(axis=1) * 100
 
         if method == "bootstrap":
-            # Bootstrap: percentile lines with final return %
             for pct in percentiles:
                 ret_pct = (pct_lines[pct][-1] / initial - 1) * 100
                 if pct == 50:
-                    ax_.plot(x, pct_lines[pct], color=median_color, linewidth=2,
-                             label=f"P{pct} (median): {ret_pct:+.1f}%", zorder=3)
+                    fig.add_trace(go.Scatter(
+                        x=x, y=pct_lines[pct], mode="lines",
+                        name=f"P{pct} (median): {ret_pct:+.1f}%",
+                        line=dict(color=median_color, width=2),
+                    ))
                 else:
-                    ax_.plot(x, pct_lines[pct], color=band_color, linewidth=0.5,
-                             alpha=0.4, label=f"P{pct}: {ret_pct:+.1f}%")
-
-            # Drawdown stats
-            running_peak = np.maximum.accumulate(paths, axis=1)
-            drawdowns = (paths - running_peak) / running_peak
-            max_dd_per_path = drawdowns.min(axis=1) * 100
+                    fig.add_trace(go.Scatter(
+                        x=x, y=pct_lines[pct], mode="lines",
+                        name=f"P{pct}: {ret_pct:+.1f}%",
+                        line=dict(color=band_color, width=0.5), opacity=0.4,
+                    ))
 
             dd_p5 = np.percentile(max_dd_per_path, 5)
             dd_p50 = np.percentile(max_dd_per_path, 50)
-
-            # P(ruin)
             p_ruin = np.mean((paths[:, -1] / initial - 1) < -0.5) * 100
-
-            stats_text = f"P(ruin) = {p_ruin:.2f}%\nMax DD (P5): {dd_p5:.1f}%\nMax DD (median): {dd_p50:.1f}%"
-            ax_.text(
-                0.98, 0.95, stats_text,
-                transform=ax_.transAxes, ha="right", va="top",
-                color="#8a8a8a", fontsize=8, fontfamily="monospace",
-                bbox={"boxstyle": "round,pad=0.4", "facecolor": "#111116",
-                       "edgecolor": "#1e1e24", "alpha": 0.9},
-            )
-
+            _stats_annotation(fig, (
+                f"P(ruin) = {p_ruin:.2f}%\n"
+                f"Max DD (P5): {dd_p5:.1f}%\n"
+                f"Max DD (median): {dd_p50:.1f}%"
+            ))
         else:
-            # Permutation: all paths end at the same point.
-            # Skill vs luck analysis: compare original drawdown to permuted distribution.
-            ax_.plot(x, pct_lines[50], color=median_color, linewidth=2,
-                     label="Median path", zorder=3)
+            # Permutation: skill vs luck via drawdown rank
+            fig.add_trace(go.Scatter(
+                x=x, y=pct_lines[50], mode="lines", name="Median path",
+                line=dict(color=median_color, width=2),
+            ))
             for pct in percentiles:
                 if pct != 50:
-                    ax_.plot(x, pct_lines[pct], color=band_color, linewidth=0.5, alpha=0.4)
+                    fig.add_trace(go.Scatter(
+                        x=x, y=pct_lines[pct], mode="lines", showlegend=False,
+                        line=dict(color=band_color, width=0.5), opacity=0.4,
+                    ))
 
-            # Max drawdown per path
-            running_peak = np.maximum.accumulate(paths, axis=1)
-            drawdowns = (paths - running_peak) / running_peak
-            max_dd_per_path = drawdowns.min(axis=1) * 100
-
-            # Original strategy drawdown
             orig_eq = np.array(orig_resampled)
             orig_peak = np.maximum.accumulate(orig_eq)
             orig_max_dd = ((orig_eq - orig_peak) / orig_peak).min() * 100
 
-            dd_p50 = np.percentile(max_dd_per_path, 50)
-
             dd_p5 = np.percentile(max_dd_per_path, 5)
+            dd_p50 = np.percentile(max_dd_per_path, 50)
             dd_p95 = np.percentile(max_dd_per_path, 95)
             dd_rank = np.mean(max_dd_per_path <= orig_max_dd) * 100
-
-            stats_text = (
+            _stats_annotation(fig, (
                 f"Realized max DD:  {orig_max_dd:.1f}%\n"
                 f"Permuted DD P5:   {dd_p5:.1f}%\n"
                 f"Permuted DD P50:  {dd_p50:.1f}%\n"
                 f"Permuted DD P95:  {dd_p95:.1f}%\n"
                 f"DD rank:          {dd_rank:.0f}th percentile"
-            )
-            ax_.text(
-                0.98, 0.95, stats_text,
-                transform=ax_.transAxes, ha="right", va="top",
-                color="#8a8a8a", fontsize=8, fontfamily="monospace",
-                bbox={"boxstyle": "round,pad=0.4", "facecolor": "#111116",
-                       "edgecolor": "#1e1e24", "alpha": 0.9},
-            )
+            ))
 
-        ax_.margins(x=0.02)
-        ax_.set_title(title)
-        ax_.set_xlabel("Days")
-        ax_.set_ylabel("Equity")
-        ax_.legend(loc="upper left", fontsize=7, framealpha=0.3)
+        fig.update_xaxes(title_text="Days")
+        fig.update_yaxes(title_text="Equity")
+        fig.update_layout(legend=dict(x=0.01, y=0.99, font=dict(size=10)))
         return finalize(fig, show=show, save=save)
 
 
@@ -727,14 +771,14 @@ def stochastic_paths(
     *,
     percentiles: Optional[List[int]] = None,
     n_sample_paths: int = 50,
-    ax: Optional[Axes] = None,
+    ax=None,
     median_color: str = ACCENT,
     band_color: str = ACCENT,
     title: Optional[str] = None,
     figsize: Tuple[float, float] = (12, 5),
     show: bool = False,
     save: Optional[Union[str, Path]] = None,
-) -> Figure:
+) -> go.Figure:
     """Fan chart for stochastic simulation paths with percentile bands.
 
     Args:
@@ -756,7 +800,7 @@ def stochastic_paths(
             "result has no paths data. Run with store_paths=True."
         )
 
-    # Reshape flat Arrow/numpy array → (n_paths, n_steps+1)
+    # Reshape flat Arrow/numpy array -> (n_paths, n_steps+1)
     flat = np.asarray(paths_raw, dtype=np.float64)
     paths = flat.reshape((n_paths, n_steps))
 
@@ -764,44 +808,32 @@ def stochastic_paths(
         title = f"Stochastic simulation - {model_name} ({n_paths:,} paths)"
 
     with theme_context():
-        fig, ax_ = get_or_create_ax(ax, figsize)
+        fig = new_figure(figsize, title)
 
         x = np.arange(paths.shape[1])
-
-        # Draw sample paths (faded)
-        if n_sample_paths > 0:
-            for i in range(min(n_sample_paths, n_paths)):
-                ax_.plot(x, paths[i], color=band_color, linewidth=0.3, alpha=0.06)
-
-        # Compute percentile bands
         pct_lines = {pct: np.percentile(paths, pct, axis=0) for pct in percentiles}
 
-        # Fill between symmetric bands
-        for lo, hi in [(0, -1), (1, -2)]:
-            if lo < len(percentiles) and hi < 0 and abs(hi) <= len(percentiles):
-                ax_.fill_between(
-                    x,
-                    pct_lines[percentiles[lo]],
-                    pct_lines[percentiles[hi]],
-                    color=band_color,
-                    alpha=0.08,
-                )
+        sample_trace = _batched_paths_trace(x, paths, n_sample_paths, band_color)
+        if sample_trace is not None:
+            fig.add_trace(sample_trace)
+        _fan_bands(fig, x, pct_lines, percentiles, band_color)
 
-        # Percentile lines
         s0 = paths[0, 0] if paths.shape[1] > 0 else 100.0
         for pct in percentiles:
             final = pct_lines[pct][-1]
             ret_pct = (final / s0 - 1) * 100
             if pct == 50:
-                ax_.plot(
-                    x, pct_lines[pct], color=median_color, linewidth=2,
-                    label=f"P{pct} (median): {ret_pct:+.1f}%", zorder=3,
-                )
+                fig.add_trace(go.Scatter(
+                    x=x, y=pct_lines[pct], mode="lines",
+                    name=f"P{pct} (median): {ret_pct:+.1f}%",
+                    line=dict(color=median_color, width=2),
+                ))
             else:
-                ax_.plot(
-                    x, pct_lines[pct], color=band_color, linewidth=0.5,
-                    alpha=0.4, label=f"P{pct}: {ret_pct:+.1f}%",
-                )
+                fig.add_trace(go.Scatter(
+                    x=x, y=pct_lines[pct], mode="lines",
+                    name=f"P{pct}: {ret_pct:+.1f}%",
+                    line=dict(color=band_color, width=0.5), opacity=0.4,
+                ))
 
         # Stats box
         final_prices = paths[:, -1]
@@ -812,27 +844,13 @@ def stochastic_paths(
         dd_p5 = np.percentile(max_dd_per_path, 5)
         dd_p50 = np.percentile(max_dd_per_path, 50)
         mean_ret = (np.mean(final_prices) / s0 - 1) * 100
-
-        stats_text = (
+        _stats_annotation(fig, (
             f"Mean return: {mean_ret:+.1f}%\n"
             f"Max DD (P5): {dd_p5:.1f}%\n"
             f"Max DD (P50): {dd_p50:.1f}%"
-        )
-        ax_.text(
-            0.98, 0.95, stats_text,
-            transform=ax_.transAxes, ha="right", va="top",
-            color="#8a8a8a", fontsize=8, fontfamily="monospace",
-            bbox={
-                "boxstyle": "round,pad=0.4",
-                "facecolor": "#111116",
-                "edgecolor": "#1e1e24",
-                "alpha": 0.9,
-            },
-        )
+        ))
 
-        ax_.margins(x=0.02)
-        ax_.set_title(title)
-        ax_.set_xlabel("Time steps")
-        ax_.set_ylabel("Price")
-        ax_.legend(loc="upper left", fontsize=7, framealpha=0.3)
+        fig.update_xaxes(title_text="Time steps")
+        fig.update_yaxes(title_text="Price")
+        fig.update_layout(legend=dict(x=0.01, y=0.99, font=dict(size=10)))
         return finalize(fig, show=show, save=save)

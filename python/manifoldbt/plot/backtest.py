@@ -1,15 +1,12 @@
-"""Charts for BacktestResult visualization."""
+"""Charts for BacktestResult visualization (plotly)."""
 from __future__ import annotations
 
 from pathlib import Path
 from typing import List, Optional, Tuple, Union
 
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
-import matplotlib.ticker as mticker
-from matplotlib.axes import Axes
-from matplotlib.figure import Figure
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 from manifoldbt.plot._theme import (
     ACCENT,
@@ -29,7 +26,42 @@ from manifoldbt.plot._convert import (
     trades_arrays,
     _ts_to_int64,
 )
-from manifoldbt.plot._utils import finalize, format_pct, get_or_create_ax
+from manifoldbt.plot._decimate import maybe_decimate
+from manifoldbt.plot._utils import finalize, format_pct, new_figure
+
+
+def _rgba(hex_color: str, alpha: float) -> str:
+    """'#rrggbb' -> 'rgba(r,g,b,a)'."""
+    h = hex_color.lstrip("#")
+    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    return f"rgba({r},{g},{b},{alpha})"
+
+
+def _area_traces(x, y, baseline: float, color: str, *, width: float = 1.5,
+                 name: Optional[str] = None, hovertemplate: Optional[str] = None):
+    """Line + fill-to-baseline traces, with a vertical gradient when supported."""
+    base = go.Scatter(
+        x=x, y=np.full(len(x), baseline), mode="lines",
+        line=dict(width=0), hoverinfo="skip", showlegend=False,
+    )
+    kwargs = dict(
+        x=x, y=y, mode="lines",
+        line=dict(color=color, width=width),
+        fill="tonexty",
+        name=name, showlegend=name is not None,
+        hovertemplate=hovertemplate,
+    )
+    try:
+        line_trace = go.Scatter(
+            fillgradient=dict(
+                type="vertical",
+                colorscale=[[0.0, _rgba(color, 0.0)], [1.0, _rgba(color, 0.22)]],
+            ),
+            **kwargs,
+        )
+    except (ValueError, TypeError):  # plotly too old for fillgradient
+        line_trace = go.Scatter(fillcolor=_rgba(color, 0.07), **kwargs)
+    return [base, line_trace]
 
 
 # ── Summary (the essential chart) ────────────────────────────────────────────
@@ -41,29 +73,44 @@ def summary(
     figsize: Tuple[float, float] = (14, 8),
     show: bool = False,
     save: Optional[Union[str, Path]] = None,
-) -> Figure:
+) -> go.Figure:
     """The essential chart: TWR equity + buy-and-hold benchmark, trade activity.
 
     Top panel:  TWR-normalized equity curve vs buy-and-hold (close price).
-    Bottom panel: daily trade count as a bar chart.
-    Metrics displayed in a clean header line.
+    Middle panel: daily trade count as a bar chart.
+    Bottom panel: used margin percentage.
+    Metrics displayed in the title line.
     """
     with theme_context():
-        fig, (ax_eq, ax_trades, ax_margin) = plt.subplots(
-            3, 1, figsize=figsize, height_ratios=[3, 1, 1],
-            sharex=True, gridspec_kw={"hspace": 0.25},
+        fig = make_subplots(
+            rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.06,
+            row_heights=[0.6, 0.2, 0.2],
         )
 
         dates, eq_vals = equity_with_dates(result)
         metrics = result.metrics if hasattr(result, "metrics") else {}
 
         # ── TWR equity (normalized to 100) ────────────────────────
-        twr = eq_vals / eq_vals[0] * 100
-        ax_eq.plot(dates, twr, color=ACCENT, linewidth=0.8, label="Strategy")
-        ax_eq.fill_between(dates, twr, 100, where=(twr >= 100),
-                           color=GREEN, alpha=0.04, interpolate=True)
-        ax_eq.fill_between(dates, twr, 100, where=(twr < 100),
-                           color=RED, alpha=0.04, interpolate=True)
+        twr_full = eq_vals / eq_vals[0] * 100
+        d_dates, twr = maybe_decimate(dates, twr_full)
+        fig.add_trace(go.Scatter(
+            x=d_dates, y=twr, mode="lines", name="Strategy",
+            line=dict(color=ACCENT, width=1.0),
+            hovertemplate="%{x|%d %b %Y}  %{y:.1f}<extra>Strategy</extra>",
+        ), row=1, col=1)
+
+        # Faint green/red fill vs the 100 baseline
+        for clip_lo, clip_hi, color in ((100.0, None, GREEN), (None, 100.0, RED)):
+            clipped = np.clip(twr, clip_lo, clip_hi)
+            fig.add_trace(go.Scatter(
+                x=d_dates, y=np.full(len(d_dates), 100.0), mode="lines",
+                line=dict(width=0), hoverinfo="skip", showlegend=False,
+            ), row=1, col=1)
+            fig.add_trace(go.Scatter(
+                x=d_dates, y=clipped, mode="lines", line=dict(width=0),
+                fill="tonexty", fillcolor=_rgba(color, 0.04),
+                hoverinfo="skip", showlegend=False,
+            ), row=1, col=1)
 
         # ── Benchmark: buy-and-hold from close prices ─────────────
         positions = result.positions
@@ -78,7 +125,7 @@ def summary(
             benchmark_raw = close_vals / close_vals[0] * 100
 
             # Vol-adjusted benchmark: scale to same volatility as strategy
-            strat_rets = np.diff(twr) / twr[:-1]
+            strat_rets = np.diff(twr_full) / twr_full[:-1]
             bench_rets = np.diff(benchmark_raw) / benchmark_raw[:-1]
             strat_vol = np.nanstd(strat_rets)
             bench_vol = np.nanstd(bench_rets)
@@ -90,16 +137,19 @@ def summary(
             else:
                 benchmark = benchmark_raw
 
-            ax_eq.plot(dates, benchmark, color=GRAY, linewidth=1.0,
-                       label="Buy & Hold (vol-adj)", alpha=0.7)
+            b_dates, b_vals = maybe_decimate(dates[: len(benchmark)], benchmark)
+            fig.add_trace(go.Scatter(
+                x=b_dates, y=b_vals, mode="lines", name="Buy & Hold (vol-adj)",
+                line=dict(color=GRAY, width=1.0), opacity=0.7,
+                hovertemplate="%{x|%d %b %Y}  %{y:.1f}<extra>Buy & Hold</extra>",
+            ), row=1, col=1)
 
-        ax_eq.axhline(100, color=DARK_GRAY, linewidth=0.4)
-        # Ensure y-axis zooms to strategy range with some padding
-        twr_min, twr_max = float(np.nanmin(twr)), float(np.nanmax(twr))
+        fig.add_hline(y=100, line_color=DARK_GRAY, line_width=0.4, row=1, col=1)
+        twr_min, twr_max = float(np.nanmin(twr_full)), float(np.nanmax(twr_full))
         twr_range = max(twr_max - twr_min, 0.1)
-        ax_eq.set_ylim(twr_min - twr_range * 0.15, twr_max + twr_range * 0.15)
-        ax_eq.set_ylabel("TWR (base 100)", fontsize=9)
-        ax_eq.legend(loc="upper left", framealpha=0.3, fontsize=8)
+        fig.update_yaxes(title_text="TWR (base 100)",
+                         range=[twr_min - twr_range * 0.15, twr_max + twr_range * 0.15],
+                         row=1, col=1)
 
         # Header metrics
         ret = metrics.get("total_return", 0)
@@ -112,10 +162,9 @@ def summary(
             f"    Max DD {mdd * 100:.1f}%"
             f"    Trades {n_trades:,}"
         )
-        ax_eq.set_title(title, fontsize=10, loc="left", pad=10)
+        fig.update_layout(title_text=title)
 
         # ── Adaptive smoothing window ──────────────────────────────
-        # Scale window: min(7d, max(1d, 5% of total period))
         smooth_label = ""
         if len(dates) >= 2:
             bar_ns = int(dates[1]) - int(dates[0])
@@ -126,22 +175,22 @@ def summary(
             smooth_window = min(smooth_window, len(dates))
             smooth_days = round(target_ns / day_ns)
             smooth_label = f" ({smooth_days}d)" if smooth_days >= 1 else ""
-        else:
-            smooth_window = 1
 
         # ── Trade activity (daily trade count) ─────────────────────
         try:
             ta = trades_arrays(result)
             trade_ts = ta.get("execution_timestamp", np.array([], dtype="datetime64[ns]"))
             if len(trade_ts) > 0 and len(dates) >= 2:
-                # Bucket trades into calendar days
                 trade_days = trade_ts.astype("datetime64[D]")
                 unique_days, day_counts = np.unique(trade_days, return_counts=True)
                 day_dates = unique_days.astype("datetime64[ns]")
 
-                ax_trades.bar(day_dates, day_counts,
-                              width=np.timedelta64(1, "D"),
-                              color=ACCENT_ALT, alpha=0.4, edgecolor="none")
+                fig.add_trace(go.Bar(
+                    x=day_dates, y=day_counts, name="Trades/day",
+                    marker_color=_rgba(ACCENT_ALT, 0.4), marker_line_width=0,
+                    showlegend=False,
+                    hovertemplate="%{x|%d %b %Y}  %{y} trades<extra></extra>",
+                ), row=2, col=1)
 
                 # Rolling 7-day average overlay
                 eq_days = dates.astype("datetime64[D]")
@@ -154,16 +203,14 @@ def summary(
                 if win > 1:
                     kernel = np.ones(win) / win
                     smoothed = np.convolve(daily_on_grid, kernel, mode="same")
-                    ax_trades.plot(unique_eq_days.astype("datetime64[ns]"), smoothed,
-                                   color=ACCENT_ALT, linewidth=1.0, alpha=0.8)
-            else:
-                ax_trades.text(0.5, 0.5, "No trade data", transform=ax_trades.transAxes,
-                               ha="center", va="center", color=DARK_GRAY, fontsize=9)
+                    fig.add_trace(go.Scatter(
+                        x=unique_eq_days.astype("datetime64[ns]"), y=smoothed,
+                        mode="lines", line=dict(color=ACCENT_ALT, width=1.0),
+                        opacity=0.8, showlegend=False, hoverinfo="skip",
+                    ), row=2, col=1)
         except Exception:
-            ax_trades.text(0.5, 0.5, "No trade data", transform=ax_trades.transAxes,
-                           ha="center", va="center", color=DARK_GRAY, fontsize=9)
-
-        ax_trades.set_ylabel("Trades/day", fontsize=8)
+            pass
+        fig.update_yaxes(title_text="Trades/day", row=2, col=1)
 
         # ── Used margin % (daily) ──────────────────────────────
         try:
@@ -183,29 +230,27 @@ def summary(
             # Resample to daily (end-of-day snapshot)
             days = used_dates.astype("datetime64[D]")
             unique_days, _ = np.unique(days, return_index=True)
-            # Use last value per day (not first) for end-of-day margin
             day_last = np.searchsorted(days, unique_days, side="right") - 1
             daily_used = used[day_last]
             daily_dates = unique_days.astype("datetime64[ns]")
 
-            ax_margin.fill_between(daily_dates, 0, daily_used,
-                                   color=GREEN, alpha=0.10, edgecolor="none")
-            ax_margin.plot(daily_dates, daily_used,
-                           color=GREEN, linewidth=0.7, alpha=0.8)
-            ax_margin.axhline(0, color=DARK_GRAY, linewidth=0.4)
+            fig.add_trace(go.Scatter(
+                x=daily_dates, y=daily_used, mode="lines",
+                line=dict(color=GREEN, width=0.7), opacity=0.8,
+                fill="tozeroy", fillcolor=_rgba(GREEN, 0.10),
+                showlegend=False,
+                hovertemplate="%{x|%d %b %Y}  %{y:.1f}%<extra>Margin</extra>",
+            ), row=3, col=1)
         except Exception:
-            ax_margin.text(
-                0.5, 0.5, "No position data",
-                transform=ax_margin.transAxes,
-                ha="center", va="center", color=DARK_GRAY, fontsize=9,
-            )
+            pass
+        fig.update_yaxes(title_text=f"Margin %{smooth_label}", row=3, col=1)
 
-        ax_margin.set_ylabel(f"Margin %{smooth_label}", fontsize=8)
-        ax_margin.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
-        ax_margin.xaxis.set_major_locator(mdates.AutoDateLocator())
-        fig.align_ylabels([ax_eq, ax_trades, ax_margin])
-        fig.autofmt_xdate(rotation=0, ha="center")
-
+        fig.update_layout(
+            width=int(figsize[0] * 80), height=int(figsize[1] * 80),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02,
+                        xanchor="right", x=1),
+            bargap=0.0,
+        )
         return finalize(fig, show=show, save=save)
 
 
@@ -215,24 +260,27 @@ def summary(
 def equity(
     result,
     *,
-    ax: Optional[Axes] = None,
+    ax=None,
     color: str = ACCENT,
     title: str = "Equity Curve",
     figsize: Tuple[float, float] = (14, 5),
     show: bool = False,
     save: Optional[Union[str, Path]] = None,
-) -> Figure:
-    """Plot the portfolio equity curve over time."""
+) -> go.Figure:
+    """Plot the portfolio equity curve over time.
+
+    ``ax`` is accepted for backward compatibility and ignored (plotly backend).
+    """
     with theme_context():
-        fig, ax_ = get_or_create_ax(ax, figsize)
+        fig = new_figure(figsize, title)
         dates, values = equity_with_dates(result)
-        ax_.plot(dates, values, color=color, linewidth=1.3)
-        ax_.fill_between(dates, values, values.min(), color=color, alpha=0.05)
-        ax_.set_title(title)
-        ax_.set_ylabel("Equity", fontsize=9)
-        ax_.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
-        ax_.xaxis.set_major_locator(mdates.AutoDateLocator())
-        fig.autofmt_xdate(rotation=0, ha="center")
+        dates, values = maybe_decimate(dates, values)
+        fig.add_traces(_area_traces(
+            dates, values, float(values.min()), color, width=1.5,
+            hovertemplate="%{x|%d %b %Y}   $%{y:,.0f}<extra></extra>",
+        ))
+        fig.update_yaxes(title_text="Equity")
+        fig.update_xaxes(tickformat="%b %Y")
         return finalize(fig, show=show, save=save)
 
 
@@ -243,7 +291,7 @@ def benchmark_equity(
     result,
     benchmark: np.ndarray,
     *,
-    ax: Optional[Axes] = None,
+    ax=None,
     strategy_color: str = ACCENT,
     benchmark_color: str = DARK_GRAY,
     normalize: bool = True,
@@ -252,10 +300,10 @@ def benchmark_equity(
     figsize: Tuple[float, float] = (14, 5),
     show: bool = False,
     save: Optional[Union[str, Path]] = None,
-) -> Figure:
+) -> go.Figure:
     """Overlay strategy equity and a benchmark, both normalized to 100."""
     with theme_context():
-        fig, ax_ = get_or_create_ax(ax, figsize)
+        fig = new_figure(figsize, title)
         dates, strat_eq = equity_with_dates(result)
         bench = np.asarray(benchmark, dtype=np.float64)
         n = min(len(strat_eq), len(bench))
@@ -265,13 +313,19 @@ def benchmark_equity(
             strat_eq = strat_eq / strat_eq[0] * 100
             bench = bench / bench[0] * 100
 
-        ax_.plot(dates, strat_eq, color=strategy_color, linewidth=1.3, label=labels[0])
-        ax_.plot(dates, bench, color=benchmark_color, linewidth=1.0, label=labels[1])
-        ax_.set_title(title)
-        ax_.set_ylabel("Normalized" if normalize else "Equity")
-        ax_.legend(loc="upper left", framealpha=0.5)
-        ax_.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
-        fig.autofmt_xdate(rotation=0, ha="center")
+        d1, s1 = maybe_decimate(dates, strat_eq)
+        d2, b1 = maybe_decimate(dates, bench)
+        fig.add_trace(go.Scatter(
+            x=d1, y=s1, mode="lines", name=labels[0],
+            line=dict(color=strategy_color, width=1.5),
+        ))
+        fig.add_trace(go.Scatter(
+            x=d2, y=b1, mode="lines", name=labels[1],
+            line=dict(color=benchmark_color, width=1.0),
+        ))
+        fig.update_yaxes(title_text="Normalized" if normalize else "Equity")
+        fig.update_xaxes(tickformat="%b %Y")
+        fig.update_layout(legend=dict(x=0.01, y=0.99))
         return finalize(fig, show=show, save=save)
 
 
@@ -281,28 +335,31 @@ def benchmark_equity(
 def drawdown(
     result,
     *,
-    ax: Optional[Axes] = None,
+    ax=None,
     color: str = RED,
     title: str = "Drawdown",
     figsize: Tuple[float, float] = (14, 3),
     show: bool = False,
     save: Optional[Union[str, Path]] = None,
-) -> Figure:
+) -> go.Figure:
     """Plot the drawdown as a filled area chart."""
     with theme_context():
-        fig, ax_ = get_or_create_ax(ax, figsize)
+        fig = new_figure(figsize, title)
         dates, values = equity_with_dates(result)
         running_max = np.maximum.accumulate(values)
         dd = (values - running_max) / running_max
+        dates, dd = maybe_decimate(dates, dd)
 
-        ax_.fill_between(dates, dd, 0, color=color, alpha=0.25)
-        ax_.plot(dates, dd, color=color, linewidth=0.8)
-        ax_.set_title(title)
-        ax_.set_ylabel("Drawdown")
-        ax_.yaxis.set_major_formatter(mticker.PercentFormatter(xmax=1.0, decimals=0))
-        ax_.set_ylim(top=0)
-        ax_.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
-        fig.autofmt_xdate(rotation=0, ha="center")
+        fig.add_trace(go.Scatter(
+            x=dates, y=dd, mode="lines",
+            line=dict(color=color, width=0.9),
+            fill="tozeroy", fillcolor=_rgba(color, 0.25),
+            hovertemplate="%{x|%d %b %Y}   %{y:.1%}<extra></extra>",
+        ))
+        dd_min = float(dd.min()) if len(dd) else -0.01
+        fig.update_yaxes(title_text="Drawdown", tickformat=".0%",
+                         range=[dd_min * 1.08, 0])
+        fig.update_xaxes(tickformat="%b %Y")
         return finalize(fig, show=show, save=save)
 
 
@@ -312,14 +369,16 @@ def drawdown(
 def monthly_returns(
     result,
     *,
-    ax: Optional[Axes] = None,
+    ax=None,
     annotate: bool = True,
     title: str = "Monthly Returns (%)",
     figsize: Tuple[float, float] = (12, 5),
     show: bool = False,
     save: Optional[Union[str, Path]] = None,
-) -> Figure:
+) -> go.Figure:
     """Monthly returns heatmap (year rows x month columns + annual)."""
+    from manifoldbt.plot._theme import CS_DIVERGING
+
     with theme_context():
         dates, values = equity_with_dates(result)
         ts = dates.astype("datetime64[M]")
@@ -344,31 +403,27 @@ def monthly_returns(
             if len(valid) > 0:
                 grid[yi, 12] = np.prod(1.0 + valid) - 1.0
 
-        fig, ax_ = get_or_create_ax(ax, figsize)
         abs_max = max(np.nanmax(np.abs(grid)), 0.01)
-        cmap = plt.get_cmap("bt_diverging")
-        im = ax_.imshow(grid, cmap=cmap, aspect="auto", vmin=-abs_max, vmax=abs_max)
-
         month_labels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
                         "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "YTD"]
-        ax_.set_xticks(range(13))
-        ax_.set_xticklabels(month_labels, fontsize=8)
-        ax_.set_yticks(range(len(years)))
-        ax_.set_yticklabels([str(y) for y in years], fontsize=9)
 
-        if annotate:
-            for yi in range(len(years)):
-                for mi in range(13):
-                    val = grid[yi, mi]
-                    if np.isnan(val):
-                        continue
-                    txt = f"{val * 100:+.1f}"
-                    brightness = abs(val) / abs_max
-                    txt_color = WHITE if brightness > 0.4 else GRAY
-                    ax_.text(mi, yi, txt, ha="center", va="center",
-                             fontsize=7, color=txt_color, fontweight="medium")
+        text = np.where(np.isnan(grid), "", np.vectorize(lambda v: f"{v * 100:+.1f}" if not np.isnan(v) else "")(grid))
 
-        ax_.set_title(title)
+        fig = new_figure(figsize, title)
+        fig.add_trace(go.Heatmap(
+            z=grid * 100, x=month_labels, y=[str(y) for y in years],
+            colorscale=CS_DIVERGING, zmin=-abs_max * 100, zmax=abs_max * 100,
+            text=text if annotate else None,
+            texttemplate="%{text}" if annotate else None,
+            textfont=dict(size=10),
+            hovertemplate="%{y} %{x}: %{z:+.2f}%<extra></extra>",
+            colorbar=dict(ticksuffix="%", outlinewidth=0, thickness=12),
+            hoverongaps=False,
+        ))
+        fig.update_yaxes(autorange="reversed")
+        fig.update_xaxes(side="bottom", showspikes=False)
+        fig.update_yaxes(showspikes=False)
+        fig.update_layout(hovermode="closest")
         return finalize(fig, show=show, save=save)
 
 
@@ -378,12 +433,12 @@ def monthly_returns(
 def annual_returns(
     result,
     *,
-    ax: Optional[Axes] = None,
+    ax=None,
     title: str = "Annual Returns",
     figsize: Tuple[float, float] = (10, 4),
     show: bool = False,
     save: Optional[Union[str, Path]] = None,
-) -> Figure:
+) -> go.Figure:
     """Annual returns bar chart with green/red conditional coloring."""
     with theme_context():
         dates, values = equity_with_dates(result)
@@ -394,19 +449,20 @@ def annual_returns(
             idx = np.nonzero(years_arr == y)[0]
             ann_rets.append(values[idx[-1]] / values[idx[0]] - 1.0 if len(idx) >= 2 else 0.0)
 
-        fig, ax_ = get_or_create_ax(ax, figsize)
+        fig = new_figure(figsize, title)
         colors = [GREEN if r >= 0 else RED for r in ann_rets]
-        bars = ax_.bar([str(y) for y in unique_years], ann_rets, color=colors,
-                       width=0.5, alpha=0.85, edgecolor="none")
-        ax_.axhline(0, color=DARK_GRAY, linewidth=0.5)
-        ax_.set_title(title)
-        ax_.yaxis.set_major_formatter(mticker.PercentFormatter(xmax=1.0, decimals=0))
-
-        for bar, ret in zip(bars, ann_rets):
-            ax_.text(bar.get_x() + bar.get_width() / 2, bar.get_height(),
-                     format_pct(ret), ha="center",
-                     va="bottom" if ret >= 0 else "top",
-                     fontsize=8, color=GRAY)
+        fig.add_trace(go.Bar(
+            x=[str(y) for y in unique_years], y=ann_rets,
+            marker_color=colors, opacity=0.85, marker_line_width=0,
+            width=0.5,
+            text=[format_pct(r) for r in ann_rets],
+            textposition="outside", textfont=dict(color=GRAY, size=11),
+            hovertemplate="%{x}: %{y:.1%}<extra></extra>",
+        ))
+        fig.add_hline(y=0, line_color=DARK_GRAY, line_width=0.5)
+        fig.update_yaxes(tickformat=".0%")
+        fig.update_xaxes(showspikes=False, type="category")
+        fig.update_layout(hovermode="closest")
         return finalize(fig, show=show, save=save)
 
 
@@ -416,19 +472,19 @@ def annual_returns(
 def returns_histogram(
     result,
     *,
-    ax: Optional[Axes] = None,
+    ax=None,
     bins: int = 100,
     title: str = "Returns Distribution",
     figsize: Tuple[float, float] = (12, 5),
     show: bool = False,
     save: Optional[Union[str, Path]] = None,
-) -> Figure:
+) -> go.Figure:
     """Histogram of daily returns with green/red coloring by sign."""
     with theme_context():
-        fig, ax_ = get_or_create_ax(ax, figsize)
+        fig = new_figure(figsize, title)
         rets = daily_returns_array(result)
         if len(rets) == 0:
-            ax_.set_title(title + " (no data)")
+            fig.update_layout(title_text=title + " (no data)")
             return finalize(fig, show=show, save=save)
 
         # Clip x-axis to P1-P99 range to avoid empty space from outliers
@@ -436,28 +492,34 @@ def returns_histogram(
         margin = (p99 - p1) * 0.3
         xlim = (p1 - margin, p99 + margin)
 
-        _, bin_edges, patches = ax_.hist(rets, bins=bins, edgecolor="none", alpha=0.7,
-                                          range=xlim)
-        for patch, left in zip(patches, bin_edges[:-1]):
-            patch.set_facecolor(GREEN if left >= 0 else RED)
+        counts, bin_edges = np.histogram(rets, bins=bins, range=xlim)
+        centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+        bw = bin_edges[1] - bin_edges[0]
+        colors = [GREEN if left >= 0 else RED for left in bin_edges[:-1]]
 
-        ax_.axvline(0, color=DARK_GRAY, linewidth=0.8, linestyle="--")
-        ax_.set_xlim(xlim)
+        fig.add_trace(go.Bar(
+            x=centers, y=counts, width=bw,
+            marker_color=colors, opacity=0.7, marker_line_width=0,
+            hovertemplate="%{x:.2%}: %{y}<extra></extra>",
+        ))
+        fig.add_vline(x=0, line_color=DARK_GRAY, line_width=0.8, line_dash="dash")
 
         # Normal fit (pure numpy)
         mu, sigma = rets.mean(), rets.std()
         if sigma > 0:
             x = np.linspace(xlim[0], xlim[1], 200)
-            bw = bin_edges[1] - bin_edges[0]
             pdf = (1 / (sigma * np.sqrt(2 * np.pi))) * np.exp(-0.5 * ((x - mu) / sigma) ** 2)
-            ax_.plot(x, pdf * len(rets) * bw, color=ACCENT, linewidth=1.0,
-                     alpha=0.7, label="Normal")
-            ax_.legend(loc="upper right", framealpha=0.3)
+            fig.add_trace(go.Scatter(
+                x=x, y=pdf * len(rets) * bw, mode="lines", name="Normal",
+                line=dict(color=ACCENT, width=1.0), opacity=0.7,
+                hoverinfo="skip",
+            ))
+            fig.update_layout(legend=dict(x=0.99, y=0.99, xanchor="right"))
 
-        ax_.set_title(title)
-        ax_.set_xlabel("Daily Return")
-        ax_.set_ylabel("Frequency")
-        ax_.xaxis.set_major_formatter(mticker.PercentFormatter(xmax=1.0, decimals=1))
+        fig.update_xaxes(title_text="Daily Return", tickformat=".1%",
+                         range=list(xlim))
+        fig.update_yaxes(title_text="Frequency")
+        fig.update_layout(hovermode="closest", bargap=0.05)
         return finalize(fig, show=show, save=save)
 
 
@@ -467,60 +529,66 @@ def returns_histogram(
 def var_chart(
     result,
     *,
-    ax: Optional[Axes] = None,
+    ax=None,
     confidence: float = 0.05,
     bins: int = 120,
     title: str = "Value at Risk",
     figsize: Tuple[float, float] = (12, 5),
     show: bool = False,
     save: Optional[Union[str, Path]] = None,
-) -> Figure:
+) -> go.Figure:
     """Returns histogram with VaR and CVaR lines at 5% and 1% levels."""
     with theme_context():
-        fig, ax_ = get_or_create_ax(ax, figsize)
+        fig = new_figure(figsize, title)
         rets = daily_returns_array(result)
         if len(rets) == 0:
-            ax_.set_title(title + " (no data)")
+            fig.update_layout(title_text=title + " (no data)")
             return finalize(fig, show=show, save=save)
 
         rets_pct = rets * 100
 
-        # Histogram
-        n, bin_edges, patches = ax_.hist(
-            rets_pct, bins=bins, color=ACCENT, alpha=0.5, edgecolor="none",
-        )
-
-        # VaR/CVaR at 5%
+        # VaR/CVaR at 5% and 1%
         var_5 = float(np.percentile(rets, 5))
         cvar_5 = float(rets[rets <= var_5].mean()) if np.any(rets <= var_5) else var_5
-
-        # VaR/CVaR at 1%
         var_1 = float(np.percentile(rets, 1))
         cvar_1 = float(rets[rets <= var_1].mean()) if np.any(rets <= var_1) else var_1
 
-        # Color tail bins
-        for b, p in zip(bin_edges, patches):
-            if b < var_1 * 100:
-                p.set_facecolor(RED)
-                p.set_alpha(0.5)
-            elif b < var_5 * 100:
-                p.set_facecolor(ORANGE)
-                p.set_alpha(0.4)
+        counts, bin_edges = np.histogram(rets_pct, bins=bins)
+        centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+        bw = bin_edges[1] - bin_edges[0]
+        colors = []
+        for left in bin_edges[:-1]:
+            if left < var_1 * 100:
+                colors.append(_rgba(RED, 0.5))
+            elif left < var_5 * 100:
+                colors.append(_rgba(ORANGE, 0.4))
+            else:
+                colors.append(_rgba(ACCENT, 0.5))
 
-        # VaR lines
-        ax_.axvline(var_5 * 100, color=ORANGE, linewidth=0.8,
-                    label=f"VaR 5%: {format_pct(var_5)}")
-        ax_.axvline(cvar_5 * 100, color=ORANGE, linewidth=0.6, linestyle="--", alpha=0.5,
-                    label=f"CVaR 5%: {format_pct(cvar_5)}")
-        ax_.axvline(var_1 * 100, color=RED, linewidth=0.8,
-                    label=f"VaR 1%: {format_pct(var_1)}")
-        ax_.axvline(cvar_1 * 100, color=RED, linewidth=0.6, linestyle="--", alpha=0.5,
-                    label=f"CVaR 1%: {format_pct(cvar_1)}")
+        fig.add_trace(go.Bar(
+            x=centers, y=counts, width=bw, marker_color=colors,
+            marker_line_width=0, showlegend=False,
+            hovertemplate="%{x:.2f}%: %{y}<extra></extra>",
+        ))
 
-        ax_.set_title(title)
-        ax_.set_xlabel("Daily Return (%)")
-        ax_.set_ylabel("Frequency")
-        ax_.legend(loc="upper right", fontsize=8, framealpha=0.3)
+        # VaR/CVaR lines with legend proxies
+        for val, color, dash, label in (
+            (var_5, ORANGE, None, f"VaR 5%: {format_pct(var_5)}"),
+            (cvar_5, ORANGE, "dash", f"CVaR 5%: {format_pct(cvar_5)}"),
+            (var_1, RED, None, f"VaR 1%: {format_pct(var_1)}"),
+            (cvar_1, RED, "dash", f"CVaR 1%: {format_pct(cvar_1)}"),
+        ):
+            fig.add_vline(x=val * 100, line_color=color, line_width=0.8,
+                          line_dash=dash, opacity=0.8 if dash is None else 0.5)
+            fig.add_trace(go.Scatter(
+                x=[None], y=[None], mode="lines", name=label,
+                line=dict(color=color, width=1.2, dash=dash),
+            ))
+
+        fig.update_xaxes(title_text="Daily Return (%)")
+        fig.update_yaxes(title_text="Frequency")
+        fig.update_layout(hovermode="closest", bargap=0.05,
+                          legend=dict(x=0.99, y=0.99, xanchor="right"))
         return finalize(fig, show=show, save=save)
 
 
@@ -531,20 +599,20 @@ def rolling_sharpe(
     result,
     *,
     windows: Optional[List[int]] = None,
-    ax: Optional[Axes] = None,
+    ax=None,
     title: str = "Rolling Sharpe",
     trading_days_per_year: float = 365.25,
     figsize: Tuple[float, float] = (14, 4),
     show: bool = False,
     save: Optional[Union[str, Path]] = None,
-) -> Figure:
+) -> go.Figure:
     """Rolling annualized Sharpe ratio."""
     if windows is None:
         windows = [126, 252]
     colors = [ACCENT, ACCENT_ALT, GREEN, RED]
 
     with theme_context():
-        fig, ax_ = get_or_create_ax(ax, figsize)
+        fig = new_figure(figsize, title)
         rets = daily_returns_array(result)
 
         for i, w in enumerate(windows):
@@ -554,13 +622,15 @@ def rolling_sharpe(
             rs = _rolling(rets, w, np.std)
             with np.errstate(divide="ignore", invalid="ignore"):
                 sharpe = np.where(rs > 0, rm / rs * np.sqrt(trading_days_per_year), 0.0)
-            label = f"{w}d"
-            ax_.plot(sharpe, color=colors[i % len(colors)], linewidth=1.0, label=label)
+            fig.add_trace(go.Scatter(
+                y=sharpe, mode="lines", name=f"{w}d",
+                line=dict(color=colors[i % len(colors)], width=1.0),
+                hovertemplate="day %{x}: %{y:.2f}<extra>" + f"{w}d" + "</extra>",
+            ))
 
-        ax_.axhline(0, color=DARK_GRAY, linewidth=0.5, linestyle="--")
-        ax_.set_title(title)
-        ax_.set_ylabel("Sharpe")
-        ax_.legend(loc="upper left", framealpha=0.3)
+        fig.add_hline(y=0, line_color=DARK_GRAY, line_width=0.5, line_dash="dash")
+        fig.update_yaxes(title_text="Sharpe")
+        fig.update_layout(legend=dict(x=0.01, y=0.99))
         return finalize(fig, show=show, save=save)
 
 
@@ -571,20 +641,20 @@ def rolling_volatility(
     result,
     *,
     windows: Optional[List[int]] = None,
-    ax: Optional[Axes] = None,
+    ax=None,
     title: str = "Rolling Volatility",
     trading_days_per_year: float = 365.25,
     figsize: Tuple[float, float] = (14, 4),
     show: bool = False,
     save: Optional[Union[str, Path]] = None,
-) -> Figure:
+) -> go.Figure:
     """Rolling annualized volatility."""
     if windows is None:
         windows = [126, 252]
     colors = [ACCENT, ACCENT_ALT, GREEN, RED]
 
     with theme_context():
-        fig, ax_ = get_or_create_ax(ax, figsize)
+        fig = new_figure(figsize, title)
         rets = daily_returns_array(result)
 
         for i, w in enumerate(windows):
@@ -592,12 +662,14 @@ def rolling_volatility(
                 continue
             rs = _rolling(rets, w, np.std)
             vol = rs * np.sqrt(trading_days_per_year)
-            ax_.plot(vol, color=colors[i % len(colors)], linewidth=1.0, label=f"{w}d")
+            fig.add_trace(go.Scatter(
+                y=vol, mode="lines", name=f"{w}d",
+                line=dict(color=colors[i % len(colors)], width=1.0),
+                hovertemplate="day %{x}: %{y:.1%}<extra>" + f"{w}d" + "</extra>",
+            ))
 
-        ax_.set_title(title)
-        ax_.set_ylabel("Volatility")
-        ax_.yaxis.set_major_formatter(mticker.PercentFormatter(xmax=1.0, decimals=0))
-        ax_.legend(loc="upper left", framealpha=0.3)
+        fig.update_yaxes(title_text="Volatility", tickformat=".0%")
+        fig.update_layout(legend=dict(x=0.01, y=0.99))
         return finalize(fig, show=show, save=save)
 
 

@@ -37,6 +37,15 @@ class Portfolio:
             strategy: A Strategy instance.
             weight: Fraction of total capital (0.0 to 1.0).
         """
+        if getattr(strategy, "_orders", None):
+            import warnings
+            warnings.warn(
+                f"Strategy '{strategy.name}' defines stop_loss/take_profit/"
+                "trailing_stop orders, but portfolio mode does not support "
+                "per-strategy orders yet: they are IGNORED in run_portfolio().",
+                UserWarning,
+                stacklevel=2,
+            )
         self._strategies.append({
             "name": strategy.name,
             "strategy_json": strategy.to_json(),

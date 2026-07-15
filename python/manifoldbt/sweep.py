@@ -93,62 +93,62 @@ class SweepResult:
         return best_result
 
     def plot_metric(self, metric: str = "sharpe", **kwargs: Any) -> Any:
-        """Plot a metric across sweep results.
+        """Plot a metric across sweep results (plotly).
 
         For 2-parameter sweeps, delegates to ``bt.plot.heatmap_2d``.
         For 1-parameter sweeps, produces a bar chart.
 
         Args:
             metric: Metric to visualize.
-            **kwargs: Forwarded to the plot function.
+            **kwargs: ``figsize``, ``show``, ``save`` forwarded to the plot.
         """
-        import matplotlib.pyplot as plt
-        import numpy as np
+        from manifoldbt.plot._theme import ACCENT, theme_context
+        from manifoldbt.plot._utils import finalize, new_figure
 
         df = self.to_df(backend="pandas")
         param_cols = [c for c in df.columns if c.startswith("param_")]
+        show = kwargs.pop("show", True)
+        save = kwargs.pop("save", None)
 
         if len(param_cols) == 2:
-            # 2D heatmap
+            from manifoldbt.plot.research import heatmap_2d
+
             x_col, y_col = param_cols[0], param_cols[1]
             pivot = df.pivot_table(index=y_col, columns=x_col, values=metric)
-            fig, ax = plt.subplots(figsize=kwargs.pop("figsize", (10, 6)))
-            im = ax.imshow(pivot.values, aspect="auto", cmap=kwargs.pop("cmap", "RdYlGn"))
-            ax.set_xticks(range(len(pivot.columns)))
-            ax.set_xticklabels(pivot.columns, rotation=45)
-            ax.set_yticks(range(len(pivot.index)))
-            ax.set_yticklabels(pivot.index)
-            ax.set_xlabel(x_col.replace("param_", ""))
-            ax.set_ylabel(y_col.replace("param_", ""))
-            ax.set_title(f"{metric} heatmap")
-            plt.colorbar(im, ax=ax, label=metric)
-            plt.tight_layout()
-            if kwargs.get("show", True):
-                plt.show()
-            return fig
-        elif len(param_cols) == 1:
-            # 1D bar chart
-            p_col = param_cols[0]
-            fig, ax = plt.subplots(figsize=kwargs.pop("figsize", (10, 5)))
-            ax.bar(range(len(df)), df[metric].values, tick_label=[str(v) for v in df[p_col].values])
-            ax.set_xlabel(p_col.replace("param_", ""))
-            ax.set_ylabel(metric)
-            ax.set_title(f"{metric} by {p_col.replace('param_', '')}")
-            plt.tight_layout()
-            if kwargs.get("show", True):
-                plt.show()
-            return fig
-        else:
-            # Fallback: simple bar
-            fig, ax = plt.subplots(figsize=kwargs.pop("figsize", (10, 5)))
-            ax.bar(range(len(df)), df[metric].values)
-            ax.set_xlabel("run")
-            ax.set_ylabel(metric)
-            ax.set_title(f"{metric} across sweep")
-            plt.tight_layout()
-            if kwargs.get("show", True):
-                plt.show()
-            return fig
+            sweep_result = {
+                "metric_grid": pivot.values.tolist(),
+                "x_values": list(pivot.columns),
+                "y_values": list(pivot.index),
+                "x_param": x_col.replace("param_", ""),
+                "y_param": y_col.replace("param_", ""),
+                "metric": metric,
+            }
+            return heatmap_2d(sweep_result, show=show, save=save, **kwargs)
+
+        import plotly.graph_objects as go
+
+        with theme_context():
+            if len(param_cols) == 1:
+                p_col = param_cols[0]
+                fig = new_figure(kwargs.pop("figsize", (10, 5)),
+                                 f"{metric} by {p_col.replace('param_', '')}")
+                fig.add_trace(go.Bar(
+                    x=[str(v) for v in df[p_col].values], y=df[metric].values,
+                    marker_color=ACCENT, marker_line_width=0,
+                ))
+                fig.update_xaxes(title_text=p_col.replace("param_", ""),
+                                 type="category", showspikes=False)
+            else:
+                fig = new_figure(kwargs.pop("figsize", (10, 5)),
+                                 f"{metric} across sweep")
+                fig.add_trace(go.Bar(
+                    x=list(range(len(df))), y=df[metric].values,
+                    marker_color=ACCENT, marker_line_width=0,
+                ))
+                fig.update_xaxes(title_text="run", showspikes=False)
+            fig.update_yaxes(title_text=metric)
+            fig.update_layout(hovermode="closest")
+            return finalize(fig, show=show, save=save)
 
     def __repr__(self) -> str:
         params = ", ".join(f"{k}={len(v)} vals" for k, v in self._param_grid.items())

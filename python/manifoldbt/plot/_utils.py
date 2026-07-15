@@ -1,25 +1,32 @@
-"""Shared plotting utilities."""
+"""Shared plotting utilities (plotly)."""
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Optional, Tuple, Union
 
-import matplotlib.pyplot as plt
-from matplotlib.axes import Axes
-from matplotlib.figure import Figure
+from manifoldbt.plot._theme import WHITE, _ensure_theme
 
-from manifoldbt.plot._theme import theme_context
+_RESPONSIVE_CSS = (
+    "<style>html,body{height:100%;margin:0;background:#0c0c0f;overflow:hidden}"
+    ".plotly-graph-div{width:100vw!important;height:100vh!important}</style>"
+)
+
+_IMAGE_EXTS = {".png", ".svg", ".pdf", ".jpg", ".jpeg", ".webp"}
 
 
-def get_or_create_ax(
-    ax: Optional[Axes] = None,
+def new_figure(
     figsize: Tuple[float, float] = (12, 4),
-) -> Tuple[Figure, Axes]:
-    """Return (fig, ax). Creates a new themed figure if *ax* is None."""
-    if ax is not None:
-        return ax.figure, ax
-    fig, new_ax = plt.subplots(figsize=figsize)
-    return fig, new_ax
+    title: Optional[str] = None,
+):
+    """Return a themed plotly Figure sized from a matplotlib-style figsize."""
+    import plotly.graph_objects as go
+
+    _ensure_theme()
+    fig = go.Figure()
+    fig.update_layout(width=int(figsize[0] * 80), height=int(figsize[1] * 80))
+    if title:
+        fig.update_layout(title_text=title)
+    return fig
 
 
 def format_pct(value: float, decimals: int = 1) -> str:
@@ -29,30 +36,96 @@ def format_pct(value: float, decimals: int = 1) -> str:
 
 def format_currency(value: float, currency: str = "USD") -> str:
     """Format a number as currency."""
-    symbol = {"USD": "$", "EUR": "\u20ac", "GBP": "\u00a3"}.get(currency, "")
+    symbol = {"USD": "$", "EUR": "€", "GBP": "£"}.get(currency, "")
     return f"{symbol}{value:,.2f}"
 
 
 def finalize(
-    fig: Figure,
+    fig,
     *,
-    show: bool = False,
+    show: "bool | str" = False,
     save: Optional[Union[str, Path]] = None,
     dpi: int = 150,
-) -> Figure:
-    """Optionally save and/or display the figure, then return it."""
-    import warnings
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", UserWarning)
-        try:
-            fig.tight_layout()
-        except Exception:
-            pass  # Skip when axes are incompatible (e.g. inside GridSpec)
+    window_size: Optional[Tuple[int, int]] = None,
+) -> "object":
+    """Optionally save and/or display the figure, then return it.
+
+    ``save`` routes on extension: ``.html`` writes a responsive interactive
+    page; image extensions (.png/.svg/.pdf/...) go through kaleido.
+    ``show``: ``True`` (or ``"window"``) opens a native window (needs pywebview,
+    else falls back to a browser tab); ``"browser"`` forces a browser tab.
+    ``dpi`` is kept for backward compatibility and maps to an export scale.
+    """
     if save is not None:
-        fig.savefig(str(save), dpi=dpi, bbox_inches="tight")
-    if show:
-        plt.show()
+        path = Path(save)
+        ext = path.suffix.lower()
+        if ext in _IMAGE_EXTS:
+            try:
+                scale = max(1.0, dpi / 96.0)
+                fig.write_image(str(path), scale=scale)
+            except Exception as exc:  # kaleido missing or export failure
+                raise RuntimeError(
+                    f"Static image export to {ext} is optional and needs kaleido. "
+                    "Install it with: pip install manifoldbt[png]  "
+                    "(the default is the interactive chart — save to .html)"
+                ) from exc
+        else:
+            write_responsive_html(fig, path)
+    if show == "browser":
+        fig.show()
+    elif show:  # True or "window" -> native window (browser tab fallback)
+        from manifoldbt.plot._window import open_in_window
+        title = "Chart"
+        try:
+            t = fig.layout.title.text
+            if t:
+                title = t.split("<br>")[0].strip() or title
+        except Exception:
+            pass
+        open_in_window(fig, title=title, size=window_size or (1280, 720))
     return fig
+
+
+def write_responsive_html(fig, path: Union[str, Path]) -> None:
+    """Write a self-adjusting full-window HTML page for *fig*.
+
+    Strips any fixed width/height so the plot fills (and resizes with) the
+    window; a clean <title> replaces the browser's filename fallback.
+    """
+    # A fixed layout size would override plotly's responsive resizing.
+    fig.update_layout(width=None, height=None, autosize=True)
+    title = "Chart"
+    try:
+        t = fig.layout.title.text
+        if t:
+            title = t.split("<br>")[0].strip() or title
+    except Exception:
+        pass
+
+    html = fig.to_html(
+        include_plotlyjs="cdn",
+        full_html=True,
+        default_width="100%",
+        default_height="100%",
+        config={"displayModeBar": False, "responsive": True},
+    )
+    head = "<head>" + _RESPONSIVE_CSS + f"<title>{title}</title>"
+    html = html.replace("<head>", head, 1)
+    Path(path).write_text(html, encoding="utf-8")
+
+
+def chart_div(fig, *, height: Optional[int] = None) -> str:
+    """Return an embeddable div (no plotly.js) for report composition."""
+    if height is not None:
+        fig.update_layout(height=height)
+    fig.update_layout(width=None, autosize=True)
+    return fig.to_html(
+        full_html=False,
+        include_plotlyjs=False,
+        default_width="100%",
+        default_height=f"{height}px" if height else "100%",
+        config={"displayModeBar": False, "responsive": True},
+    )
 
 
 def auto_title(result, fallback: str) -> str:

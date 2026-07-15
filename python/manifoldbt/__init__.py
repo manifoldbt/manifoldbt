@@ -310,7 +310,12 @@ _PREPARED_CFG_CACHE_MAX = 256
 
 
 def _prepared_config_json(config: BacktestConfig, strategy, store: DataStore) -> str:
-    """Content-memoised equivalent of ``_prepare_config(...).to_json()``."""
+    """Content-memoised equivalent of ``_prepare_config(...).to_json()``.
+
+    The prepared config no longer depends on the strategy (orders travel in the
+    strategy JSON now), so the memo key is just the config content plus the
+    metadata DB; the ``strategy`` argument is accepted for call-site symmetry.
+    """
     try:
         meta_db = store.metadata_db()
     except Exception:
@@ -318,10 +323,8 @@ def _prepared_config_json(config: BacktestConfig, strategy, store: DataStore) ->
     if meta_db is None:
         return _prepare_config(config, strategy, store).to_json()
 
-    orders = getattr(strategy, "_orders", None) if strategy is not None else None
     try:
-        orders_key = json.dumps(orders, sort_keys=True, default=str) if orders else ""
-        key = (config.to_json(), orders_key, meta_db)
+        key = (config.to_json(), meta_db)
     except (TypeError, ValueError):
         # Unserialisable config content — skip memoisation, never fail.
         return _prepare_config(config, strategy, store).to_json()
@@ -397,13 +400,11 @@ def _prepare_config(config: BacktestConfig, strategy, store: DataStore) -> Backt
                 resolved_sv[int(store.resolve_symbol(key))] = venue
         fees.symbol_venue = resolved_sv
 
-    # Merge orders from strategy into execution config
-    if strategy and hasattr(strategy, '_orders') and strategy._orders:
-        if cfg.execution.orders is None:
-            cfg.execution.orders = OrderConfig()
-        for key, val in strategy._orders.items():
-            setattr(cfg.execution.orders, key, val)
-
+    # Per-strategy SL/TP/trailing orders are NOT merged into the config anymore:
+    # they travel inside the strategy JSON (Strategy.to_json -> StrategyDef.orders)
+    # so the engine applies them per-strategy. This lets one batch/sweep call run
+    # strategies carrying different brackets over a single data load. A bracket
+    # set directly on config.execution.orders still applies as the fallback.
     return cfg
 
 
@@ -789,6 +790,11 @@ def run_batch(
     Loads bars once, aligns timestamps once, then evaluates each strategy
     on a separate rayon thread.  Much faster than calling ``run()`` in a loop.
 
+    Per-strategy ``stop_loss``/``take_profit``/``trailing_stop`` are honored:
+    each strategy's orders travel inside its JSON and the engine applies them
+    per-strategy, so a batch of strategies with DIFFERENT brackets still runs
+    over a single data load.
+
     Args:
         strategies: List of Strategy definitions.
         config: Shared backtest configuration (same universe/time range).
@@ -800,13 +806,12 @@ def run_batch(
     """
     _require_pro_over_combos(len(strategies), "Batch backtesting")
     try:
-        config = _prepare_config(config, None, store)
         config = _cap_output_resolution(config)
         store = _resolve_store(config, store)
-        strategy_jsons = [strat.to_json() for strat in strategies]
+        cfg_json = _prepared_config_json(config, None, store)
         raw_results = _run_batch_native(
-            strategy_jsons,
-            config.to_json(),
+            [strat.to_json() for strat in strategies],
+            cfg_json,
             store,
             max_parallelism,
         )
@@ -828,6 +833,11 @@ def run_batch_lite(
     position traces, and Arrow output construction.  Ideal for parameter sweeps
     where you only need metrics to select the best variant.
 
+    Per-strategy ``stop_loss``/``take_profit``/``trailing_stop`` are honored:
+    each strategy's orders travel inside its JSON and the engine applies them
+    per-strategy, so a batch of strategies with DIFFERENT brackets still runs
+    over a single data load.
+
     Args:
         strategies: List of Strategy definitions.
         config: Shared backtest configuration (same universe/time range).
@@ -839,13 +849,12 @@ def run_batch_lite(
     """
     _require_pro_over_combos(len(strategies), "Batch backtesting")
     try:
-        config = _prepare_config(config, None, store)
         config = _cap_output_resolution(config)
         store = _resolve_store(config, store)
-        strategy_jsons = [strat.to_json() for strat in strategies]
+        cfg_json = _prepared_config_json(config, None, store)
         return _run_batch_lite_native(
-            strategy_jsons,
-            config.to_json(),
+            [strat.to_json() for strat in strategies],
+            cfg_json,
             store,
             max_parallelism,
         )
@@ -1372,7 +1381,7 @@ __all__ = [
     "__version__",
     # Indicators (submodule)
     "indicators",
-    # Plotting (lazy, requires matplotlib)
+    # Plotting (lazy, requires plotly)
     "plot",
     # Diagnostics (lazy)
     "diagnostics",

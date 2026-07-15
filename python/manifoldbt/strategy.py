@@ -194,7 +194,7 @@ class Strategy:
                 spec["range"] = None
             params[param_name] = spec
 
-        return {
+        out = {
             "name": self.name,
             "signals": {
                 name: expr.to_json() for name, expr in self.signals.items()
@@ -206,6 +206,12 @@ class Strategy:
                 "description": self._description,
             },
         }
+        # Per-strategy SL/TP/trailing orders travel with the strategy so the
+        # engine applies them per-strategy in a single batch/sweep call (the
+        # Rust StrategyDef.orders field; omitted when unset for a clean JSON).
+        if self._orders:
+            out["orders"] = self._orders
+        return out
 
     def to_json(self) -> str:
         """Serialize to a JSON string matching Rust ``StrategyDef``.

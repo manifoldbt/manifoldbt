@@ -1,4 +1,4 @@
-"""Candlestick chart with indicators and trade markers."""
+"""Candlestick chart with indicators and trade markers (plotly)."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -12,13 +12,9 @@ from manifoldbt.plot._theme import (
     ACCENT_ALT,
     BG_AXES,
     BG_FIGURE,
-    BORDER,
-    DARK_GRAY,
     GREEN,
-    GRID_RGBA,
-    GRAY,
     RED,
-    WHITE,
+    theme_context,
 )
 from manifoldbt.plot._utils import finalize
 
@@ -143,49 +139,7 @@ def _load_bars(
 
 
 # ---------------------------------------------------------------------------
-# Candlestick drawing
-# ---------------------------------------------------------------------------
-
-def _draw_candles(ax, dates, o, h, l, c, width_ratio=0.6):
-    """Draw candlestick bodies and wicks on an axes."""
-    n = len(dates)
-    if n < 2:
-        return
-
-    # Width in date units
-    delta = np.median(np.diff(dates)).astype("timedelta64[s]").astype(float)
-    w = np.timedelta64(int(delta * width_ratio), "s")
-
-    bull = c >= o
-    bear = ~bull
-
-    # Wicks (high-low lines)
-    for i in range(n):
-        color = GREEN if bull[i] else RED
-        ax.plot([dates[i], dates[i]], [l[i], h[i]], color=color, linewidth=0.5, alpha=0.7)
-
-    # Bodies
-    for mask, color in [(bull, GREEN), (bear, RED)]:
-        idx = np.where(mask)[0]
-        for i in idx:
-            bottom = min(o[i], c[i])
-            height = abs(c[i] - o[i])
-            if height < 1e-10:
-                height = (h[i] - l[i]) * 0.01
-            rect = __import__("matplotlib.patches", fromlist=["Rectangle"]).Rectangle(
-                (dates[i] - w / 2, bottom),
-                w,
-                height,
-                facecolor=color,
-                edgecolor=color,
-                alpha=0.85,
-                linewidth=0.5,
-            )
-            ax.add_patch(rect)
-
-
-# ---------------------------------------------------------------------------
-# Public API
+# Shared helpers
 # ---------------------------------------------------------------------------
 
 INDICATOR_COLORS = [ACCENT, ACCENT_ALT, "#2dd4bf", "#f59e0b", "#f472b6"]
@@ -206,7 +160,7 @@ def _resolve_sym_name(store, symbol_id: int) -> str:
 
 
 def _prepare_chart_data(result, store, symbol_id, n_bars):
-    """Load bars, compute trim offset, extract trades — shared by both renderers."""
+    """Load bars, compute trim offset, extract trades."""
     manifest = result.manifest
     cfg = manifest.get("config", {})
     tr = cfg.get("time_range", {})
@@ -245,243 +199,6 @@ def _prepare_chart_data(result, store, symbol_id, n_bars):
 
 
 # ---------------------------------------------------------------------------
-# Interactive chart (plotly)
-# ---------------------------------------------------------------------------
-
-def _chart_interactive(result, store, symbol_id, *, emas, smas, n_bars, save):
-    """Plotly-based interactive candlestick chart."""
-    import plotly.graph_objects as go
-    from plotly.subplots import make_subplots
-
-    bars, offset, bar_interval_s, filtered_trades = _prepare_chart_data(
-        result, store, symbol_id, n_bars,
-    )
-
-    close_full = bars["close"]
-    ts = bars["timestamp"][offset:]
-    o = bars["open"][offset:]
-    h = bars["high"][offset:]
-    l = bars["low"][offset:]
-    c = bars["close"][offset:]
-    vol = bars["volume"][offset:]
-    dates = ts.view("datetime64[ns]")
-
-    sym_name = _resolve_sym_name(store, symbol_id)
-    interval_label = _interval_label(bar_interval_s)
-
-    fig = make_subplots(
-        rows=2, cols=1,
-        shared_xaxes=True,
-        vertical_spacing=0.03,
-        row_heights=[0.8, 0.2],
-    )
-
-    # Candlesticks
-    fig.add_trace(
-        go.Candlestick(
-            x=dates, open=o, high=h, low=l, close=c,
-            increasing_line_color=GREEN, decreasing_line_color=RED,
-            increasing_fillcolor=GREEN, decreasing_fillcolor=RED,
-            name="OHLC",
-        ),
-        row=1, col=1,
-    )
-
-    # Indicators
-    color_idx = 0
-    if emas:
-        for period in emas:
-            vals = _ema(close_full, period)[offset:]
-            color = INDICATOR_COLORS[color_idx % len(INDICATOR_COLORS)]
-            fig.add_trace(
-                go.Scatter(
-                    x=dates, y=vals, mode="lines",
-                    name=f"EMA({period})",
-                    line=dict(color=color, width=1.5),
-                ),
-                row=1, col=1,
-            )
-            color_idx += 1
-
-    if smas:
-        for period in smas:
-            vals = _sma(close_full, period)[offset:]
-            color = INDICATOR_COLORS[color_idx % len(INDICATOR_COLORS)]
-            fig.add_trace(
-                go.Scatter(
-                    x=dates, y=vals, mode="lines",
-                    name=f"SMA({period})",
-                    line=dict(color=color, width=1.5, dash="dash"),
-                ),
-                row=1, col=1,
-            )
-            color_idx += 1
-
-    # Trade markers
-    t_ts = filtered_trades["ts"]
-    t_side = filtered_trades["side"]
-    t_price = filtered_trades["price"]
-    t_qty = filtered_trades["qty"]
-
-    buy_mask = t_side == 1
-    sell_mask = t_side == 2
-
-    if buy_mask.any():
-        fig.add_trace(
-            go.Scatter(
-                x=t_ts[buy_mask], y=t_price[buy_mask],
-                mode="markers",
-                name="BUY",
-                marker=dict(
-                    symbol="triangle-up", size=12,
-                    color=GREEN, line=dict(color="white", width=1),
-                ),
-                text=[f"BUY {q:.6f} @ {p:.2f}" for q, p in
-                      zip(t_qty[buy_mask], t_price[buy_mask])],
-                hoverinfo="text+x",
-            ),
-            row=1, col=1,
-        )
-
-    if sell_mask.any():
-        fig.add_trace(
-            go.Scatter(
-                x=t_ts[sell_mask], y=t_price[sell_mask],
-                mode="markers",
-                name="SELL",
-                marker=dict(
-                    symbol="triangle-down", size=12,
-                    color=RED, line=dict(color="white", width=1),
-                ),
-                text=[f"SELL {q:.6f} @ {p:.2f}" for q, p in
-                      zip(t_qty[sell_mask], t_price[sell_mask])],
-                hoverinfo="text+x",
-            ),
-            row=1, col=1,
-        )
-
-    # Volume bars
-    vol_colors = [GREEN if c[i] >= o[i] else RED for i in range(len(c))]
-    fig.add_trace(
-        go.Bar(
-            x=dates, y=vol, name="Volume",
-            marker_color=vol_colors, opacity=0.5,
-            showlegend=False,
-        ),
-        row=2, col=1,
-    )
-
-    # Layout — dark theme
-    fig.update_layout(
-        title=f"{sym_name}  {interval_label}",
-        template="plotly_dark",
-        paper_bgcolor=BG_FIGURE,
-        plot_bgcolor=BG_AXES,
-        xaxis_rangeslider_visible=False,
-        hovermode="x unified",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
-        height=700,
-        margin=dict(l=60, r=20, t=60, b=40),
-    )
-
-    fig.update_yaxes(title_text="Price", row=1, col=1)
-    fig.update_yaxes(title_text="Vol", row=2, col=1)
-
-    if save:
-        fig.write_html(str(save))
-
-    fig.show()
-    return fig
-
-
-# ---------------------------------------------------------------------------
-# Matplotlib (static) chart
-# ---------------------------------------------------------------------------
-
-def _chart_matplotlib(result, store, symbol_id, *, emas, smas, n_bars, figsize, show, save):
-    """Matplotlib-based static candlestick chart."""
-    import matplotlib.pyplot as plt
-    from manifoldbt.plot._theme import theme_context
-
-    bars, offset, bar_interval_s, filtered_trades = _prepare_chart_data(
-        result, store, symbol_id, n_bars,
-    )
-
-    close_full = bars["close"]
-    ts = bars["timestamp"][offset:]
-    o = bars["open"][offset:]
-    h = bars["high"][offset:]
-    l = bars["low"][offset:]
-    c = bars["close"][offset:]
-    dates = ts.view("datetime64[ns]")
-
-    sym_name = _resolve_sym_name(store, symbol_id)
-    interval_label = _interval_label(bar_interval_s)
-
-    with theme_context():
-        fig, (ax_price, ax_vol) = plt.subplots(
-            2, 1, figsize=figsize, height_ratios=[4, 1],
-            sharex=True, gridspec_kw={"hspace": 0.05},
-        )
-
-        _draw_candles(ax_price, dates, o, h, l, c)
-
-        color_idx = 0
-        if emas:
-            for period in emas:
-                vals = _ema(close_full, period)[offset:]
-                color = INDICATOR_COLORS[color_idx % len(INDICATOR_COLORS)]
-                ax_price.plot(dates, vals, color=color, linewidth=1.2,
-                              label=f"EMA({period})", alpha=0.9)
-                color_idx += 1
-        if smas:
-            for period in smas:
-                vals = _sma(close_full, period)[offset:]
-                color = INDICATOR_COLORS[color_idx % len(INDICATOR_COLORS)]
-                ax_price.plot(dates, vals, color=color, linewidth=1.2,
-                              label=f"SMA({period})", linestyle="--", alpha=0.9)
-                color_idx += 1
-
-        # Trade markers
-        t_ts = filtered_trades["ts"]
-        t_side = filtered_trades["side"]
-        t_price = filtered_trades["price"]
-        buy_mask = t_side == 1
-        sell_mask = t_side == 2
-
-        if buy_mask.any():
-            ax_price.scatter(
-                t_ts[buy_mask], t_price[buy_mask],
-                marker="^", color=GREEN, s=80, zorder=5,
-                edgecolors=WHITE, linewidths=0.5, label="BUY",
-            )
-        if sell_mask.any():
-            ax_price.scatter(
-                t_ts[sell_mask], t_price[sell_mask],
-                marker="v", color=RED, s=80, zorder=5,
-                edgecolors=WHITE, linewidths=0.5, label="SELL",
-            )
-
-        ax_price.legend(loc="upper left", fontsize=8)
-        ax_price.set_title(f"{sym_name}  {interval_label}", fontsize=11, loc="left")
-        ax_price.set_ylabel("Price", fontsize=9)
-
-        vol = bars["volume"][offset:]
-        vol_colors = np.where(c >= o, GREEN, RED)
-        ax_vol.bar(dates, vol, width=np.timedelta64(int(bar_interval_s * 0.6), "s"),
-                   color=vol_colors, alpha=0.5)
-        ax_vol.set_ylabel("Volume", fontsize=9)
-
-        import matplotlib.dates as mdates
-        if bar_interval_s < 86400:
-            ax_vol.xaxis.set_major_locator(mdates.AutoDateLocator())
-            ax_vol.xaxis.set_major_formatter(mdates.DateFormatter("%m-%d %H:%M"))
-        fig.autofmt_xdate(rotation=30, ha="right")
-
-    return finalize(fig, show=show, save=save)
-
-
-# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -507,21 +224,151 @@ def chart(
         emas: List of EMA periods to overlay (e.g. [10, 25]).
         smas: List of SMA periods to overlay.
         n_bars: Number of bars to display (last N).
-        interactive: Use plotly (True) or matplotlib (False).
-        figsize: Figure size (matplotlib only).
-        show: Display the chart (matplotlib only; plotly always shows).
-        save: Save path (.html for plotly, .png for matplotlib).
+        interactive: Kept for backward compatibility (plotly renders both
+            paths; ``save=".png"`` produces a static image via kaleido).
+        figsize: Figure size in inches, mapped to pixels.
+        show: Display the chart in the browser.
+        save: Save path (.html interactive, or .png/.svg via kaleido).
     """
-    if interactive:
-        return _chart_interactive(
-            result, store, symbol_id,
-            emas=emas, smas=smas, n_bars=n_bars, save=save,
-        )
-    return _chart_matplotlib(
-        result, store, symbol_id,
-        emas=emas, smas=smas, n_bars=n_bars,
-        figsize=figsize, show=show, save=save,
+    _ = interactive  # single plotly path
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+
+    bars, offset, bar_interval_s, filtered_trades = _prepare_chart_data(
+        result, store, symbol_id, n_bars,
     )
+
+    close_full = bars["close"]
+    ts = bars["timestamp"][offset:]
+    o = bars["open"][offset:]
+    h = bars["high"][offset:]
+    l = bars["low"][offset:]
+    c = bars["close"][offset:]
+    vol = bars["volume"][offset:]
+    dates = ts.view("datetime64[ns]")
+
+    sym_name = _resolve_sym_name(store, symbol_id)
+    interval_label = _interval_label(bar_interval_s)
+
+    with theme_context():
+        fig = make_subplots(
+            rows=2, cols=1,
+            shared_xaxes=True,
+            vertical_spacing=0.03,
+            row_heights=[0.8, 0.2],
+        )
+
+        # Candlesticks
+        fig.add_trace(
+            go.Candlestick(
+                x=dates, open=o, high=h, low=l, close=c,
+                increasing_line_color=GREEN, decreasing_line_color=RED,
+                increasing_fillcolor=GREEN, decreasing_fillcolor=RED,
+                name="OHLC",
+            ),
+            row=1, col=1,
+        )
+
+        # Indicators
+        color_idx = 0
+        if emas:
+            for period in emas:
+                vals = _ema(close_full, period)[offset:]
+                color = INDICATOR_COLORS[color_idx % len(INDICATOR_COLORS)]
+                fig.add_trace(
+                    go.Scatter(
+                        x=dates, y=vals, mode="lines",
+                        name=f"EMA({period})",
+                        line=dict(color=color, width=1.5),
+                    ),
+                    row=1, col=1,
+                )
+                color_idx += 1
+
+        if smas:
+            for period in smas:
+                vals = _sma(close_full, period)[offset:]
+                color = INDICATOR_COLORS[color_idx % len(INDICATOR_COLORS)]
+                fig.add_trace(
+                    go.Scatter(
+                        x=dates, y=vals, mode="lines",
+                        name=f"SMA({period})",
+                        line=dict(color=color, width=1.5, dash="dash"),
+                    ),
+                    row=1, col=1,
+                )
+                color_idx += 1
+
+        # Trade markers
+        t_ts = filtered_trades["ts"]
+        t_side = filtered_trades["side"]
+        t_price = filtered_trades["price"]
+        t_qty = filtered_trades["qty"]
+
+        buy_mask = t_side == 1
+        sell_mask = t_side == 2
+
+        if buy_mask.any():
+            fig.add_trace(
+                go.Scatter(
+                    x=t_ts[buy_mask], y=t_price[buy_mask],
+                    mode="markers",
+                    name="BUY",
+                    marker=dict(
+                        symbol="triangle-up", size=12,
+                        color=GREEN, line=dict(color="white", width=1),
+                    ),
+                    text=[f"BUY {q:.6f} @ {p:.2f}" for q, p in
+                          zip(t_qty[buy_mask], t_price[buy_mask])],
+                    hoverinfo="text+x",
+                ),
+                row=1, col=1,
+            )
+
+        if sell_mask.any():
+            fig.add_trace(
+                go.Scatter(
+                    x=t_ts[sell_mask], y=t_price[sell_mask],
+                    mode="markers",
+                    name="SELL",
+                    marker=dict(
+                        symbol="triangle-down", size=12,
+                        color=RED, line=dict(color="white", width=1),
+                    ),
+                    text=[f"SELL {q:.6f} @ {p:.2f}" for q, p in
+                          zip(t_qty[sell_mask], t_price[sell_mask])],
+                    hoverinfo="text+x",
+                ),
+                row=1, col=1,
+            )
+
+        # Volume bars
+        vol_colors = [GREEN if c[i] >= o[i] else RED for i in range(len(c))]
+        fig.add_trace(
+            go.Bar(
+                x=dates, y=vol, name="Volume",
+                marker_color=vol_colors, opacity=0.5,
+                showlegend=False,
+            ),
+            row=2, col=1,
+        )
+
+        fig.update_layout(
+            title=f"{sym_name}  {interval_label}",
+            paper_bgcolor=BG_FIGURE,
+            plot_bgcolor=BG_AXES,
+            xaxis_rangeslider_visible=False,
+            hovermode="x unified",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+            width=int(figsize[0] * 80),
+            height=int(figsize[1] * 80),
+            margin=dict(l=60, r=20, t=60, b=40),
+        )
+
+        fig.update_yaxes(title_text="Price", row=1, col=1)
+        fig.update_yaxes(title_text="Vol", row=2, col=1)
+
+        return finalize(fig, show=show, save=save)
 
 
 def _bar_interval_to_seconds(bi: dict) -> int:

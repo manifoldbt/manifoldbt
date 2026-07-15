@@ -1,4 +1,4 @@
-"""Plotting module for manifoldbt (requires matplotlib).
+"""Plotting module for manifoldbt (requires plotly).
 
 Install with::
 
@@ -11,12 +11,18 @@ Quick start::
     result = bt.run(strategy, config, store)
     bt.plot.tearsheet(result)              # full-page dashboard
     bt.plot.equity(result, show=True)      # single chart
+
+Every chart is interactive (crosshair, hover, zoom). ``show=True`` opens it
+in a native window (``pip install manifoldbt[window]``; falls back to a
+browser tab, which you can also force with ``show="browser"``).
+``save=".html"`` writes a responsive interactive page. Static ``save=".png"``
+is optional and needs ``pip install manifoldbt[png]`` (pulls a headless Chromium).
 """
 try:
-    import matplotlib  # noqa: F401
+    import plotly  # noqa: F401
 except ImportError:
     raise ImportError(
-        "matplotlib is required for the plotting module. "
+        "plotly is required for the plotting module. "
         "Install it with: pip install manifoldbt[plot]"
     ) from None
 
@@ -51,6 +57,9 @@ from manifoldbt.plot.research import (
 # Composite layouts
 from manifoldbt.plot.tearsheet import research_report, tearsheet
 
+# Window display (multi-window, matplotlib-style)
+from manifoldbt.plot._window import show
+
 # Theme
 from manifoldbt.plot._theme import THEME, apply_theme
 
@@ -78,6 +87,8 @@ __all__ = [
     # Composites
     "tearsheet",
     "research_report",
+    # Window display
+    "show",
     # Theme
     "THEME",
     "apply_theme",
