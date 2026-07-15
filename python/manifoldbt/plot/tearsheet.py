@@ -1,4 +1,4 @@
-"""Composite tearsheet — HTML strategy report with interactive plotly charts."""
+"""Composite tearsheet - HTML strategy report with interactive plotly charts."""
 from __future__ import annotations
 
 import tempfile
@@ -144,7 +144,7 @@ def tearsheet(
     dpi: int = 150,
     plotlyjs: str = "cdn",
 ) -> str:
-    """Strategy report — self-contained HTML page with interactive charts.
+    """Strategy report - self-contained HTML page with interactive charts.
 
     Returns the HTML string. Opens in browser when ``show=True``,
     writes to disk when ``save`` is given.
@@ -225,7 +225,7 @@ def tearsheet(
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{escape(strategy_name)} — Tearsheet</title>
+<title>{escape(strategy_name)} · Tearsheet</title>
 <style>{_CSS}</style>
 {plotly_js_tag}
 </head>
@@ -296,7 +296,7 @@ def research_report(
     save: Optional[Union[str, Path]] = None,
     dpi: int = 150,
 ) -> List[Any]:
-    """Research report — one figure per analysis (plotly Figures)."""
+    """Research report - one figure per analysis (plotly Figures)."""
     from manifoldbt.plot.research import (
         heatmap_2d,
         stability,
@@ -340,7 +340,7 @@ def research_report(
 def _fmt_hold_time(seconds):
     """Format holding time in human-readable units."""
     if seconds <= 0:
-        return "—"
+        return "-"
     days = seconds / 86400
     if days >= 365:
         return f"{days / 365:.1f}y"

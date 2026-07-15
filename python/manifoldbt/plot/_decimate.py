@@ -1,4 +1,4 @@
-"""Min/max time-series decimation for plotting — pure numpy.
+"""Min/max time-series decimation for plotting - pure numpy.
 
 A chart is ~1000-2500 px wide, so plotting 10^5-10^6 samples draws hundreds of
 sub-pixel points per column and bloats saved HTML. Per pixel column we keep the

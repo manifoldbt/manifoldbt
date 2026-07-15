@@ -1,4 +1,4 @@
-"""Charts for research analysis results (sweep, walk-forward, stability) — plotly."""
+"""Charts for research analysis results (sweep, walk-forward, stability) - plotly."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -47,17 +47,46 @@ def _grid_window_size(nx: int, ny: int, plot: int = 720, cbar: int = 160,
     return (int(pw + cbar), int(ph + top))
 
 
-def _plateau_best(grid: np.ndarray):
-    """Plateau-optimal cell: Gaussian blur finds the center of the best stable
-    region, not a lucky spike (overfit-resistant). sigma = ~5% of each axis."""
-    from scipy.ndimage import gaussian_filter
+def _moving_average_1d(a: np.ndarray, radius: int, axis: int) -> np.ndarray:
+    """Edge-replicated moving average of window 2*radius+1 along axis (numpy)."""
+    if radius < 1:
+        return a
+    pad = [(radius, radius) if ax == axis else (0, 0) for ax in range(a.ndim)]
+    padded = np.pad(a, pad, mode="edge")
+    cumsum = np.cumsum(padded, axis=axis)
+    zero = np.zeros_like(np.take(cumsum, [0], axis=axis))
+    cumsum = np.concatenate([zero, cumsum], axis=axis)
+    n = a.shape[axis]
+    width = 2 * radius + 1
+    upper = np.take(cumsum, np.arange(width, width + n), axis=axis)
+    lower = np.take(cumsum, np.arange(0, n), axis=axis)
+    return (upper - lower) / width
 
+
+def _box_blur_2d(a: np.ndarray, sigma_y: float, sigma_x: float, passes: int = 3) -> np.ndarray:
+    """Separable box blur that approximates a Gaussian (central-limit theorem),
+    pure numpy. A scipy-free fallback for _plateau_best."""
+    out = a.astype(float)
+    ry, rx = max(1, int(round(sigma_y))), max(1, int(round(sigma_x)))
+    for _ in range(passes):
+        out = _moving_average_1d(out, ry, axis=0)
+        out = _moving_average_1d(out, rx, axis=1)
+    return out
+
+
+def _plateau_best(grid: np.ndarray):
+    """Plateau-optimal cell: a blur finds the center of the best stable region,
+    not a lucky spike (overfit-resistant). sigma = ~5% of each axis. Uses
+    scipy's Gaussian filter when installed, else a pure-numpy box blur so the
+    plotting extra needs no scipy."""
+    filled = np.nan_to_num(grid, nan=np.nanmin(grid))
     sigma_y = max(1.0, grid.shape[0] * 0.05)
     sigma_x = max(1.0, grid.shape[1] * 0.05)
-    smoothed = gaussian_filter(
-        np.nan_to_num(grid, nan=np.nanmin(grid)),
-        sigma=(sigma_y, sigma_x),
-    )
+    try:
+        from scipy.ndimage import gaussian_filter
+        smoothed = gaussian_filter(filled, sigma=(sigma_y, sigma_x))
+    except ImportError:
+        smoothed = _box_blur_2d(filled, sigma_y, sigma_x)
     return np.unravel_index(np.argmax(smoothed), smoothed.shape)
 
 
@@ -137,7 +166,7 @@ def heatmap_2d(
             best_label = f"best: {best_val:{fmt}} ({x_param}={best_x:.0f}, {y_param}={best_y:.0f})"
 
         combos = nx * ny
-        main_title = title or f"{metric} — Parameter Sweep ({combos:,} combos)"
+        main_title = title or f"{metric} · Parameter Sweep ({combos:,} combos)"
         if best_label:
             main_title = f"{main_title}<br><span style='font-size:11px;color:{GRAY}'>{best_label}</span>"
         fig.update_layout(title_text=main_title, hovermode="closest")
@@ -224,7 +253,7 @@ def surface_3d(
         )
 
         combos = len(x_vals) * len(y_vals)
-        main_title = title or f"{metric} — Surface ({combos:,} combos)"
+        main_title = title or f"{metric} · Surface ({combos:,} combos)"
         if best_label:
             main_title = f"{main_title}<br><span style='font-size:11px;color:{GRAY}'>{best_label}</span>"
 

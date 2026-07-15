@@ -124,7 +124,7 @@ def show() -> None:
     _pending.clear()
 
     try:
-        import webview  # noqa: F401 — only to detect the backend
+        import webview  # noqa: F401 - only to detect the backend
     except ImportError:
         for div, title, _ in pending:
             _open_browser(div, title)

@@ -1,16 +1,16 @@
-"""Clean dark theme — modern, readable, quant-oriented (plotly template)."""
+"""Clean dark theme - modern, readable, quant-oriented (plotly template)."""
 from __future__ import annotations
 
 from contextlib import contextmanager
 
 # ---------------------------------------------------------------------------
-# Color palette — neutral dark, no decorative colors
+# Color palette - neutral dark, no decorative colors
 # ---------------------------------------------------------------------------
 WHITE = "#e8e6e3"
 GRAY = "#8a8a8a"
 DARK_GRAY = "#555555"
-ACCENT = "#60a5fa"       # Neutral blue — primary data line
-ACCENT_ALT = "#a78bfa"   # Subtle purple — secondary series
+ACCENT = "#60a5fa"       # Neutral blue - primary data line
+ACCENT_ALT = "#a78bfa"   # Subtle purple - secondary series
 GREEN = "#22c55e"        # Positive only
 RED = "#ef4444"          # Negative only
 ORANGE = "#f59e0b"       # OOS / warning
@@ -27,7 +27,7 @@ FONT_FAMILY = "Inter, system-ui, Segoe UI, Arial, sans-serif"
 MONO_FAMILY = "SF Mono, Fira Code, Cascadia Code, Consolas, monospace"
 
 # ---------------------------------------------------------------------------
-# Colorscales (plotly format) — same stops as the old matplotlib colormaps
+# Colorscales (plotly format) - same stops as the old matplotlib colormaps
 # ---------------------------------------------------------------------------
 CS_DIVERGING = [[0.0, "#b91c1c"], [0.5, "#262626"], [1.0, "#15803d"]]
 CS_SEQUENTIAL = [[0.0, "#b91c1c"], [0.5, "#d97706"], [1.0, "#15803d"]]

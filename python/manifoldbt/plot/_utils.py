@@ -67,7 +67,7 @@ def finalize(
                 raise RuntimeError(
                     f"Static image export to {ext} is optional and needs kaleido. "
                     "Install it with: pip install manifoldbt[png]  "
-                    "(the default is the interactive chart — save to .html)"
+                    "(the default is the interactive chart - save to .html)"
                 ) from exc
         else:
             write_responsive_html(fig, path)
