@@ -31,13 +31,23 @@ def _collect_params(expr: "Expr", out: Dict[str, Any]) -> None:
         if name not in out:
             out[name] = expr._param_meta
     for arg in expr._args:
-        if isinstance(arg, Expr):
-            _collect_params(arg, out)
-        elif isinstance(arg, str):
-            # DynPeriod/DynFloat param name — check global registry
-            from manifoldbt.expr import _param_registry
-            if arg in _param_registry and arg not in out:
-                out[arg] = _param_registry[arg]
+        _collect_params_arg(arg, out)
+
+
+def _collect_params_arg(arg: Any, out: Dict[str, Any]) -> None:
+    if isinstance(arg, Expr):
+        _collect_params(arg, out)
+    elif isinstance(arg, (list, tuple)):
+        # Scan nodes carry their init/update expressions as LISTS of Exprs;
+        # skipping them silently dropped every param() used inside a scan
+        # ("strategy uses undefined parameters: q" on a swept Kalman).
+        for item in arg:
+            _collect_params_arg(item, out)
+    elif isinstance(arg, str):
+        # DynPeriod/DynFloat param name — check global registry
+        from manifoldbt.expr import _param_registry
+        if arg in _param_registry and arg not in out:
+            out[arg] = _param_registry[arg]
 
 
 class Strategy:

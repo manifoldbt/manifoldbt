@@ -1,7 +1,7 @@
 """manifoldbt: Fast research backtesting with Rust core + Python DSL."""
 import copy
 import json
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import importlib as _importlib
 
@@ -18,6 +18,7 @@ from manifoldbt._native import (
     run_json,
     run_sweep as _run_sweep_native,
     run_sweep_lite as _run_sweep_lite_native,
+    sweep_columns as _sweep_columns_native,
     run_with_parquet,
     py_run_walk_forward as _run_walk_forward_native,
     py_run_sweep_2d as _run_sweep_2d_native,
@@ -869,7 +870,8 @@ def run_sweep_lite(
     store: DataStore,
     *,
     max_parallelism: int = 0,
-    device: str = "cpu",
+    device: str = "auto",
+    precision: str = "fp64",
 ) -> List["BatchResultLite"]:
     """Run a parameter sweep returning only metrics (no Arrow output).
 
@@ -882,14 +884,47 @@ def run_sweep_lite(
         config: Backtest configuration.
         store: Data store.
         max_parallelism: Maximum threads. 0 = all available cores.
-        device: ``"cpu"`` (default) or ``"cuda"``/``"gpu"``. The GPU path
-            accelerates single-asset, AtClose + FixedBps sweeps and produces
-            results numerically identical to the CPU path. **Pro-only**: a
-            Community license raises ``PermissionError`` for ``device="cuda"``
-            (Community keeps the full-speed CPU sweep with no restriction).
-            Requires a build with ``--features cuda`` and a CUDA device; for any
-            unsupported strategy/config (or when no GPU is present at runtime) it
-            silently falls back to the CPU sweep, so results are never affected.
+        device: ``"auto"`` (default), ``"cpu"``, or ``"cuda"``/``"gpu"``.
+            The GPU path produces results numerically identical to the CPU
+            path. ``"auto"`` picks per sweep: small grids run on the CPU (the
+            GPU has a ~50 ms fixed launch floor, so the CPU wins below ~1,000
+            combos -- override with ``MBT_GPU_AUTO_MIN_COMBOS``), large grids
+            run on the GPU when the build, a device, and a Pro license are
+            available, and the CPU otherwise. This is the default because it is
+            never slower than the better of the two by more than the launch
+            floor and its results match the CPU bit-for-bit, so it is safe to
+            leave on: with no GPU, no Pro license, or a Community build it is
+            simply the CPU sweep. **Pro-only**: a Community license raises
+            ``PermissionError`` for ``device="cuda"`` (``"auto"`` simply stays
+            on the CPU; Community keeps the full-speed CPU sweep with no
+            restriction). ``"cuda"`` requires a build with ``--features cuda``
+            and a CUDA device; for any unsupported strategy/config (or when no
+            GPU is present at runtime) it falls back to the CPU sweep with a
+            ``UserWarning`` naming the reason, so results are never affected.
+            An unknown device string raises ``ValueError`` instead of silently
+            running on the CPU.
+        precision: ``"fp64"`` (default) runs the GPU sweep in double precision,
+            bit-identical to the CPU path. ``"fp32"`` runs the single-asset GPU
+            kernel in single precision at the cost of approximate results: a
+            signal within ~1e-7 relative of a decision threshold can flip vs f64,
+            so occasional combos diverge. Intended as a **scan-only** accelerator
+            (rank in fp32, re-run the winner in fp64 for an exact P&L). Note the
+            speedup is modest (~1.1x measured on an RTX 3090): the per-bar
+            capital/position recurrence is latency-bound, so fp32's throughput
+            advantage barely applies. ``"fp32"`` requires ``device="cuda"``.
+
+    Metric resolution:
+        The lite path computes risk metrics from one equity point per UTC day
+        (this is what makes it fast), whereas :func:`run` uses the full-resolution
+        curve. ``final_equity``, ``total_return``, ``sharpe``, ``sortino``,
+        ``volatility`` and ``max_drawdown`` are unaffected -- they match ``run``
+        exactly. Three annualisation-sensitive metrics differ slightly because
+        they are derived from the daily series: ``cagr`` (it starts from the
+        first daily equity rather than initial capital), ``calmar`` and
+        ``ulcer_index``. The gap is small (< ~0.4% relative on a multi-year daily
+        backtest) and is the same for every sweep regardless of orders. Sort and
+        rank on it freely; for an exact single-figure P&L, re-run the winning
+        combo through :func:`run`.
 
     Returns:
         One :class:`BatchResultLite` per combo (Cartesian product order).
@@ -911,9 +946,56 @@ def run_sweep_lite(
             store,
             max_parallelism,
             device,
+            precision,
         )
     except (ValueError, RuntimeError) as exc:
         raise _classify_error(exc) from exc
+
+
+def sweep_columns(
+    batch: List["BatchResultLite"],
+    names: Union[str, List[str]],
+) -> Union["Any", Dict[str, "Any"]]:
+    """Extract whole metric columns from a sweep as numpy arrays.
+
+    ``result.metrics`` builds a 21-key dict per combo, so reading one metric off
+    a large sweep creates millions of throwaway floats. This walks the results
+    once and copies each requested column straight into a numpy array, which is
+    ~20x faster: on a 1M-combo sweep, ~1.1s of extraction becomes ~0.05s.
+
+    Args:
+        batch: The list returned by :func:`run_sweep_lite`.
+        names: One column name, or a list of them. Available: ``final_equity``,
+            ``trade_count``, and every :class:`PerformanceMetrics` field
+            (``sharpe``, ``sortino``, ``calmar``, ``max_drawdown``, ``alpha``,
+            ``beta``, ``tstat_alpha``, ``total_return``, ``cagr``,
+            ``volatility``, ``skewness``, ``kurtosis``, ``tail_ratio``,
+            ``omega_ratio``, ``ulcer_index``, ``best_day``, ``worst_day``,
+            ``avg_daily_return``, ``pct_positive_days``,
+            ``max_drawdown_duration_days``, ``tstat_sharpe``).
+
+    Returns:
+        A single ``np.ndarray`` if ``names`` is a string, else a dict mapping
+        each name to its array. Arrays are float64 and in combo order (the same
+        order as ``batch``), so ``np.argmax``/``argsort`` indices map straight
+        back onto it. ``trade_count`` comes back as float64 like the rest.
+
+    Note:
+        The arrays are read-only views over the returned buffers (no copy). Call
+        ``.copy()`` if you need to mutate one.
+
+    Example:
+        >>> batch = mbt.run_sweep_lite(strategy, grid, config, store, device="cuda")
+        >>> sharpe = mbt.sweep_columns(batch, "sharpe")
+        >>> best = batch[int(sharpe.argmax())]
+    """
+    import numpy as _np
+
+    single = isinstance(names, str)
+    wanted = [names] if single else list(names)
+    raw = _sweep_columns_native(batch, wanted)
+    out = {n: _np.frombuffer(raw[n], dtype=_np.float64) for n in wanted}
+    return out[names] if single else out
 
 
 # ---------------------------------------------------------------------------
