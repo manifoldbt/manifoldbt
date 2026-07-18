@@ -13,6 +13,30 @@ Log de mesures : `gpu_funding_bench.md`. Toute nouvelle phase y ajoute sa sectio
 
 ---
 
+## État au 2026-07-17 : TOUTES les phases 0-5 shippées en 0.13.0
+
+Phases **0, 1a, 1b, 2, 3, 4, 5 LIVRÉES** (voir chaque section + `gpu_funding_bench.md`
+Parts 0-17). La 0.13.0 est publiée sur PyPI. Il ne reste que le backlog Phase 6.
+
+**Reste à faire (Phase 6), chaque cas se nomme quand il retombe sur CPU :**
+- **Brackets multi-asset** : le kernel `sweep_t_multi` n'a pas de bracket (seul le
+  mono l'a, cf. Part 17). Raison nommée : « exit orders on a multi-asset universe
+  (the multi kernel has no bracket) ».
+- **Frais per-venue** (2 exemples) : extension du fast path.
+- **Cross-sectionnel** (1) : `sweep_t_multi`, restructuration en 2 passes.
+- **MTF** (1) : grilles multiples, mapping d'index par timeframe.
+- **Multi-asset + dérivées** (1) : l'exo/dérivée est globale, layout `[n_cols][n_sym][num_bars]`.
+
+**Branches en attente (hors périmètre GPU, à trier) :**
+- `feat/import-dataframe` (1 commit) : import de barres depuis un DataFrame en
+  mémoire, sans round-trip CSV. Feature réelle, jamais mergée.
+- `fix/python-test-suite` (2 commits) : branche pytest en CI + aligne les tests
+  golden/sweep. Vaut le coup (la CI ne teste pas pytest aujourd'hui), MAIS
+  rendrait la CI rouge sur le `test_sweep_returns_one_result_per_combo` golden
+  préexistant tant qu'il n'est pas réglé (plancher de sortie Pro).
+
+---
+
 ## Les trois couches qui bloquent une stratégie
 
 1. **Ops transpileur manquants** : `Eq, Lag, Lead, RollingStd, RollingSum,
@@ -55,14 +79,14 @@ Sans données, l'ordre ci-dessous est notre meilleure estimation.
 
 ## Phase 1 — Quick wins périmètre (≈½ journée)
 
-### 1a. Funding multi-asset dans `sweep_t_multi` (~15 lignes)
+### 1a. Funding multi-asset dans `sweep_t_multi` (~15 lignes, **FAIT** `bb4396c`)
 Le terme funding est déjà dans `sweep_t` (mono) : `capital += -position * close
 * rate` par barre, par symbole ici. Retirer le garde-fou
 `"multi-asset funding not yet on the GPU kernel"`.
 - **Validation** : colonne funding synthétique injectée, e2e multi bit-identique
   CPU==GPU (même harnais que le fix funding mono).
 
-### 1b. Colonnes exogènes dans le sweep GPU (~30 lignes)
+### 1b. Colonnes exogènes dans le sweep GPU (~30 lignes, **FAIT** `0a695e4`)
 `load_exo_columns` ASOF-joint déjà l'exo sur `master_timestamps` → un
 `Float64Array` de `num_bars`, indistinguable de `close` pour le kernel. Étendre
 la résolution des `col_names` du transpileur aux colonnes exo alignées, retirer
@@ -179,13 +203,19 @@ plus intéressante du filtre), même sur CPU.
 
 ---
 
-## Phase 4 — SL/TP sur le fast path GPU (gros ; décision APRÈS Phase 0)
+## Phase 4 : SL/TP sur le fast path GPU (**FAIT 2026-07-17**)
 
-`orders.is_empty()` est probablement le garde-fou le plus coûteux en usage réel
-(hypothèse à confirmer par les données de la Phase 0). Résolution intra-bar
-SL/TP = high/low + sémantique de priorité déjà fixée à la 0.12.0 côté lite CPU.
-Design séparé — ne pas commencer avant d'avoir les données de fréquence et le
-merge des phases précédentes.
+**Livré** : brackets (stop-loss / take-profit / trailing) simulés dans le kernel
+CUDA `sweep_t`, transcription 1:1 des phases B1/B0 de `sim_fast_lite_core_single`
+(la référence CPU, elle-même tenue à `run()` par `backtest_orders.rs`). Gate
+`allow_exits` sur `fast_path_blocker` (mono-asset seulement) ; OHL packés en un
+buffer (arité cudarc). **5.3x vs CPU à 24k combos**, GPU==CPU exact. Le trou le
+plus gros de l'audit exemples (5/18) est bouché → **exemples 7→10/18 sur GPU**.
+Deux bugs livrés trouvés en route : signe de `max_drawdown` inversé sur tout
+chemin lite, et ~360 lignes de bracket lite inatteignables. Détail : Part 17.
+
+Design d'origine (conservé) : résolution intra-bar SL/TP = high/low + sémantique
+de priorité fixée à la 0.12.0 côté lite CPU.
 
 ## Phase 5 — Dispatch GPU/CPU (à faire À LA FIN)
 

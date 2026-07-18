@@ -214,8 +214,11 @@ def tearsheet(
 
     # ── plotly.js include ─────────────────────────────────────────
     if plotlyjs == "inline":
-        import plotly.io as pio
-        plotly_js_tag = f"<script>{pio.get_plotlyjs()}</script>"
+        # get_plotlyjs lives in plotly.offline. plotly.io has never exposed it
+        # (checked on 5.24 and 6.9), so the old plotly.io lookup raised
+        # AttributeError on every inline report rather than embedding anything.
+        from plotly.offline import get_plotlyjs
+        plotly_js_tag = f"<script>{get_plotlyjs()}</script>"
     else:
         plotly_js_tag = '<script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>'
 
