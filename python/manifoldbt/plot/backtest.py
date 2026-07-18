@@ -420,7 +420,10 @@ def monthly_returns(
             colorbar=dict(ticksuffix="%", outlinewidth=0, thickness=12),
             hoverongaps=False,
         ))
-        fig.update_yaxes(autorange="reversed")
+        # The year labels are strings, but without an explicit type plotly
+        # reads them as numbers and interpolates: a single-year backtest drew
+        # ticks at 2,022.6 / 2,022.8 / 2023 / 2,023.2 instead of one "2023" row.
+        fig.update_yaxes(type="category", autorange="reversed")
         fig.update_xaxes(side="bottom", showspikes=False)
         fig.update_yaxes(showspikes=False)
         fig.update_layout(hovermode="closest")
@@ -501,6 +504,10 @@ def returns_histogram(
             x=centers, y=counts, width=bw,
             marker_color=colors, opacity=0.7, marker_line_width=0,
             hovertemplate="%{x:.2%}: %{y}<extra></extra>",
+            # Kept out of the legend: the bars are green or red by sign, so a
+            # single swatch misrepresents them, and unnamed it showed up as
+            # "trace 0". The legend exists for the Normal overlay only.
+            showlegend=False,
         ))
         fig.add_vline(x=0, line_color=DARK_GRAY, line_width=0.8, line_dash="dash")
 
