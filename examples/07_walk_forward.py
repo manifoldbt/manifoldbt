@@ -93,4 +93,4 @@ if __name__ == "__main__":
     print(f"\n{len(folds)} folds in {elapsed:.2f}s")
 
     if folds:
-        mbt.plot.walk_forward({"optimize_metric": metric, "folds": folds}, show=True)
+        mbt.plot.walk_forward({"optimize_metric": metric, "folds": folds})

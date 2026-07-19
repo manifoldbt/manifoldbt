@@ -211,4 +211,4 @@ if __name__ == "__main__":
 
     print(result.summary())
     print(f"\nElapsed: {elapsed:.3f}s")
-    result.plot_equity(show=True)
+    result.plot_equity()

@@ -72,4 +72,4 @@ if __name__ == "__main__":
     print(result.summary())
     print(f"\nElapsed: {perf_counter() - t0:.2f}s")
 
-    mbt.plot.tearsheet(result, show=True)
+    mbt.plot.tearsheet(result)

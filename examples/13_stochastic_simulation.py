@@ -141,5 +141,4 @@ if __name__ == "__main__":
     mbt.plot.stochastic_paths(
         result,
         title=f"Mean-reverting model (S0=80, target=100, {N_PLOT:,} paths)",
-        show=True,
     )

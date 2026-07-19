@@ -16,7 +16,7 @@ from manifoldbt.plot._theme import (
     theme_context,
 )
 from manifoldbt.plot._convert import equity_with_dates
-from manifoldbt.plot._utils import auto_title, chart_div, format_pct
+from manifoldbt.plot._utils import auto_title, chart_div, format_pct, resolve_show
 from manifoldbt.plot.backtest import (
     annual_returns,
     drawdown,
@@ -139,7 +139,7 @@ def tearsheet(
     *,
     benchmark=None,
     title: Optional[str] = None,
-    show: bool = False,
+    show: "bool | str | None" = None,
     save: Optional[Union[str, Path]] = None,
     dpi: int = 150,
     plotlyjs: str = "cdn",
@@ -165,14 +165,16 @@ def tearsheet(
 
     # ── Generate interactive chart divs ────────────────────────────
     with theme_context():
-        div_summary = _div(summary(result), height=520)
-        div_dd = _div(drawdown(result), height=210)
-        div_annual = _div(annual_returns(result), height=330)
-        div_monthly = _div(monthly_returns(result), height=340)
-        div_hist = _div(returns_histogram(result), height=340)
-        div_sharpe = _div(rolling_sharpe(result), height=300)
-        div_vol = _div(rolling_volatility(result), height=300)
-        div_var = _div(var_chart(result), height=340)
+        # show=False on every panel: these are embedded as divs in the page
+        # below, so the auto-show default would open 8 stray windows.
+        div_summary = _div(summary(result, show=False), height=520)
+        div_dd = _div(drawdown(result, show=False), height=210)
+        div_annual = _div(annual_returns(result, show=False), height=330)
+        div_monthly = _div(monthly_returns(result, show=False), height=340)
+        div_hist = _div(returns_histogram(result, show=False), height=340)
+        div_sharpe = _div(rolling_sharpe(result, show=False), height=300)
+        div_vol = _div(rolling_volatility(result, show=False), height=300)
+        div_var = _div(var_chart(result, show=False), height=340)
 
     # ── Metrics ───────────────────────────────────────────────────
     ret = metrics.get("total_return", 0)
@@ -273,7 +275,9 @@ def tearsheet(
     if save is not None:
         Path(save).write_text(html, encoding="utf-8")
 
-    if show:
+    # A report is an HTML page, not a Figure: it always opens in a browser
+    # tab, so "inline" resolves to the same thing here.
+    if resolve_show(show, save):
         if save is not None:
             report_path = Path(save).resolve()
         else:
@@ -295,7 +299,7 @@ def research_report(
     *,
     title: str = "Research Report",
     figsize: tuple = (14, 6),
-    show: bool = False,
+    show: "bool | str | None" = None,
     save: Optional[Union[str, Path]] = None,
     dpi: int = 150,
 ) -> List[Any]:
@@ -309,12 +313,13 @@ def research_report(
     _ = title
     figs = []
     with theme_context():
+        # show=False: this function does its own showing at the end.
         if sweep_result is not None:
-            figs.append(heatmap_2d(sweep_result, figsize=figsize))
+            figs.append(heatmap_2d(sweep_result, figsize=figsize, show=False))
         if wf_result is not None:
-            figs.append(walk_forward(wf_result, figsize=figsize))
+            figs.append(walk_forward(wf_result, figsize=figsize, show=False))
         if stability_result is not None:
-            figs.append(stability(stability_result, figsize=figsize))
+            figs.append(stability(stability_result, figsize=figsize, show=False))
 
     if not figs:
         raise ValueError("At least one result (sweep, wf, or stability) required.")
@@ -330,7 +335,7 @@ def research_report(
             else:
                 scale = max(1.0, dpi / 96.0)
                 f.write_image(str(out), scale=scale)
-    if show:
+    if resolve_show(show, save):
         for f in figs:
             f.show()
 

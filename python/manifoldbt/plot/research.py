@@ -112,14 +112,29 @@ def heatmap_2d(
     annotate: bool = True,
     fmt: str = ".3f",
     highlight_best: bool = True,
+    zones: "bool | List[float] | None" = None,
+    drift: int = 2,
     title: Optional[str] = None,
     figsize: Tuple[float, float] = (10, 8),
-    show: bool = False,
+    show: "bool | str | None" = None,
     save: Optional[Union[str, Path]] = None,
 ) -> go.Figure:
     """2D parameter sweep heatmap from ``run_sweep_2d()`` result.
 
     Expected keys: metric_grid, x_values, y_values, x_param, y_param, metric.
+
+    Args:
+        zones: Colour cells by discrete robustness zone instead of by the
+            metric. A zone is what the area still guarantees when the
+            parameters drift by ``drift`` cells, so a lucky spike is shown in
+            a low zone despite scoring well on its own cell. ``True`` picks
+            the bands (conventional 0/0.5/1.0/1.5 for risk-adjusted ratios,
+            an even split of the observed range otherwise); pass a list of
+            thresholds to set them yourself. The metric value stays on hover
+            and in the cell labels. Same option as ``surface_3d``.
+        drift: Neighbourhood radius in grid cells for the worst case. Cells,
+            not parameter units: with an x step of 1 and a y step of 5,
+            ``drift=2`` means +/-2 on x but +/-10 on y.
     """
     with theme_context():
         grid = np.array(sweep_result["metric_grid"], dtype=np.float64)
@@ -135,22 +150,50 @@ def heatmap_2d(
             text = np.vectorize(lambda v: "" if np.isnan(v) else f"{v:{fmt}}")(grid)
 
         fig = new_figure(figsize)
-        fig.add_trace(go.Heatmap(
-            z=grid, x=x_vals, y=y_vals,
-            colorscale=CS_SEQUENTIAL,
-            text=text, texttemplate="%{text}" if text is not None else None,
-            textfont=dict(size=9),
-            hovertemplate=(
-                f"{x_param} %{{x}}<br>{y_param} %{{y}}<br>"
-                f"{metric} %{{z:{fmt}}}<extra></extra>"
-            ),
-            colorbar=dict(outlinewidth=0, thickness=12),
-            hoverongaps=False,
-        ))
+        if zones:
+            worst = _worst_case(grid, drift)
+            band, scale, labels, edges, n_bands = _zone_bands(worst, zones, metric)
+            # z carries the band so colour is discrete; the metric and what it
+            # holds ride along in customdata so the cell still reports both.
+            fig.add_trace(go.Heatmap(
+                z=band, x=x_vals, y=y_vals,
+                colorscale=scale, zmin=-0.5, zmax=n_bands - 0.5,
+                customdata=np.dstack((grid, worst)),
+                text=text, texttemplate="%{text}" if text is not None else None,
+                textfont=dict(size=9),
+                hovertemplate=(
+                    f"{x_param} %{{x}}<br>{y_param} %{{y}}<br>"
+                    f"{metric} %{{customdata[0]:{fmt}}}<br>"
+                    f"held %{{customdata[1]:{fmt}}}<extra></extra>"
+                ),
+                colorbar=dict(
+                    title=dict(text=f"{metric}<br>held under drift", side="right"),
+                    outlinewidth=0, thickness=12,
+                    tickmode="array", tickvals=list(range(n_bands)),
+                    ticktext=labels),
+                hoverongaps=False,
+            ))
+        else:
+            fig.add_trace(go.Heatmap(
+                z=grid, x=x_vals, y=y_vals,
+                colorscale=CS_SEQUENTIAL,
+                text=text, texttemplate="%{text}" if text is not None else None,
+                textfont=dict(size=9),
+                hovertemplate=(
+                    f"{x_param} %{{x}}<br>{y_param} %{{y}}<br>"
+                    f"{metric} %{{z:{fmt}}}<extra></extra>"
+                ),
+                colorbar=dict(outlinewidth=0, thickness=12),
+                hoverongaps=False,
+            ))
 
         best_label = None
         if highlight_best:
-            best_idx = _plateau_best(grid)
+            if zones:
+                # Match the colouring: best = what holds up, not the spike.
+                best_idx = np.unravel_index(np.argmax(worst), worst.shape)
+            else:
+                best_idx = _plateau_best(grid)
             best_val = grid[best_idx]
             best_x = x_vals[best_idx[1]]
             best_y = y_vals[best_idx[0]]
@@ -163,7 +206,12 @@ def heatmap_2d(
                 x0=best_x - dx, x1=best_x + dx, y0=best_y - dy, y1=best_y + dy,
                 line=dict(color="white", width=2.5),
             )
-            best_label = f"best: {best_val:{fmt}} ({x_param}={best_x:.0f}, {y_param}={best_y:.0f})"
+            kind = "most robust" if zones else "plateau centre"
+            best_label = (f"{kind}: {best_val:{fmt}} "
+                          f"({x_param}={best_x:.0f}, {y_param}={best_y:.0f})")
+            if zones:
+                best_label += (f", holds {worst[best_idx]:{fmt}} "
+                               f"under +/-{drift} cells")
 
         combos = nx * ny
         main_title = title or f"{metric} · Parameter Sweep ({combos:,} combos)"
@@ -188,21 +236,162 @@ def heatmap_2d(
 # ── 3D Surface Plot ─────────────────────────────────────────────────────────
 
 
+def _worst_case(grid: np.ndarray, radius: int) -> np.ndarray:
+    """Lowest value reachable within +/-``radius`` cells of each cell.
+
+    This is what a combo still returns if the parameters drift, as opposed
+    to what its own cell scored. Lucky spikes collapse to their surroundings;
+    plateaus keep their value. Edges are replicated so the border is not
+    flattered by having fewer neighbours.
+    """
+    if radius < 1:
+        return grid
+    filled = np.nan_to_num(grid, nan=np.nanmin(grid))
+    padded = np.pad(filled, radius, mode="edge")
+    n, m = filled.shape
+    stack = np.stack([padded[i:i + n, j:j + m]
+                      for i in range(2 * radius + 1)
+                      for j in range(2 * radius + 1)])
+    return stack.min(axis=0)
+
+
+# Metrics where 0 separates losing from winning, so 0 is worth keeping as a
+# band edge even when the data would not have put one there.
+_RATIO_METRICS = ("sharpe", "sortino", "calmar", "tstat_alpha", "information")
+_ZONE_COLORS = ["#3f1d1d", "#7c3a1d", "#8a7a1e", "#2f6b3a", ACCENT]
+
+
+def _nice_step(span: float, n_bands: int) -> float:
+    """A 1/2/2.5/5 x 10^k step covering ``span`` in about ``n_bands`` steps.
+
+    Rounded steps keep the legend readable: "0.8 - 1.2" rather than
+    "0.7834 - 1.2017".
+    """
+    if not np.isfinite(span) or span <= 0:
+        return 1.0
+    raw = span / n_bands
+    mag = 10.0 ** np.floor(np.log10(raw))
+    for m in (1.0, 2.0, 2.5, 5.0):
+        if raw <= m * mag:
+            return m * mag
+    return 10.0 * mag
+
+
+def _auto_edges(worst: np.ndarray, metric: str, n_bands: int = 5):
+    """Band edges fitted to the data, snapped to round numbers.
+
+    Fixed conventional thresholds (0/0.5/1.0/1.5 for a Sharpe) collapse to a
+    single flat band whenever the sweep happens to live inside one of them,
+    which is common: a grid whose guaranteed Sharpe runs 1.5-2.0 came out
+    entirely one colour.
+
+    Edges sit at -1.5 to +1.5 standard deviations around the sweep's mean, so
+    the zones say how exceptional a region is *within this sweep*. That is a
+    relative statement, not a quality certificate: a sweep where every combo
+    loses money still has a top zone, it is just the least bad. Read the
+    colourbar, which prints the real thresholds, and pass explicit
+    ``zones=[...]`` whenever the bands must mean something absolute.
+    """
+    finite = worst[np.isfinite(worst)]
+    if finite.size == 0:
+        return [0.0]
+    lo, hi = float(finite.min()), float(finite.max())
+    if hi <= lo:                       # a flat grid has nothing to band
+        return [lo]
+
+    # Quantiles, not an even split of the range. Taking a minimum over the
+    # drift window skews the distribution hard toward its low tail, so even
+    # edges dumped 93% of the cells into one band and the map came out flat.
+    # Quantiles balance the bands by construction; the snap keeps the numbers
+    # readable and the colourbar prints them.
+    # Bands in standard deviations around the mean of the sweep.
+    #
+    # Quantiles were the other candidate and they are worse here: they force
+    # ~20% of cells into every band, so a grid that is genuinely uniform
+    # after erosion still comes out looking structured. Sigma bands scale
+    # with the actual dispersion, so a flat sweep reads flat and a sweep with
+    # a real standout region shows it. They also carry a meaning a reader can
+    # use: "+1 sigma" is how exceptional the region is for THIS sweep.
+    mu, sd = float(np.mean(finite)), float(np.std(finite))
+    if sd <= 0:
+        return [lo]
+    sigmas = np.linspace(-1.5, 1.5, n_bands - 1)   # 5 bands -> -1.5..+1.5
+    raw_edges = mu + sigmas * sd
+    step = _nice_step(float(raw_edges[-1] - raw_edges[0]),
+                      max(len(raw_edges) - 1, 1))
+    edges = sorted({round(float(np.round(e / step) * step), 10)
+                    for e in raw_edges})
+    edges = [e for e in edges if lo < e < hi]
+    if len(edges) < len(raw_edges):
+        # Rounding merged edges (a very tight spread): keep them unsnapped.
+        edges = sorted({float(f"{e:.4g}") for e in raw_edges if lo < e < hi})
+
+    # 0 is a real boundary for a ratio: above it you make money, below you
+    # lose it. Keep it even if the rounding would have skipped it.
+    if any(k in metric.lower() for k in _RATIO_METRICS) and lo < 0.0 < hi:
+        edges = sorted(set(edges + [0.0]))
+        if len(edges) > n_bands - 1:   # drop the edge nearest 0, not 0 itself
+            nonzero = [e for e in edges if e != 0.0]
+            drop = min(nonzero, key=lambda e: abs(e))
+            edges.remove(drop)
+    return edges or [(lo + hi) / 2.0]
+
+
+def _zone_bands(worst: np.ndarray, zones, metric: str):
+    """Resolve ``zones`` into thresholds, then bucket ``worst`` into bands."""
+    if zones is True:
+        edges = _auto_edges(worst, metric)
+    else:
+        edges = sorted(float(z) for z in zones)
+
+    band = np.digitize(worst, edges).astype(float)
+    n_bands = len(edges) + 1
+    labels = [f"< {edges[0]:g}"]
+    labels += [f"{edges[i]:g} - {edges[i + 1]:g}" for i in range(len(edges) - 1)]
+    labels.append(f">= {edges[-1]:g}")
+
+    colors = _ZONE_COLORS
+    if n_bands != len(colors):  # stretch or trim the ramp to the band count
+        idx = np.linspace(0, len(colors) - 1, n_bands).round().astype(int)
+        colors = [colors[i] for i in idx]
+
+    scale = []
+    for i, c in enumerate(colors):   # duplicated stops = hard borders
+        scale.append([i / n_bands, c])
+        scale.append([(i + 1) / n_bands, c])
+    return band, scale, labels, edges, n_bands
+
+
 def surface_3d(
     sweep_result: Dict[str, Any],
     *,
     highlight_best: bool = True,
+    zones: "bool | List[float] | None" = None,
+    drift: int = 2,
     title: Optional[str] = None,
     figsize: Tuple[float, float] = (12, 8),
     elev: float = 30,
     azim: float = -45,
-    show: bool = False,
+    show: "bool | str | None" = None,
     save: Optional[Union[str, Path]] = None,
 ) -> go.Figure:
     """3D surface plot from a 2D parameter sweep result.
 
     Same input format as ``heatmap_2d``. ``elev``/``azim`` are kept for
     backward compatibility and mapped to the plotly camera.
+
+    Args:
+        zones: Colour the surface by discrete robustness zones instead of by
+            height. Height still shows the metric; colour shows what each
+            area still guarantees when the parameters drift by ``drift``
+            cells, so a lucky spike lands in a low zone despite standing
+            tall. ``True`` picks the bands (conventional 0/0.5/1.0/1.5 for
+            risk-adjusted ratios, an even split of the observed range
+            otherwise); pass a list of thresholds to set them yourself,
+            which is what you want whenever the bands carry meaning.
+        drift: Neighbourhood radius in grid cells used for the worst case.
+            Note this is cells, not parameter units: with an x step of 1 and
+            a y step of 5, ``drift=2`` means +/-2 on x but +/-10 on y.
     """
     with theme_context():
         grid = np.array(sweep_result["metric_grid"], dtype=np.float64)
@@ -213,34 +402,94 @@ def surface_3d(
         metric = sweep_result.get("metric", "metric")
 
         fig = new_figure(figsize)
-        fig.add_trace(go.Surface(
-            x=x_vals, y=y_vals, z=grid,
-            colorscale=CS_SEQUENTIAL, opacity=0.98,
-            colorbar=dict(title=dict(text=metric, side="right"),
-                          outlinewidth=0, thickness=13, len=0.6),
-            lighting=dict(ambient=0.75, diffuse=0.5, roughness=0.9, specular=0.1),
-            contours=dict(z=dict(show=True, usecolormap=True, project_z=True,
-                                 width=1)),
-            hovertemplate=(
-                f"{x_param} %{{x:.2f}}<br>{y_param} %{{y:.2f}}<br>"
-                f"{metric} %{{z:.3f}}<extra></extra>"
-            ),
-        ))
+        lighting = dict(ambient=0.75, diffuse=0.5, roughness=0.9, specular=0.1)
+
+        if zones:
+            worst = _worst_case(grid, drift)
+            band, scale, labels, edges, n_bands = _zone_bands(worst, zones, metric)
+            fig.add_trace(go.Surface(
+                x=x_vals, y=y_vals, z=grid,
+                surfacecolor=band, colorscale=scale,
+                cmin=-0.5, cmax=n_bands - 0.5, opacity=0.98,
+                colorbar=dict(
+                    title=dict(text=f"{metric}<br>held under drift", side="right"),
+                    outlinewidth=0, thickness=13, len=0.62,
+                    tickmode="array", tickvals=list(range(n_bands)),
+                    ticktext=labels),
+                lighting=lighting,
+                contours=dict(z=dict(show=True, color="rgba(255,255,255,0.13)",
+                                     width=1)),
+                customdata=worst,
+                hovertemplate=(
+                    f"{x_param} %{{x:.2f}}<br>{y_param} %{{y:.2f}}<br>"
+                    f"{metric} %{{z:.3f}}<br>held %{{customdata:.3f}}"
+                    f"<extra></extra>"
+                ),
+            ))
+        else:
+            fig.add_trace(go.Surface(
+                x=x_vals, y=y_vals, z=grid,
+                colorscale=CS_SEQUENTIAL, opacity=0.98,
+                colorbar=dict(title=dict(text=metric, side="right"),
+                              outlinewidth=0, thickness=13, len=0.6),
+                lighting=lighting,
+                contours=dict(z=dict(show=True, usecolormap=True, project_z=True,
+                                     width=1)),
+                hovertemplate=(
+                    f"{x_param} %{{x:.2f}}<br>{y_param} %{{y:.2f}}<br>"
+                    f"{metric} %{{z:.3f}}<extra></extra>"
+                ),
+            ))
 
         best_label = None
         if highlight_best:
-            best_idx = _plateau_best(grid)
+            if zones:
+                # With zones on, "best" means the combo that holds up best
+                # under drift, not the tallest cell. Reporting the spike here
+                # would contradict the colouring right next to it.
+                best_idx = np.unravel_index(np.argmax(worst), worst.shape)
+                held = worst[best_idx]
+            else:
+                best_idx = _plateau_best(grid)
+                held = None
             best_val = grid[best_idx]
             bx = x_vals[best_idx[1]]
             by = y_vals[best_idx[0]]
+
+            # A dot sitting exactly at best_val is half-buried in the surface
+            # it marks, and a stem dropped to the floor runs underneath that
+            # surface, hidden by it. So the marker is a pin standing ABOVE
+            # the peak: the stalk clears the geometry and stays readable from
+            # any camera angle and over any colour.
+            span = float(np.nanmax(grid) - np.nanmin(grid)) or 1.0
+            tip = best_val + span * 0.10
             fig.add_trace(go.Scatter3d(
-                x=[bx], y=[by], z=[best_val], mode="markers",
-                marker=dict(color="white", size=6,
-                            line=dict(color="black", width=2)),
-                name="best", showlegend=False,
-                hovertemplate=f"best {metric} %{{z:.3f}}<extra></extra>",
+                x=[bx, bx], y=[by, by], z=[best_val, tip], mode="lines",
+                line=dict(color=WHITE, width=5),
+                name="best", showlegend=False, hoverinfo="skip",
             ))
-            best_label = f"best: {best_val:.3f} ({x_param}={bx:.0f}, {y_param}={by:.0f})"
+            # Name the criterion. Calling this "best <metric>" was a lie
+            # whenever zones were on: it is not the highest cell, it is the
+            # one that survives drift, and the highest cell is elsewhere and
+            # visibly taller.
+            if zones:
+                pin_text = (f"most robust<br>{metric} {best_val:.3f}"
+                            f"<br>holds {worst[best_idx]:.3f} "
+                            f"under +/-{drift} cells")
+            else:
+                pin_text = f"plateau centre<br>{metric} {best_val:.3f}"
+            fig.add_trace(go.Scatter3d(
+                x=[bx], y=[by], z=[tip], mode="markers",
+                marker=dict(color=WHITE, size=9, symbol="diamond",
+                            line=dict(color="black", width=3)),
+                name="best", showlegend=False,
+                hovertemplate=pin_text + "<extra></extra>",
+            ))
+            kind = "most robust" if zones else "plateau centre"
+            best_label = (f"{kind}: {best_val:.3f} "
+                          f"({x_param}={bx:.0f}, {y_param}={by:.0f})")
+            if held is not None:
+                best_label += f", holds {held:.3f} under +/-{drift} cells"
 
         # Map matplotlib elev/azim to a plotly camera eye position
         r = 1.9
@@ -283,7 +532,7 @@ def walk_forward(
     oos_color: str = ORANGE,
     title: Optional[str] = None,
     figsize: Tuple[float, float] = (10, 5),
-    show: bool = False,
+    show: "bool | str | None" = None,
     save: Optional[Union[str, Path]] = None,
 ) -> go.Figure:
     """Walk-forward analysis chart.
@@ -507,7 +756,7 @@ def stability(
     band_alpha: float = 0.15,
     title: Optional[str] = None,
     figsize: Tuple[float, float] = (10, 5),
-    show: bool = False,
+    show: "bool | str | None" = None,
     save: Optional[Union[str, Path]] = None,
 ) -> go.Figure:
     """Parameter stability chart with mean +/- std shaded bands.
@@ -572,7 +821,7 @@ def correlation_matrix(
     annotate: bool = True,
     title: str = "Correlation Matrix",
     figsize: Tuple[float, float] = (8, 7),
-    show: bool = False,
+    show: "bool | str | None" = None,
     save: Optional[Union[str, Path]] = None,
 ) -> go.Figure:
     """Symbol correlation matrix heatmap."""
@@ -652,7 +901,7 @@ def monte_carlo(
     title: Optional[str] = None,
     figsize: Tuple[float, float] = (12, 5),
     seed: Optional[int] = None,
-    show: bool = False,
+    show: "bool | str | None" = None,
     save: Optional[Union[str, Path]] = None,
 ) -> go.Figure:
     """Monte Carlo fan chart with percentile bands, sample paths, and risk stats.
@@ -805,7 +1054,7 @@ def stochastic_paths(
     band_color: str = ACCENT,
     title: Optional[str] = None,
     figsize: Tuple[float, float] = (12, 5),
-    show: bool = False,
+    show: "bool | str | None" = None,
     save: Optional[Union[str, Path]] = None,
 ) -> go.Figure:
     """Fan chart for stochastic simulation paths with percentile bands.

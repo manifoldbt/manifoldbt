@@ -71,7 +71,7 @@ def summary(
     result,
     *,
     figsize: Tuple[float, float] = (14, 8),
-    show: bool = False,
+    show: "bool | str | None" = None,
     save: Optional[Union[str, Path]] = None,
 ) -> go.Figure:
     """The essential chart: TWR equity + buy-and-hold benchmark, trade activity.
@@ -264,7 +264,7 @@ def equity(
     color: str = ACCENT,
     title: str = "Equity Curve",
     figsize: Tuple[float, float] = (14, 5),
-    show: bool = False,
+    show: "bool | str | None" = None,
     save: Optional[Union[str, Path]] = None,
 ) -> go.Figure:
     """Plot the portfolio equity curve over time.
@@ -298,7 +298,7 @@ def benchmark_equity(
     labels: Tuple[str, str] = ("Strategy", "Buy & Hold"),
     title: str = "Strategy vs Benchmark",
     figsize: Tuple[float, float] = (14, 5),
-    show: bool = False,
+    show: "bool | str | None" = None,
     save: Optional[Union[str, Path]] = None,
 ) -> go.Figure:
     """Overlay strategy equity and a benchmark, both normalized to 100."""
@@ -339,7 +339,7 @@ def drawdown(
     color: str = RED,
     title: str = "Drawdown",
     figsize: Tuple[float, float] = (14, 3),
-    show: bool = False,
+    show: "bool | str | None" = None,
     save: Optional[Union[str, Path]] = None,
 ) -> go.Figure:
     """Plot the drawdown as a filled area chart."""
@@ -373,7 +373,7 @@ def monthly_returns(
     annotate: bool = True,
     title: str = "Monthly Returns (%)",
     figsize: Tuple[float, float] = (12, 5),
-    show: bool = False,
+    show: "bool | str | None" = None,
     save: Optional[Union[str, Path]] = None,
 ) -> go.Figure:
     """Monthly returns heatmap (year rows x month columns + annual)."""
@@ -439,7 +439,7 @@ def annual_returns(
     ax=None,
     title: str = "Annual Returns",
     figsize: Tuple[float, float] = (10, 4),
-    show: bool = False,
+    show: "bool | str | None" = None,
     save: Optional[Union[str, Path]] = None,
 ) -> go.Figure:
     """Annual returns bar chart with green/red conditional coloring."""
@@ -479,7 +479,7 @@ def returns_histogram(
     bins: int = 100,
     title: str = "Returns Distribution",
     figsize: Tuple[float, float] = (12, 5),
-    show: bool = False,
+    show: "bool | str | None" = None,
     save: Optional[Union[str, Path]] = None,
 ) -> go.Figure:
     """Histogram of daily returns with green/red coloring by sign."""
@@ -541,7 +541,7 @@ def var_chart(
     bins: int = 120,
     title: str = "Value at Risk",
     figsize: Tuple[float, float] = (12, 5),
-    show: bool = False,
+    show: "bool | str | None" = None,
     save: Optional[Union[str, Path]] = None,
 ) -> go.Figure:
     """Returns histogram with VaR and CVaR lines at 5% and 1% levels."""
@@ -610,7 +610,7 @@ def rolling_sharpe(
     title: str = "Rolling Sharpe",
     trading_days_per_year: float = 365.25,
     figsize: Tuple[float, float] = (14, 4),
-    show: bool = False,
+    show: "bool | str | None" = None,
     save: Optional[Union[str, Path]] = None,
 ) -> go.Figure:
     """Rolling annualized Sharpe ratio."""
@@ -652,7 +652,7 @@ def rolling_volatility(
     title: str = "Rolling Volatility",
     trading_days_per_year: float = 365.25,
     figsize: Tuple[float, float] = (14, 4),
-    show: bool = False,
+    show: "bool | str | None" = None,
     save: Optional[Union[str, Path]] = None,
 ) -> go.Figure:
     """Rolling annualized volatility."""

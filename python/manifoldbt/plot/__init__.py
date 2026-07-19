@@ -10,11 +10,24 @@ Quick start::
 
     result = bt.run(strategy, config, store)
     bt.plot.tearsheet(result)              # full-page dashboard
-    bt.plot.equity(result, show=True)      # single chart
+    bt.plot.equity(result)                 # single chart, opens on its own
 
-Every chart is interactive (crosshair, hover, zoom). ``show=True`` opens it
-in a native window (``pip install manifoldbt[window]``; falls back to a
+Every chart is interactive (crosshair, hover, zoom) and **shows itself by
+default**: plotting is what you asked for, so no ``show=`` is needed. Charts
+open in a native window (``pip install manifoldbt[window]``; falls back to a
 browser tab, which you can also force with ``show="browser"``).
+
+Three cases opt out of showing automatically, because showing would be
+wrong: passing ``save=`` (you asked for a file, not a window), running
+under pytest/CI (a window there blocks the run), and running inside a
+notebook, where the cell already renders the returned Figure and showing
+would print a second copy of the same chart.
+
+Pass an explicit ``show=True`` to override any of them, or ``show=False``
+to get the Figure back silently and compose it yourself. To place a chart
+in the middle of a notebook cell, where there is no trailing expression for
+Jupyter to display, call IPython's ``display(fig)`` on the returned figure.
+
 ``save=".html"`` writes a responsive interactive page. Static ``save=".png"``
 is optional and needs ``pip install manifoldbt[png]`` (pulls a headless Chromium).
 """

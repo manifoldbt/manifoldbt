@@ -29,6 +29,57 @@ def new_figure(
     return fig
 
 
+def _in_notebook() -> bool:
+    """True inside a Jupyter/IPython kernel (not a plain terminal REPL)."""
+    try:
+        from IPython import get_ipython  # type: ignore
+    except ImportError:
+        return False
+    try:
+        ip = get_ipython()
+    except Exception:
+        return False
+    return ip is not None and hasattr(ip, "kernel")
+
+
+def _in_test_or_ci() -> bool:
+    """True under pytest or on a CI runner.
+
+    A test that builds a figure must not queue a window: show() runs from
+    the atexit hook and blocks on the window process, so one bare plot call
+    in a test suite hangs the whole run until a human closes it.
+    """
+    import os
+    return bool(os.environ.get("PYTEST_CURRENT_TEST") or os.environ.get("CI"))
+
+
+def resolve_show(show: "bool | str | None",
+                 save: Optional[Union[str, Path]]) -> "bool | str":
+    """Resolve the ``show=None`` auto default.
+
+    A chart you asked for is a chart you want to see, so the default shows
+    it. Three cases opt out, because showing there would be wrong:
+
+    - ``save`` was given: you asked for a file, not a window.
+    - pytest/CI: show() runs from atexit and blocks on the window process.
+    - a notebook: the cell already renders the returned Figure. Calling
+      show() here too would emit a SECOND copy of the same chart, so the
+      notebook path stays silent and lets the cell do the rendering.
+
+    Explicit ``True``/``False``/``"browser"`` always wins. There is no
+    "render it inline" value to pass, because that is what the notebook
+    already does with the returned Figure; to place a chart mid-cell, call
+    IPython's ``display(fig)``.
+    """
+    if show is not None:
+        return show
+    if save is not None:
+        return False
+    if _in_test_or_ci():
+        return False
+    return False if _in_notebook() else True
+
+
 def format_pct(value: float, decimals: int = 1) -> str:
     """Format a decimal fraction as a percentage string."""
     return f"{value * 100:+.{decimals}f}%"
@@ -43,7 +94,7 @@ def format_currency(value: float, currency: str = "USD") -> str:
 def finalize(
     fig,
     *,
-    show: "bool | str" = False,
+    show: "bool | str | None" = None,
     save: Optional[Union[str, Path]] = None,
     dpi: int = 150,
     window_size: Optional[Tuple[int, int]] = None,
@@ -52,10 +103,20 @@ def finalize(
 
     ``save`` routes on extension: ``.html`` writes a responsive interactive
     page; image extensions (.png/.svg/.pdf/...) go through kaleido.
-    ``show``: ``True`` (or ``"window"``) opens a native window (needs pywebview,
-    else falls back to a browser tab); ``"browser"`` forces a browser tab.
+    ``show``: ``None`` (default) shows the chart unless ``save`` was given or
+    we are in a notebook (see :func:`resolve_show`); ``True`` (or ``"window"``)
+    opens a native window (needs pywebview, else falls back to a browser tab);
+    ``"browser"`` forces a browser tab; ``False`` returns the figure silently.
     ``dpi`` is kept for backward compatibility and maps to an export scale.
     """
+    show = resolve_show(show, save)
+    if _in_notebook():
+        # new_figure() sets a pixel width sized for a window (1120px by
+        # default). A notebook cell is narrower than that, so the chart
+        # overflowed its output area: the right edge and the modebar were
+        # pushed out of view. Drop the fixed width and let it track the cell,
+        # keeping the height so the cell still has a definite size.
+        fig.update_layout(width=None, autosize=True)
     if save is not None:
         path = Path(save)
         ext = path.suffix.lower()
@@ -71,7 +132,13 @@ def finalize(
                 ) from exc
         else:
             write_responsive_html(fig, path)
-    if show == "browser":
+    if show == "inline" and _in_notebook():
+        # No-op on purpose. Rendering in the cell IS the notebook default, so
+        # calling show() here would emit a second copy of the chart the cell
+        # is already going to render. To place a chart mid-cell, where there
+        # is no trailing expression, use IPython's display(fig).
+        pass
+    elif show in ("browser", "inline"):
         fig.show()
     elif show:  # True or "window" -> native window (browser tab fallback)
         from manifoldbt.plot._window import open_in_window

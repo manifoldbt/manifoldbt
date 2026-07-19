@@ -11,13 +11,13 @@ import pytest
 import manifoldbt as bt
 from manifoldbt import run_with_parquet
 
-# The golden fixtures were generated at full (Pro) resolution; the Community
-# resolution cap changes the equity-point count and the comparison is
-# meaningless. CI unlocks via BT_UNLOCKED=1 (debug builds); locally this needs
-# an activated Pro license.
+# The golden fixtures assert on 1-second output resolution, below even the Pro
+# floor (60s) — exactly like the Rust golden test, which sets BT_UNLOCKED=1.
+# The override is only honored by debug builds (cargo test / maturin develop),
+# so this needs BOTH: a dev build and BT_UNLOCKED=1 in the environment.
 pytestmark = pytest.mark.skipif(
-    bt.license_info()[0] != "Pro",
-    reason="requires Pro (fixtures generated at sub-daily resolution); activate a license or use a BT_UNLOCKED dev build",
+    os.environ.get("BT_UNLOCKED") != "1",
+    reason="requires BT_UNLOCKED=1 on a dev (debug) build: fixtures assert 1s output, below the Pro 60s floor",
 )
 
 
@@ -38,9 +38,14 @@ def test_golden_buy_and_hold_matches_fixtures(golden_buy_hold_dir):
         universe=[1],
         time_range_start=0,
         time_range_end=4_000_000_000,
-        bar_interval={"Days": 1},
+        # The fixture is 4 bars at 1-second spacing; the Rust golden test runs
+        # them at Seconds(1) with per-bar output. Days(1) would resample the
+        # whole range into a single bar and the comparison would be meaningless.
+        bar_interval={"Seconds": 1},
+        output_resolution={"Seconds": 1},
         initial_capital=1000.0,
         currency="USD",
+        risk_free_rate=0.025,
         execution=bt.ExecutionConfig(
             signal_delay=1,
             execution_price="AtClose",
@@ -92,8 +97,11 @@ def test_golden_buy_and_hold_matches_fixtures(golden_buy_hold_dir):
     with open(os.path.join(golden_buy_hold_dir, "expected_metrics.json")) as f:
         expected_metrics = json.load(f)
 
+    # Mirror the Rust golden test: annualized metrics (CAGR, volatility,
+    # sharpe, sortino, calmar) are not compared because the fixture uses 4
+    # synthetic 1-second bars, making annualization numerically extreme.
     metrics = result.metrics
-    for key in expected_metrics:
+    for key in ("total_return", "max_drawdown"):
         assert abs(metrics[key] - expected_metrics[key]) <= 1e-12, (
             f"Metric {key}: {metrics[key]} != {expected_metrics[key]}"
         )
@@ -102,7 +110,11 @@ def test_golden_buy_and_hold_matches_fixtures(golden_buy_hold_dir):
     with open(os.path.join(golden_buy_hold_dir, "expected_manifest_snapshot.json")) as f:
         expected_manifest = json.load(f)
 
+    # Mirror the Rust golden test: engine_version is excluded from the snapshot
+    # (it tracks the crate version and would break on every release bump);
+    # assert only that it is populated.
     manifest = result.manifest
     assert manifest["strategy_name"] == expected_manifest["strategy_name"]
-    assert manifest["engine_version"] == expected_manifest["engine_version"]
+    assert manifest["engine_version"], "engine_version should be populated"
+    assert manifest["data_versions"].get("bars_1m", "") == expected_manifest["data_version"]
     assert manifest["config"] == expected_manifest["config"]

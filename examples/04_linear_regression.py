@@ -101,4 +101,4 @@ if __name__ == "__main__":
 
     print(result.summary())
     print(f"\nElapsed: {elapsed:.3f}s")
-    mbt.plot.summary(result, show=True)
+    mbt.plot.summary(result)

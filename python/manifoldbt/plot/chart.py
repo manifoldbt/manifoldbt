@@ -212,7 +212,7 @@ def chart(
     n_bars: int = 120,
     interactive: bool = True,
     figsize: Tuple[float, float] = (14, 7),
-    show: bool = False,
+    show: "bool | str | None" = None,
     save: Optional[Union[str, Path]] = None,
 ):
     """Plot candlestick chart with indicators and trade markers.

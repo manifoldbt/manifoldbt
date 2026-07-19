@@ -92,7 +92,7 @@ if __name__ == "__main__":
     )
 
     # -- 3. Summary 3-panel ---------------------------------------------------
-    mbt.plot.summary(result, show=True)
+    mbt.plot.summary(result)
 
     # -- 4. Candlestick chart (first symbol in universe) --------------------
     mbt.plot.chart(
@@ -101,18 +101,17 @@ if __name__ == "__main__":
         smas=[50],
         n_bars=120,
         interactive=False,
-        show=True,
     )
 
     # -- 5. Individual charts -------------------------------------------------
-    mbt.plot.equity(result, show=True)
-    mbt.plot.drawdown(result, show=True)
-    mbt.plot.monthly_returns(result, show=True)
-    mbt.plot.annual_returns(result, show=True)
-    mbt.plot.returns_histogram(result, show=True)
-    mbt.plot.var_chart(result, show=True)
-    mbt.plot.rolling_sharpe(result, show=True)
-    mbt.plot.rolling_volatility(result, show=True)
+    mbt.plot.equity(result)
+    mbt.plot.drawdown(result)
+    mbt.plot.monthly_returns(result)
+    mbt.plot.annual_returns(result)
+    mbt.plot.returns_histogram(result)
+    mbt.plot.var_chart(result)
+    mbt.plot.rolling_sharpe(result)
+    mbt.plot.rolling_volatility(result)
 
     # -- 6. Sweep heatmap 2D -------------------------------------------------
     # Sweep over RSI period and oversold threshold
@@ -160,7 +159,7 @@ if __name__ == "__main__":
         "metric_grid": metric_grid,
     }
     print(f"Sweep done in {time.perf_counter() - t0:.1f}s")
-    mbt.plot.heatmap_2d(sweep_result, show=True)
+    mbt.plot.heatmap_2d(sweep_result)
 
     # -- 7. Walk-forward validation -------------------------------------------
     print("\nRunning walk-forward (manual folds)...")
@@ -201,11 +200,11 @@ if __name__ == "__main__":
         "folds": wf_folds,
     }
     print(f"Walk-forward done in {time.perf_counter() - t0:.1f}s")
-    mbt.plot.walk_forward(wf_result, show=True)
+    mbt.plot.walk_forward(wf_result)
 
     # -- 8. Monte Carlo -------------------------------------------------------
     print("\nRunning Monte Carlo (1000 paths)...")
-    mbt.plot.monte_carlo(result, n_simulations=1000, seed=42, show=True)
+    mbt.plot.monte_carlo(result, n_simulations=1000, seed=42)
 
     # -- 9. Parameter stability -----------------------------------------------
     print("\nRunning stability analysis (RSI period)...")
@@ -241,7 +240,7 @@ if __name__ == "__main__":
         "stability_score": 1.0 - (std_m / abs(mean_m)) if mean_m != 0 else 0.0,
     }
     print(f"Stability done in {time.perf_counter() - t0:.1f}s")
-    mbt.plot.stability(stab_result, show=True)
+    mbt.plot.stability(stab_result)
 
     # -- 10. Research report (composite) --------------------------------------
     print("\nGenerating research report...")

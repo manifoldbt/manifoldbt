@@ -87,4 +87,4 @@ if __name__ == "__main__":
         "y_values": slow_values,
         "metric": "t-stat(alpha)",
         "metric_grid": metric_grid,
-    }, show=True)
+    })

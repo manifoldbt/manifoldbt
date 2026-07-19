@@ -29,6 +29,7 @@ from manifoldbt._native import (
     run_portfolio as _run_portfolio_native,
     py_ingest as _ingest_native,
     py_import_csv as _import_csv_native,
+    py_import_dataframe as _import_dataframe_native,
 )
 from manifoldbt._serde import scalar_value_to_json
 from manifoldbt.config import (
@@ -180,6 +181,32 @@ def _require_pro_over_combos(n_combos: int, what: str) -> None:
     raise LicenseError(
         f"{what} with {n_combos} runs exceeds the Community limit of "
         f"{_COMMUNITY_MAX_COMBOS}. Upgrade to Pro at www.manifoldbt.com"
+    )
+
+
+def _validate_swept_params(strategy: "Strategy", names, what: str) -> None:
+    """Reject swept parameter names the strategy never declares.
+
+    Sweeping a name the strategy does not use is a silent no-op: the value is
+    merged into a parameter map nothing reads, so every combo runs the same
+    backtest and the sweep returns N identical results with no warning. That
+    is worse than an error, because an "optimisation" over thousands of combos
+    looks like it worked and its best result is meaningless.
+
+    A parameter counts as declared whether it came from ``mbt.param()`` inside
+    an expression or from an explicit ``.param()`` call: ``to_json_dict()``
+    merges both into ``parameters`` (and is memoised, so this costs nothing).
+    """
+    declared = set(strategy.to_json_dict().get("parameters") or {})
+    unknown = [n for n in names if n not in declared]
+    if not unknown:
+        return
+    known = ", ".join(sorted(declared)) if declared else "none"
+    raise StrategyError(
+        f"{what}: parameter(s) {unknown} are not declared by strategy "
+        f"'{strategy.name}' (declared: {known}). Sweeping them would run the "
+        f"same backtest for every combination. Use mbt.param(\"name\") where "
+        f"the value is consumed, e.g. ema(close, mbt.param(\"fast\"))."
     )
 
 
@@ -682,6 +709,128 @@ def import_csv(
     )
 
 
+_BARS_REQUIRED_COLUMNS = ("timestamp", "open", "high", "low", "close", "volume")
+
+
+def _df_to_bars_batch(data):
+    """Normalise a pandas/polars DataFrame (or dict) to a pyarrow RecordBatch.
+
+    Output contract (what the native import expects): columns
+    ``timestamp`` (timestamp[ns, UTC]), ``open/high/low/close/volume`` (f64).
+    Naive timestamps are assumed UTC. A pandas DatetimeIndex is promoted to
+    the ``timestamp`` column when the column is absent.
+    """
+    import pyarrow as pa
+
+    # --- to Arrow Table (same dispatch as register_exo) ---
+    if hasattr(data, "to_arrow"):
+        # Polars DataFrame
+        table = data.to_arrow()
+    elif hasattr(data, "columns"):
+        # Pandas DataFrame
+        import pandas as pd
+        if "timestamp" not in data.columns and isinstance(data.index, pd.DatetimeIndex):
+            data = data.reset_index(names="timestamp")
+        table = pa.Table.from_pandas(data, preserve_index=False)
+    elif isinstance(data, dict):
+        table = pa.table(data)
+    else:
+        raise TypeError(
+            f"Unsupported data type: {type(data)}. Use a pandas/polars DataFrame or dict."
+        )
+
+    missing = [c for c in _BARS_REQUIRED_COLUMNS if c not in table.column_names]
+    if missing:
+        raise DataError(
+            f"DataFrame is missing required column(s): {', '.join(missing)}. "
+            f"Expected: {', '.join(_BARS_REQUIRED_COLUMNS)}"
+        )
+    table = table.select(list(_BARS_REQUIRED_COLUMNS))
+
+    # --- timestamp → timestamp[ns, UTC] ---
+    ts_type = table.schema.field("timestamp").type
+    if not pa.types.is_timestamp(ts_type):
+        raise DataError(
+            f"'timestamp' column must be a datetime type, got {ts_type}. "
+            "For epoch integers, convert first: pd.to_datetime(ts, unit='ms', utc=True)"
+        )
+    target_ts = pa.timestamp("ns", tz="UTC")
+    if ts_type != target_ts:
+        table = table.set_column(
+            0, pa.field("timestamp", target_ts), table.column(0).cast(target_ts)
+        )
+
+    # --- value columns → float64 ---
+    for i, name in enumerate(_BARS_REQUIRED_COLUMNS[1:], start=1):
+        if table.schema.field(i).type != pa.float64():
+            table = table.set_column(
+                i, pa.field(name, pa.float64()), table.column(i).cast(pa.float64())
+            )
+
+    if table.num_rows == 0:
+        raise DataError("DataFrame contains no data rows")
+
+    # Single contiguous batch for the zero-copy FFI crossing.
+    return table.combine_chunks().to_batches()[0]
+
+
+def import_dataframe(
+    data,
+    symbol: str,
+    symbol_id: int,
+    *,
+    interval: str = "1m",
+    data_root: str = "data",
+    metadata_db: str = "metadata/metadata.sqlite",
+    exchange: str = "DATAFRAME",
+    asset_class: str = "crypto_spot",
+) -> DataStore:
+    """Import bars from an in-memory DataFrame into the Arrow IPC store. Free on all tiers.
+
+    The in-memory twin of :func:`import_csv`: edit your data as a DataFrame,
+    then import it directly — no intermediate CSV. Returns a :class:`DataStore`
+    ready for :func:`run` (same store, metadata and versioning as ``bt.ingest``).
+
+    Accepts a pandas DataFrame, polars DataFrame, or dict of columns with
+    ``timestamp`` (datetime; naive values are assumed UTC), ``open``, ``high``,
+    ``low``, ``close``, ``volume``. A pandas DatetimeIndex is used as
+    ``timestamp`` if that column is absent. Rows must be sorted by timestamp.
+
+    Example::
+
+        df = pd.read_parquet("EURUSD_1m.parquet")
+        df["close"] = df["close"].clip(upper=1.5)   # edit in memory
+        store = bt.import_dataframe(df, symbol="EURUSD", symbol_id=1,
+                                    interval="1m", asset_class="forex")
+        result = bt.run(strategy, config, store)
+
+    Args:
+        data: pandas/polars DataFrame or dict of columns.
+        symbol: Ticker name (e.g. ``"EURUSD"``, ``"BTCUSDT"``).
+        symbol_id: Unique integer ID for this symbol in the store.
+        interval: Bar interval of the rows (``"1m"``, ``"5m"``, ``"1h"``, ``"1d"``, ...).
+        data_root: Store directory (default ``"data"``).
+        metadata_db: Metadata SQLite path.
+        exchange: Exchange label for metadata (default ``"DATAFRAME"``).
+        asset_class: ``crypto_spot``, ``crypto_perp``, ``equity``, ``future``,
+            ``option``, ``forex``, or ``index``.
+    """
+    batch = _df_to_bars_batch(data)
+    try:
+        return _import_dataframe_native(
+            batch,
+            symbol=symbol,
+            symbol_id=symbol_id,
+            interval=interval,
+            data_root=data_root,
+            metadata_db=metadata_db,
+            exchange=exchange,
+            asset_class=asset_class,
+        )
+    except (ValueError, RuntimeError) as exc:
+        raise _classify_error(exc) from exc
+
+
 def _ingest_single(
     *, provider, symbol, symbol_id, start, end, interval, dataset,
     data_root, metadata_db, exchange, asset_class, progress,
@@ -759,6 +908,7 @@ def run_sweep(
         A :class:`SweepResult` with ``.to_df()``, ``.best()``, ``.plot_metric()``.
     """
     _require_pro_over_combos(_grid_combos(param_grid), "Parameter sweep")
+    _validate_swept_params(strategy, param_grid.keys(), "Parameter sweep")
     try:
         config = _cap_output_resolution(config)
         store = _resolve_store(config, store)
@@ -930,6 +1080,7 @@ def run_sweep_lite(
         One :class:`BatchResultLite` per combo (Cartesian product order).
     """
     _require_pro_over_combos(_grid_combos(param_grid), "Parameter sweep")
+    _validate_swept_params(strategy, param_grid.keys(), "Parameter sweep")
     _require_pro_for_gpu(device, "GPU sweep")
     try:
         config = _cap_output_resolution(config)
@@ -939,7 +1090,11 @@ def run_sweep_lite(
             name: [scalar_value_to_json(v) for v in values]
             for name, values in param_grid.items()
         })
-        return _run_sweep_lite_native(
+        # Wrapped in a list subclass: echoing a sweep in a notebook cell
+        # printed one BatchResultLite line per combo. Indexing, iteration and
+        # len() are unchanged.
+        from manifoldbt._reprs import wrap_sweep_lite
+        return wrap_sweep_lite(_run_sweep_lite_native(
             strategy.to_json(),
             grid_json,
             cfg_json,
@@ -947,7 +1102,7 @@ def run_sweep_lite(
             max_parallelism,
             device,
             precision,
-        )
+        ))
     except (ValueError, RuntimeError) as exc:
         raise _classify_error(exc) from exc
 
@@ -1029,9 +1184,15 @@ def run_walk_forward(
     # in `py_run_walk_forward` (check_feature("walk_forward")), so this cannot be
     # bypassed by calling the native function directly.
     _require_pro("Walk-forward optimization")
+    _validate_swept_params(strategy, (wf_config.get("param_grid") or {}).keys(),
+                           "Walk-forward")
     config = _prepare_config(config, strategy, store)
     wf_json = json.dumps(_convert_param_grid_in_config(wf_config))
-    return _run_walk_forward_native(strategy.to_json(), wf_json, config.to_json(), store)
+    raw = _run_walk_forward_native(strategy.to_json(), wf_json, config.to_json(), store)
+    # Wrapped in a dict subclass: the raw dict holds a full equity curve per
+    # fold, so echoing it in a cell printed tens of thousands of floats.
+    from manifoldbt._reprs import wrap_walk_forward
+    return wrap_walk_forward(raw)
 
 
 def run_sweep_2d(
@@ -1061,6 +1222,10 @@ def run_sweep_2d(
         len(sweep_config.get("x_values", [])) * len(sweep_config.get("y_values", [])),
         "2D parameter sweep",
     )
+    _validate_swept_params(
+        strategy,
+        [n for n in (sweep_config.get("x_param"), sweep_config.get("y_param")) if n],
+        "2D parameter sweep")
     config = _prepare_config(config, strategy, store)
     sweep_json = json.dumps(_convert_scalar_values_in_sweep(sweep_config))
     return _run_sweep_2d_native(strategy.to_json(), sweep_json, config.to_json(), store)
@@ -1088,6 +1253,10 @@ def run_stability(
         Dict with ``stability_score``, ``metric_values``, ``mean_metric``, ``std_metric``.
     """
     _require_pro_over_combos(len(stability_config.get("values", [])), "Parameter stability analysis")
+    _validate_swept_params(
+        strategy,
+        [n for n in (stability_config.get("param_name"),) if n],
+        "Parameter stability analysis")
     config = _prepare_config(config, strategy, store)
     stab_json = json.dumps(_convert_scalar_values_in_stability(stability_config))
     return _run_stability_native(strategy.to_json(), stab_json, config.to_json(), store)
@@ -1404,6 +1573,7 @@ __all__ = [
     # Data ingestion
     "ingest",
     "import_csv",
+    "import_dataframe",
     # Run functions
     "run",
     "run_sweep",

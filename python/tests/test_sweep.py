@@ -31,7 +31,9 @@ def test_sweep_returns_one_result_per_combo(golden_buy_hold_dir):
         universe=[1],
         time_range_start=0,
         time_range_end=4_000_000_000,
-        bar_interval={"Days": 1},
+        # Fixture bars are 1-second spaced; Days(1) collapses them into a
+        # single bar and signal_delay=1 then never fills → zero trades.
+        bar_interval={"Seconds": 1},
         execution=bt.ExecutionConfig(
             signal_delay=1,
             execution_price="AtClose",
@@ -89,7 +91,7 @@ def test_sweep_golden_grid_deterministic_order(golden_buy_hold_dir):
         universe=[1],
         time_range_start=0,
         time_range_end=4_000_000_000,
-        bar_interval={"Days": 1},
+        bar_interval={"Seconds": 1},
         execution=bt.ExecutionConfig(
             signal_delay=1,
             execution_price="AtClose",

@@ -66,4 +66,4 @@ if __name__ == "__main__":
     print(f"Elapsed: {time.perf_counter() - t0:.3f}s\n")
 
     # 2. Monte Carlo fan chart
-    mbt.plot.monte_carlo(result, n_simulations=10000, seed=42, show=True)
+    mbt.plot.monte_carlo(result, n_simulations=10000, seed=42)

@@ -107,7 +107,9 @@ class SweepResult:
 
         df = self.to_df(backend="pandas")
         param_cols = [c for c in df.columns if c.startswith("param_")]
-        show = kwargs.pop("show", True)
+        # None = the auto default (show, unless save= or a notebook); both
+        # branches below hand it to finalize(), which resolves it.
+        show = kwargs.pop("show", None)
         save = kwargs.pop("save", None)
 
         if len(param_cols) == 2:

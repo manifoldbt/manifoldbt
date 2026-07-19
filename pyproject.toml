@@ -1,6 +1,6 @@
 [project]
 name = "manifoldbt"
-version = "0.13.2"
+version = "0.14.0"
 description = "Rust-powered backtesting engine for quantitative research"
 requires-python = ">=3.9"
 license = { file = "LICENSE" }
