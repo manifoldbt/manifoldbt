@@ -19,12 +19,14 @@
 
 ---
 
-ManifoldBT compiles Python strategy definitions into an optimized Rust expression graph.
-Write strategies in a fluent Python DSL — execute them on a vectorized Rust engine.
+ManifoldBT is a Python backtesting library with a Rust core. Strategies are written in a
+fluent Python DSL, compiled to a vectorized Rust expression graph, then run through a
+sequential fill simulation with realistic fees, slippage, funding and look-ahead protection.
+**Vectorized speed with event-driven execution realism.**
 
 ## Why ManifoldBT
 
-- **Fast** — 500K bars in ~26ms. 161x faster than vectorbt, 1000x+ faster than backtrader.
+- **Fast** — 500K bars in ~13 ms. 353x faster than vectorbt, ~3,500x faster than backtrader.
 - **Expressive** — fluent DSL with 30+ indicators, conditional logic, cross-asset references
 - **Rigorous** — Monte Carlo, walk-forward, parameter sweeps, lookahead detection, exposure diagnostics
 - **Portable** — `pip install`, no Rust toolchain needed. Works on Python 3.9+.
@@ -131,15 +133,29 @@ manifoldbt ingest --provider binance --symbol BTCUSDT --symbol-id 1 --start ... 
 
 ## Performance
 
-EMA(12/26) + RSI(14) on 500K synthetic 1-min bars (median of 5 runs):
+EMA(12/26) + RSI(14) on 500K synthetic 1-min bars (manifoldbt/vectorbt: median of 5 runs; backtrader: median of 3):
 
 | Engine | Time | vs ManifoldBT |
 |--------|------|---------------|
-| **ManifoldBT** (Rust) | **26 ms** | 1x |
-| vectorbt (NumPy) | 4,094 ms | 161x slower |
-| backtrader (Python) | — | ~1000x slower |
+| **ManifoldBT** (Rust) | **13 ms** | 1x |
+| vectorbt (NumPy) | 4,662 ms | 353x slower |
+| backtrader (Python) | 46,944 ms | ~3,556x slower |
+
+ManifoldBT and vectorbt produce identical results (−30.23% vs −30.24% return, same trade count); backtrader's event-driven fills give a different PnL.
 
 Reproduce: `python benchmarks/bench_vs_competitors.py --rows 500000 --runs 5`
+
+### How it compares
+
+| | ManifoldBT | vectorbt | backtrader | Nautilus |
+|---|---|---|---|---|
+| Engine | Rust (vectorized + sequential fills) | Numba/NumPy (vectorized) | Python (event-driven) | Rust/Python (event-driven) |
+| Execution realism¹ | High | Basic | High | High |
+| Focus | Backtesting + research | Backtesting at scale | Backtest + live | Backtest + live (production) |
+
+¹ fees, slippage, funding, partial fills, look-ahead detection.
+
+> On GPU (Pro), the Monte Carlo engine runs **~36x faster** than the all-core CPU path (SDE path simulation, RTX 3090, f32).
 
 ## Documentation
 

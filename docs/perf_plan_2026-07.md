@@ -11,6 +11,25 @@ Ground rules for every phase:
 - Every perf claim: median of >=3 runs, MC-10M-CPU sentinel ~6s clean on both sides.
 - One branch per workstream, `perf:` commits, no cross-stream stacking unless noted.
 
+## Status board (updated 2026-07-19)
+
+| phase | state | outcome |
+|---|---|---|
+| 0 ruler | **done** | harness + bracket probe; re-sized finding #3b downward |
+| 1a metrics pydict | **done, merged-ready** | 5.3x to_df / 10.5x best / 9.4x .metrics |
+| 1b CAPM hoist | **done, measured** | +11.9% wall, +16.5% sim (paired A/B) |
+| 2 single-run parallel | **cancelled** | premise false: signals already parallel |
+| 2 simd-dispatch | open | ~1.1-1.15x, off the critical path |
+| 3 loop-extraction | **DONE** | daily-equity + bracket-exit + fill/sizing all unified |
+| 3 transpiled sweep | **de-risked, not started** | >=1.33x confirmed, plausibly 1.4-1.7x |
+| 3 loop tightening | **unblocked, not started** | enabler done: write it once, not four times |
+| 4 coverage | not started | optional, per-gate |
+
+Open debts, both found by deliberately breaking things:
+- The integration suite is blind to daily-equity drift (only 2 unit tests bite).
+- ~14% of the measured +26% sweep gain is unattributed; likely the daily-equity
+  simplification, but that needs its own paired A/B before it is claimed.
+
 ## End-to-end result so far (2026-07-18)
 
 Measured A-B-A at the build level (HEAD, then main's engine sources, then HEAD
@@ -106,7 +125,7 @@ proven by stashing the change, rebuilding, and reproducing the identical
 truncated equity curve (`[1000.0, 1000.0]`), which makes total_return 0.0 for every
 combo. Tracked separately (see the pending `fix/python-test-suite` branch).
 
-Branch `perf/hoist-capm` (Phase 1b, DONE 2026-07-18 -- perf number provisional)
+Branch `perf/hoist-capm` (Phase 1b, DONE 2026-07-18 -- measured: +11.9% wall)
 - [x] CAPM benchmark returns hoisted into `run_sweep_lite` and `run_batch_lite`
       via `hoist_capm_benchmark()`; `run_lite_on_aligned` takes
       `hoisted_benchmark: Option<&[f64]>` and falls back to computing per run when
@@ -165,10 +184,17 @@ first-touch / page-cache state), so it flags "loaded" on a quiet machine.
 Use instead: interleaved A/B with paired deltas, which is robust to drift by
 construction and needs no external notion of "clean".
 
-Gate to close Phase 1: parity suite green (Rust goldens + Python mirrors), benches
-re-run per protocol, numbers recorded in the audit doc.
+**Gate to close Phase 1: PASSED 2026-07-18.** `cargo test -p bt-core` 91 passed /
+0 failed; bt-python serde-parity 5/5. Python suite 63 passed / 2 failed, and both
+failures were proven pre-existing by stashing the change, rebuilding and
+reproducing the identical `2 failed, 63 passed` (they share one root cause: the
+golden fixture yields a flat equity curve `[1000.0, 1000.0]`). Benches re-run per
+protocol, numbers recorded above and in the audit doc.
 
 ## Phase 2 — medium effort, contained risk (~1-2 weeks)
+
+Status: the single-run half is cancelled (below); only `perf/simd-dispatch`
+remains open, and it is no longer on the critical path to 2x.
 
 Branch `perf/single-run-parallel` -- **CANCELLED 2026-07-18, premise was false.**
 
@@ -215,11 +241,68 @@ Optional branch `perf/full-sweep-traces`
 
 ## Phase 3 — structural, the 2x closers (~3-5 weeks, sequential)
 
-Branch `refactor/loop-extraction` FIRST (enabler, no behavior change)
-- [ ] Mechanically extract the shared fill/equity/daily blocks from the four loop
-      transcriptions (full/lite x general/fast) and the two bracket macros.
-      Pure extraction: does not change WHICH metrics lite computes (lite contract).
-- [ ] Golden + parity suites must be bit-identical before/after.
+Branch `refactor/loop-extraction` FIRST (enabler, no behavior change) -- PARTIAL
+
+- [x] **daily-equity rule unified** (commit a48121a). The three lite loops
+      (general, multi-asset fast, single-asset fast) each carried their own
+      transcription, and they had already drifted into three different forms: two
+      decided from `daily_timestamps.last()` with a midnight special case, the
+      third from a `current_day` cursor. Now one `record_daily_equity`. The
+      cursor is gone: dead state in two of the three sites.
+- [x] Verified by sabotage, not by a green suite: perturbing the overwritten
+      equity by 1.0001x fails `test_fast_lite_core_matches_simulate_fast_lite` on
+      a bitwise `daily_equity[0] bits` assertion. Reverted, 91 passed / 0 failed.
+- [x] **bracket-exit rule unified** (commit aabc701). `check_bracket_exit!`
+      (~150 LOC) and `check_bracket_exit_lite!` (~100 LOC) were line-for-line
+      identical on the decision and pricing: null high/low guard,
+      check_stop/check_tp, the gap-aware fill, the slippage call, the clamp to
+      the bar range, taker-vs-maker fees. They differed only in what they
+      recorded. Now one `resolve_bracket_exit` returning a `BracketExit`; it
+      deliberately does not touch capital or positions, so applying the fill and
+      the bookkeeping stays at each call site and one function serves two kernels
+      that own different state.
+- [x] Sabotage-verified on BOTH arms: perturbing the stop fill fails 8 tests
+      (incl. the `lite_matches_full_*` family and the batch_lite order test),
+      perturbing the take-profit fails 5 (incl.
+      `lite_matches_full_with_take_profit`). Reverted, 91 passed / 0 failed.
+- [x] No perf regression from turning macro-inlined code into a call in the
+      per-bar loop. A-B-A at the build level: bracket sweep 29,602 c/s (macros)
+      vs 32,369 c/s (extracted, mean of two builds); plain sweep and GPU flat.
+      The two identical extracted builds differ by 7.9%, so the apparent +9% is
+      inside the noise and is NOT claimed; "no regression" is what it shows.
+- [x] **fill/sizing rule unified** (commit 3a284fb). `simulate_fast`,
+      `simulate_fast_lite` and `simulate_fast_lite_single` each had the same
+      sequence: sanitize the target into units, round/clamp for
+      fractional/short, cap at max_position_pct, delta against the position,
+      bail under 1e-12, price AtClose + FixedBps with a min-fee floor. They
+      differed only in scalar-vs-Vec storage and `continue` vs `break 'signal`.
+      Now `resolve_fast_fill` -> `FastFill`, with the loop-invariants bundled in
+      `FastSizing`/`FastCosts` built once before the bar loop. Capital and
+      positions stay with the caller, which is what lets one function serve a
+      kernel holding `positions[si]` and one holding a scalar `position`.
+      `#[inline(always)]`, FP op order preserved exactly (it is what the CUDA
+      kernel is transpiled against).
+- [x] Sabotage-verified: perturbing the fee fails
+      `test_fast_lite_core_matches_simulate_fast_lite`,
+      `test_fast_lite_core_units_and_short` and
+      `fast_path_matches_general_with_fees` (the lite-vs-core and
+      fast-vs-general comparisons). Reverted, 91 passed / 0 failed.
+- [x] No perf regression on the hottest code in the engine. A-B-A: plain sweep
+      57,304 -> 59,394 c/s, bracket 32,232 -> 30,559 c/s, both inside their own
+      build-to-build spread (3.2% and 5.4%). Nothing resolvable either way.
+
+**The enabler is now complete for the lite/fast kernels.** The general full loop
+keeps its own fill path (pending orders, limit entries, per-venue fees make it a
+different shape); it is out of scope for `perf/lite-loop-tightening`, which
+targets the lite kernels. Loop tightening can now be written once.
+
+**Coverage gap found by the sabotage, not fixed here.** With the perturbation
+live, ONLY the two lib unit tests failed: all 28 backtest_orders, 14
+backtest_single_asset, 7 backtest_multi_asset, per_venue_fees and the goldens
+passed with a visibly wrong daily equity curve. So the daily-equity rule is
+bit-guarded only by `gpu_sweep_core_tests`, and the integration suite is blind to
+drift in the series feeding sharpe, volatility and sortino. Same shape as the
+golden that was blind to max_drawdown because dd was 0.0.
 
 **De-risked 2026-07-18: the 1.33x premise holds, and is probably conservative.**
 
