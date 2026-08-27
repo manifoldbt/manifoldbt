@@ -146,12 +146,19 @@ if __name__ == "__main__":
 
     # -- 2. The detector -------------------------------------------------------
     from manifoldbt.diagnostics import detect_lookahead
+    from manifoldbt.exceptions import LicenseError
 
-    report = detect_lookahead(leaky(global_mean), config_of(frame), store, mode="all")
-    compared = sum(r.total_trades_overlap for r in report.reports)
-    verdict = BLIND if report.passed else CAUGHT
-    print(f"\n  [1] detect_lookahead .......... {verdict}")
-    print(f"      ({compared} trades compared, so the verdict is not empty)")
+    try:
+        report = detect_lookahead(leaky(global_mean), config_of(frame), store, mode="all")
+        compared = sum(r.total_trades_overlap for r in report.reports)
+        verdict = BLIND if report.passed else CAUGHT
+        print(f"\n  [1] detect_lookahead .......... {verdict}")
+        print(f"      ({compared} trades compared, so the verdict is not empty)")
+    except LicenseError:
+        # A Pro diagnostic. The file's argument does not need it to run: this
+        # is the audit the leak is INVISIBLE to (run under Pro, it reports
+        # SEES NOTHING here), and the audit that does catch it, [3], is free.
+        print("\n  [1] detect_lookahead .......... skipped (Pro diagnostic)")
 
     # -- 3. Perturbing the future ---------------------------------------------
     split = 500
