@@ -4,7 +4,6 @@ Demonstrates:
   - Built-in presets (GBM, Heston, Merton, GARCH-JD)
   - Custom SDE model via string expressions
   - Stochastic fan chart visualization
-  - CUDA GPU acceleration (device="cuda")
   - All expressions compile to native Rust — full Rayon / CUDA parallelism
 
 Data: none — this file simulates price paths, it does not backtest on any
@@ -18,8 +17,12 @@ import manifoldbt as mbt
 
 from _bootstrap import plots_available
 
-N = 10_000_000  # 10M paths
-DEVICE = "cuda"  # "cpu" or "cuda"
+# The mechanics are identical at any scale, so the defaults run on the free
+# tier, which caps simulations at 1,000 paths. With a Pro licence the same
+# file is a throughput demo: N = 10_000_000 and DEVICE = "cuda" run each
+# preset below in about two seconds.
+N = 1_000
+DEVICE = "cpu"  # Pro: "cuda"
 
 if __name__ == "__main__":
     # ── 1. Geometric Brownian Motion (preset) ───────────────────────────────
@@ -117,7 +120,7 @@ if __name__ == "__main__":
     print(f"   Elapsed: {elapsed:.3f}s\n")
 
     # ── 5. Custom mean-reverting model (CPU — store_paths needs RAM) ────────
-    N_PLOT = 10_000
+    N_PLOT = min(N, 10_000)
     print(f"5. Custom mean-reverting model ({N_PLOT:,} paths) [cpu, store_paths]")
     mean_rev = mbt.StochasticModel(
         name="mean_reverting",
