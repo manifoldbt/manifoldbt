@@ -15,6 +15,13 @@
 # running them in one environment, and the environment has to be one they all
 # support.
 vectorbt==0.28.4
+# plotly is vectorbt's transitive dependency, and it was the hole in this
+# lock: unpinned, pip resolved plotly 7.0.0 the day it landed on PyPI, and
+# vectorbt 0.28.4's own template references the mapbox traces that 7.0
+# removed -- `import vectorbt` died before a single bar was benchmarked.
+# Exactly the failure mode the header above describes. 6.9.0 is the last
+# 6.x line and the one this harness is validated against.
+plotly==6.9.0
 raptorbt==0.9.0
 numpy==2.4.3
 numba==0.64.0

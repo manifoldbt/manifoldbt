@@ -146,7 +146,7 @@ jobs:
 
       - name: Record the resolved environment
         shell: bash
-        run: pip freeze | grep -iE '^(manifoldbt|vectorbt|raptorbt|numpy|numba|pandas|psutil)=' || true
+        run: pip freeze | grep -iE '^(manifoldbt|vectorbt|raptorbt|numpy|numba|pandas|psutil|plotly)=' || true
 
       - name: Run the benchmark
         shell: bash
