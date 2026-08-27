@@ -10,6 +10,11 @@ name: CI
 #   verify — the package-layout guard that was already here. Kept as-is.
 #   tests  — installs the published wheel from PyPI and runs the mirrored test
 #            suite against it, on every supported Python version.
+#   bench-report — the benchmark harness's own rendering tests
+#            (benchmarks/vs_vectorbt/test_report.py). They import no engine and
+#            need no wheel; without this job nothing collects them, because the
+#            root testpaths points at python/tests. PR #13 arrived with tests
+#            their author could not wire in, and this is the wiring.
 #
 # The second job is the point. The suite shipped in this repository for months
 # without anything running it, so "there are tests" was a claim a reader had to
@@ -32,6 +37,20 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
 
 jobs:
+  bench-report:
+    name: Benchmark report rendering
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run the harness's rendering tests
+        run: |
+          python -m pip install --quiet pytest
+          python -m pytest benchmarks/vs_vectorbt/test_report.py -q
+
   verify:
     name: Verify package layout
     runs-on: ubuntu-latest
