@@ -420,7 +420,7 @@ def render(payload: Dict[str, Any]) -> str:
         lines += _speed_table(timed, "Results differ, kept out of the headline", payload)
         # Every point carries its own size: a divergence can grow with the
         # number of bars, so the first point does not speak for the others.
-        notes = [note for row in documented for note in _divergence_note(row, payload)]
+        notes = [note for row in timed for note in _divergence_note(row, payload)]
         if notes:
             lines += notes + ["", "Cause in {}.".format(METHOD_LINK), ""]
 
