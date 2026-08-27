@@ -254,7 +254,7 @@ method can weigh it. Treat any parameter that came from data as part of the
 pipeline, re-derive it on the window under test, and compare the results.
 
 [`examples/25_lookahead_trap.py`](https://github.com/manifoldbt/manifoldbt/blob/master/examples/25_lookahead_trap.py)
-runs both on the same strategy — including perturbing every future bar — and
+runs both on the same strategy, including perturbing every future bar, and
 prints what each method concludes, so the difference is visible rather than
 asserted.
 

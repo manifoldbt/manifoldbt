@@ -9,7 +9,7 @@ traded as written, and that is not a defect.
 Every example opens with the same four blocks, in this order:
 
 ```
-"""One-line title — the mechanism, named.
+"""One-line title -- the mechanism, named.
 
 Demonstrates:
   - the two or three API surfaces the file exists to show
@@ -27,15 +27,15 @@ from is part of the example.
 
 ## The three data provenances
 
-**`Data: shared store`** — real market data from `data/`, ingested once and
+**`Data: shared store`** -- real market data from `data/`, ingested once and
 reused. These examples need that store to exist (see below). Their results are
 real in the sense that the prices are real; they are still not investment
 advice, and none of the strategies is tuned.
 
-**`Data: self-contained (network)`** — the file ingests what it needs on each
+**`Data: self-contained (network)`** -- the file ingests what it needs on each
 run, from a free connector. Runs on a fresh clone, needs a network.
 
-**`Data: synthetic (seed N)`** — the file generates its own series. Always
+**`Data: synthetic (seed N)`** -- the file generates its own series. Always
 reproducible, never a market claim.
 
 ## The rule on synthetic data
@@ -51,7 +51,7 @@ in that case:
 
 | | What the fixture determines |
 |---|---|
-| `21_fill_at_computed_level.py` | the series is detrended, so mean reversion cannot lose on it — only the *gap* between two execution prices is meaningful |
+| `21_fill_at_computed_level.py` | the series is detrended, so mean reversion cannot lose on it -- only the *gap* between two execution prices is meaningful |
 | `25_lookahead_trap.py` | the leak is deliberate; the file exists to show which audits fail to see it |
 
 A synthetic example whose fixture does **not** predetermine the outcome carries
@@ -73,7 +73,7 @@ python examples/13_stochastic_simulation.py
 ```
 
 Charts are an optional extra. Without it an example still runs to the end and
-skips its chart, saying so — no file here needs `[plot]` to be useful, except
+skips its chart, saying so -- no file here needs `[plot]` to be useful, except
 `06_full_visualization.py`, which is nothing but charts.
 
 ## The shared store
@@ -92,7 +92,7 @@ same 1h store serves the examples running on 12h or daily bars. Both connectors
 are free on all tiers and need no API key.
 
 Doing it by hand takes one call per symbol, and the `asset_class` is the part
-that is easy to get wrong — the examples ask for `BTC-USDT:perp`, and the
+that is easy to get wrong -- the examples ask for `BTC-USDT:perp`, and the
 default (`crypto_spot`) stores a symbol they will not find:
 
 ```python
