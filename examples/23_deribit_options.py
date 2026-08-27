@@ -103,14 +103,20 @@ config = mbt.BacktestConfig(
 
 if __name__ == "__main__":
     result = mbt.run(strategy, config, store)
-    trades = result.trades.to_pandas()
+
+    # `result.trades` is an Arrow table. Read it column-wise rather than through
+    # `.to_pandas()`, so the file runs on the plain `pip install manifoldbt`.
+    cols = ["symbol_id", "side", "quantity", "fill_price", "exit_reason"]
+    trades = [dict(zip(cols, row))
+              for row in zip(*(result.trades.column(c).to_pylist() for c in cols))]
 
     print("\nTrades on the option legs:")
-    print(
-        trades[trades.symbol_id != UNDERLYING_ID][
-            ["symbol_id", "side", "quantity", "fill_price", "exit_reason"]
-        ].to_string(index=False)
-    )
+    print(f"  {'symbol_id':>9} {'side':>6} {'quantity':>9} {'fill_price':>11} {'exit_reason':>11}")
+    for t in trades:
+        if t["symbol_id"] == UNDERLYING_ID:
+            continue
+        print(f"  {t['symbol_id']:>9} {str(t['side']):>6} {t['quantity']:>9.2f} "
+              f"{t['fill_price']:>11.6f} {str(t['exit_reason']):>11}")
     # exit_reason 5 is OptionExpiry: the venue settled the contract, the
     # strategy did not sell it. The put settles at 0 because BTC finished far
     # above its 90k strike.

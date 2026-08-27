@@ -157,6 +157,10 @@ class ExecutionConfig:
     """Fill model configuration. None = Rust defaults (atomic fill, single point).
     Example: {"max_participation_rate": 0.1, "intra_bar_price": "TypicalPrice"}
     intra_bar_price options: "SinglePoint", "TypicalPrice", "OhlcAverage"
+    passive_fill options: "touch" (default: a maker fill books when the bar
+      reaches its level) or "traverse" (the bar must trade through the level;
+      conservative, and the run stays on the general loop). The result's
+      fill_fragility counters say how many maker fills the choice affects.
     """
     orders: Optional[OrderConfig] = None
     """Order management: limit entries, stop-loss, take-profit, trailing stops.

@@ -49,7 +49,7 @@ class Result:
         Args:
             backend: ``"pandas"``, ``"polars"``, or ``"auto"``.
         """
-        from manifoldbt.plot._convert import equity_with_dates
+        from manifoldbt._convert import equity_with_dates
 
         dates, values = equity_with_dates(self._raw)
 

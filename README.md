@@ -199,6 +199,19 @@ exogenous column to use, which asset to reference, or which indicator to apply.
 
 ## Examples
 
+Clone the repository and run one:
+
+```bash
+python examples/13_stochastic_simulation.py
+```
+
+Most of them backtest real market data, which is not in the repository.
+`python examples/setup_data.py` downloads it once, from free connectors that
+need no API key; [examples/README.md](https://github.com/manifoldbt/manifoldbt/blob/master/examples/README.md)
+says which files need it and which run on nothing at all. Charts come from the
+optional `[plot]` extra: without it an example still runs to the end and skips
+its chart.
+
 | # | Example | What it shows |
 |---|---------|---------------|
 | 00 | [Template](https://github.com/manifoldbt/manifoldbt/blob/master/examples/00_template.py) | Minimal starting point |

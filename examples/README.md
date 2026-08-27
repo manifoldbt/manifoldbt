@@ -64,19 +64,45 @@ appears it illustrates the mechanism under discussion. If an example ever
 produced a reproducible edge on real data, it would belong in a private
 repository rather than in documentation.
 
+## Running them
+
+```bash
+pip install manifoldbt          # the engine
+pip install manifoldbt[plot]    # and the charts, if you want them drawn
+python examples/13_stochastic_simulation.py
+```
+
+Charts are an optional extra. Without it an example still runs to the end and
+skips its chart, saying so — no file here needs `[plot]` to be useful, except
+`06_full_visualization.py`, which is nothing but charts.
+
 ## The shared store
 
-Examples marked `Data: shared store` read `data/` and `metadata/`, which are not
-in the repository. Populate them once:
+Examples marked `Data: shared store` read `data/` and `metadata/`, which are
+not in the repository: market data does not belong in a git repository.
+Download what they need, once, from the repository root:
+
+```bash
+python examples/setup_data.py
+```
+
+That ingests the ten Binance perpetuals and the one dYdX perpetual these files
+name, at 1h, over the range they cover. The engine aggregates upwards, so the
+same 1h store serves the examples running on 12h or daily bars. Both connectors
+are free on all tiers and need no API key.
+
+Doing it by hand takes one call per symbol, and the `asset_class` is the part
+that is easy to get wrong — the examples ask for `BTC-USDT:perp`, and the
+default (`crypto_spot`) stores a symbol they will not find:
 
 ```python
 import manifoldbt as mbt
-mbt.ingest(provider="binance", symbol="BTCUSDT", symbol_id=1,
-           start="2021-01-01T00:00:00Z", end="2025-01-01T00:00:00Z")
+mbt.ingest(provider="binance", symbol="BTCUSDT", symbol_id=1, interval="1h",
+           asset_class="crypto_perp",
+           start="2021-01-01T00:00:00Z", end="2026-03-01T00:00:00Z")
 ```
 
-Add the symbols an example asks for; each names them in its `universe`. The
-self-contained and synthetic examples need none of this.
+The self-contained and synthetic examples need none of this.
 
 ## Index
 
@@ -108,5 +134,20 @@ self-contained and synthetic examples need none of this.
 | 23 | `23_deribit_options.py` | option contracts that expire and settle | network |
 | 24 | `24_option_spread.py` | a two-leg option structure | network |
 | 25 | `25_lookahead_trap.py` | the look-ahead no re-run can detect | synthetic ⚠ |
+| 26 | `26_fill_costs.py` | the same signal filled four ways, and what each costs | shared store |
+| 27 | `27_bars_vs_tape.py` | the exit a candle has to guess, put back to the trades | synthetic, **not runnable yet** |
 
 ⚠ marks the two files whose fixture determines the outcome, as described above.
+
+**27 does not run today, on any licence.** The tick layer it uses belongs to
+the Pro+ tier, and that tier is not on sale: the code ships ahead of the plan
+that will carry it. The file is there to be read, and it will run unchanged
+when the tier opens. It is also the only example that wants pandas, for the
+join between its trade log and its bars.
+
+Two files here are not examples and carry no number:
+
+| File | What it is |
+|---|---|
+| `setup_data.py` | downloads the shared store, once |
+| `_bootstrap.py` | opens that store, and reports a missing plotting extra |

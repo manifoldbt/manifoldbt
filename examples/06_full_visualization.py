@@ -23,6 +23,8 @@ import manifoldbt as mbt
 from manifoldbt.indicators import close, rsi
 from manifoldbt.helpers import time_range, Slippage, Interval
 
+from _bootstrap import open_store, plots_available
+
 rsi_14 = rsi(close, 14)
 
 # -- Strategy -----------------------------------------------------------------
@@ -74,14 +76,14 @@ config = mbt.BacktestConfig(
 
 # -- Run ----------------------------------------------------------------------
 if __name__ == "__main__":
+    # This file is the plotting surface end to end, so unlike the others it has
+    # nothing left to show without the extra.
+    if not plots_available():
+        raise SystemExit(0)
+
     root = os.path.join(os.path.dirname(__file__), "..")
     os.makedirs(os.path.join(root, "output"), exist_ok=True)
-    data_root = os.path.abspath(os.path.join(root, "data"))
-    store = mbt.DataStore(
-        data_root=data_root,
-        metadata_db=os.path.abspath(os.path.join(root, "metadata", "metadata.sqlite")),
-        arrow_dir=os.path.join(data_root, "mega"),
-    )
+    store = open_store()
 
     # -- 1. Single backtest --------------------------------------------------
     print("Running backtest...")
@@ -103,7 +105,7 @@ if __name__ == "__main__":
 
     # -- 4. Candlestick chart (first symbol in universe) --------------------
     mbt.plot.chart(
-        result, store, symbol_id=201,
+        result, store, symbol_id=1,
         emas=[10, 25],
         smas=[50],
         n_bars=120,

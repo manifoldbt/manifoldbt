@@ -111,7 +111,7 @@ def _dates(days):
 
 
 def test_date_tickformat_follows_the_span():
-    from manifoldbt.plot._convert import date_tickformat
+    from manifoldbt._convert import date_tickformat
 
     assert date_tickformat(_dates(2)) == "%d %b %H:%M"
     assert date_tickformat(_dates(61)) == "%d %b", "a two-month window must show days"
@@ -120,7 +120,7 @@ def test_date_tickformat_follows_the_span():
 
 def test_money_hovertemplate_is_currency_and_magnitude_aware():
     np = pytest.importorskip("numpy")
-    from manifoldbt.plot._convert import money_hovertemplate
+    from manifoldbt._convert import money_hovertemplate
 
     btc = money_hovertemplate(np.array([10.0, 10.04]), "BTC")
     assert "BTC" in btc and "%{y:,.4f}" in btc, btc
@@ -134,7 +134,7 @@ def test_money_hovertemplate_is_currency_and_magnitude_aware():
 
 
 def test_percent_tickformat_keeps_small_drawdowns_legible():
-    from manifoldbt.plot._convert import percent_tickformat
+    from manifoldbt._convert import percent_tickformat
 
     assert percent_tickformat(-0.35) == ".0%"
     assert percent_tickformat(-0.02) == ".1%"
@@ -142,7 +142,7 @@ def test_percent_tickformat_keeps_small_drawdowns_legible():
 
 
 def test_run_currency_reads_the_manifest_and_survives_its_absence():
-    from manifoldbt.plot._convert import run_currency
+    from manifoldbt._convert import run_currency
 
     class WithManifest:
         manifest = {"config": {"currency": "BTC"}}

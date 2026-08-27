@@ -39,7 +39,6 @@ import os
 import tempfile
 
 import numpy as np
-import pandas as pd
 
 import manifoldbt as mbt
 from manifoldbt.indicators import close, high, low, open as open_px, sma
@@ -64,12 +63,15 @@ px = 100.0 * np.exp(level - np.linspace(0, level[-1], N))
 o, c = px, np.roll(px, -1)
 c[-1] = px[-1]
 amp = np.abs(rng.normal(0.0, 0.0012, N))
-ts = pd.date_range("2024-01-01", periods=N, freq="1min", tz="UTC")
-frame = pd.DataFrame(
-    {"timestamp": ts, "open": o,
-     "high": np.maximum(o, c) * (1 + amp), "low": np.minimum(o, c) * (1 - amp),
-     "close": c, "volume": rng.uniform(1_000, 5_000, N)}
-)
+# `import_dataframe` takes a dict of columns as readily as a DataFrame, so the
+# fixture needs numpy alone -- which the engine already depends on. Naive
+# timestamps are read as UTC.
+ts = np.datetime64("2024-01-01") + np.arange(N) * np.timedelta64(1, "m")
+frame = {
+    "timestamp": ts.astype("datetime64[ns]"), "open": o,
+    "high": np.maximum(o, c) * (1 + amp), "low": np.minimum(o, c) * (1 - amp),
+    "close": c, "volume": rng.uniform(1_000, 5_000, N),
+}
 
 # -- Bands around an 8-hour mean, on 1m native bars ---------------------------
 # `apply()` evaluates the SMA on the hourly grid, so its period counts hourly
@@ -114,7 +116,7 @@ if __name__ == "__main__":
         config = mbt.BacktestConfig(
             universe=[1],
             time_range_start=0,
-            time_range_end=int(ts[-1].value) + 86_400_000_000_000,
+            time_range_end=int(ts[-1].astype("datetime64[ns]").astype("int64")) + 86_400_000_000_000,
             bar_interval=Interval.minutes(1),
             initial_capital=10_000,
             execution=mbt.ExecutionConfig(
@@ -141,11 +143,14 @@ if __name__ == "__main__":
     for label, price in (("AtClose", "AtClose"),
                          ("custom('exec_level')", ExecutionPrice.custom("exec_level"))):
         result = run(price)
-        tr = result.trades_df()
-        entries = tr[tr["fill_price"] > 0].head(3)["fill_price"].round(4).tolist()
+        # `result.trades` is the Arrow table `trades_df()` converts; reading it
+        # directly keeps this file free of a DataFrame library.
+        tr = result.trades
+        fills = [p for p in tr.column("fill_price").to_pylist() if p > 0]
+        entries = [round(p, 4) for p in fills[:3]]
         returns[label] = result.metrics["total_return"]
-        n_trades = len(tr)
-        print(f"{label:<22} {len(tr):>7} {returns[label]:>8.2%}   {entries}")
+        n_trades = tr.num_rows
+        print(f"{label:<22} {tr.num_rows:>7} {returns[label]:>8.2%}   {entries}")
 
     gap = returns["custom('exec_level')"] - returns["AtClose"]
     print(f"\n  GAP: {gap:.1%} on identical signals and identical bars.")

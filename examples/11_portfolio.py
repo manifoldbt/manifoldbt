@@ -22,6 +22,8 @@ sys.path.insert(0, os.path.dirname(__file__))
 import manifoldbt as mbt
 from manifoldbt.helpers import time_range, Slippage, Interval
 
+from _bootstrap import open_store, plots_available
+
 # -- Import strategies from dedicated files -----------------------------------
 from importlib import import_module
 
@@ -58,13 +60,7 @@ config = mbt.BacktestConfig(
 
 # -- Run ----------------------------------------------------------------------
 if __name__ == "__main__":
-    root = os.path.join(os.path.dirname(__file__), "..")
-    data_root = os.path.abspath(os.path.join(root, "data"))
-    store = mbt.DataStore(
-        data_root=data_root,
-        metadata_db=os.path.abspath(os.path.join(root, "metadata", "metadata.sqlite")),
-        arrow_dir=os.path.join(data_root, "mega"),
-    )
+    store = open_store()
 
     print(f"Running portfolio: {portfolio}\n")
     t0 = time.perf_counter()
@@ -74,4 +70,5 @@ if __name__ == "__main__":
     print(result.summary())
     print(f"\nElapsed: {elapsed:.3f}s")
 
-    mbt.plot.tearsheet(result)
+    if plots_available():
+        mbt.plot.tearsheet(result)

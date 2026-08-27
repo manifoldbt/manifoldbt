@@ -27,6 +27,8 @@ from manifoldbt.indicators import rsi, ema
 from manifoldbt.expr import col, symbol_ref, lit, when
 from manifoldbt.helpers import time_range, Interval, Slippage
 
+from _bootstrap import open_store, plots_available
+
 # =============================================================================
 # Signal — RSI + EMA from Binance BTC, applied to dYdX BTC
 # All SymbolRef expressions must be named signals (for pass 2b resolution)
@@ -93,16 +95,7 @@ config = mbt.BacktestConfig(
 # Run
 # =============================================================================
 if __name__ == "__main__":
-    import os
-    root = os.path.dirname(os.path.abspath(__file__))
-    data_root = os.path.abspath(os.path.join(root, "..", "data"))
-    meta_db = os.path.join(root, "..", "metadata", "metadata.sqlite")
-
-    store = mbt.DataStore(
-        data_root=data_root,
-        metadata_db=meta_db,
-        arrow_dir=os.path.join(data_root, "mega"),
-    )
+    store = open_store()
 
     print("Running: cross_exchange_rsi")
     print("  Signal:    binance:BTC-USDT:perp (RSI + EMA)")
@@ -115,4 +108,6 @@ if __name__ == "__main__":
 
     print(result.summary())
     print(f"\nElapsed: {elapsed:.3f}s")
-    result.plot_equity()
+
+    if plots_available():
+        result.plot_equity()

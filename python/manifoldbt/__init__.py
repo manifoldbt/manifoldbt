@@ -397,7 +397,12 @@ def _prepared_config_json(config: BacktestConfig, strategy, store: DataStore) ->
     The prepared config no longer depends on the strategy (orders travel in the
     strategy JSON now), so the memo key is just the config content plus the
     metadata DB; the ``strategy`` argument is accepted for call-site symmetry.
+
+    Strategy-dependent validation therefore has to run BEFORE the memo, not
+    inside `_prepare_config`: one config reused across several strategies would
+    otherwise be validated once, against whichever strategy arrived first.
     """
+    _reject_resting_order_without_delay(config, strategy)
     try:
         meta_db = store.metadata_db()
     except Exception:
@@ -420,9 +425,39 @@ def _prepared_config_json(config: BacktestConfig, strategy, store: DataStore) ->
     return cached
 
 
+def _reject_resting_order_without_delay(cfg: BacktestConfig, strategy) -> None:
+    """A resting order cannot be priced off the bar it fills on.
+
+    An entry order placed from the signal of bar `t - signal_delay` is gated
+    against bar `t` in the same pass, so with ``signal_delay = 0`` the level is
+    computed from the very bar whose high and low decide whether it fills. The
+    order would have had to exist before that bar opened, and its price did not
+    exist yet: the backtest fills at a level nobody could have posted.
+
+    Market orders are unaffected (they take the bar's execution price, which is
+    what `signal_delay = 0` is *for*). Only resting orders read the bar twice.
+    """
+    orders = getattr(strategy, "_orders", None) if strategy is not None else None
+    if not orders or not orders.get("limit_entry"):
+        return
+    execution = getattr(cfg, "execution", None)
+    if execution is None or getattr(execution, "signal_delay", 1) != 0:
+        return
+    trigger = orders["limit_entry"].get("trigger", "Limit")
+    raise ValueError(
+        f"a resting entry order ({trigger}) needs signal_delay >= 1: with "
+        "signal_delay=0 its level is computed from the same bar whose high/low "
+        "decide the fill, so the backtest fills at a price that did not exist "
+        "when the order was placed. Set "
+        "ExecutionConfig(signal_delay=1), or drop the entry order to take a "
+        "market fill, which signal_delay=0 is meant for."
+    )
+
+
 def _prepare_config(config: BacktestConfig, strategy, store: DataStore) -> BacktestConfig:
     """Prepare config for execution: resolve symbols, convert deprecated fields."""
     cfg = copy.deepcopy(config)
+    _reject_resting_order_without_delay(cfg, strategy)
 
     # --- Dict universe: {"binance": ["BTC-USDT:perp"], "onchain": ["hashrate"]} ---
     if isinstance(cfg.universe, dict):
@@ -827,6 +862,111 @@ def ingest(
             display.stop()
 
     return store
+
+
+def attach_quotes(
+    store: DataStore,
+    symbol,
+    start: str,
+    end: str,
+    *,
+    provider: str = "bybit",
+    provider_symbol: Optional[str] = None,
+    category: str = "linear",
+    cache_dir: Optional[str] = None,
+    progress: bool = True,
+) -> dict:
+    """Fill the ``bid`` / ``ask`` / ``spread`` columns of already-stored bars
+    with real top-of-book quotes.
+
+    The bar schema has always carried these columns and the engine has always
+    known how to read them (``execution_price="MidPrice"``, per-bar spread for
+    cost analysis) — but no ingestion path filled them until now, so they were
+    null. This does, from Bybit's public order-book archives: one ~200 MB
+    archive per day is streamed and reduced to the best bid/ask standing at
+    each bar close, and only those few KB touch the store. Bars outside the
+    quoted range keep their current values.
+
+    Bybit's archive is a rolling window of roughly one year, ``linear``
+    (USDT perps) and ``spot``. The venue quoted is Bybit: on another venue's
+    bars the spread is that of a different book — a reasonable proxy for
+    majors, a real approximation for thin alts.
+
+    Args:
+        store: The store holding the symbol's bars (see :func:`ingest`).
+        symbol: The store ticker (e.g. ``"BTC-USDT:perp"``) or symbol id.
+        start: First day, ``YYYY-MM-DD``.
+        end: Last day, inclusive, ``YYYY-MM-DD``.
+        provider: ``"bybit"`` (the only quote source with free history).
+        provider_symbol: Symbol on the provider (e.g. ``"BTCUSDT"``). Derived
+            from the ticker when omitted: ``BTC-USDT:perp`` -> ``BTCUSDT``.
+        category: ``"linear"`` or ``"spot"``.
+        cache_dir: Keep the raw daily archives here and reuse them.
+        progress: Print one line per day.
+
+    Returns:
+        ``{"days", "quote_bars", "bars_updated", "version"}``.
+
+    Example::
+
+        store = bt.ingest(provider="bybit", symbol="BTCUSDT", symbol_id=1,
+                          start="2026-07-01T00:00:00Z", end="2026-08-01T00:00:00Z")
+        bt.attach_quotes(store, 1, "2026-07-01", "2026-07-31")
+        # bars now carry real bid/ask: MidPrice execution and per-bar
+        # spread costs read actual quotes instead of nulls.
+    """
+    import datetime as _dt
+
+    # No Python-side gate: the native side gates this as Pro+ (the tier is not
+    # on sale yet, and its refusal says so). A _require_pro here would stop a
+    # Pro user one layer early with the WRONG message -- an upgrade they
+    # already own. Same policy as manifoldbt.ticks.
+    if provider != "bybit":
+        raise ValueError(
+            f"unknown quote provider {provider!r}: 'bybit' is the only source "
+            "with free order-book history"
+        )
+
+    if isinstance(symbol, int):
+        symbol_id = symbol
+        ticker = None
+    else:
+        ticker = str(symbol)
+        symbol_id = store.resolve_symbol(ticker)
+    if provider_symbol is None:
+        base = ticker if ticker is not None else ""
+        provider_symbol = base.split(":")[0].replace("-", "").replace("/", "").upper()
+        if not provider_symbol:
+            raise ValueError(
+                "provider_symbol is required when symbol is given as an id"
+            )
+
+    d0 = _dt.date.fromisoformat(start)
+    d1 = _dt.date.fromisoformat(end)
+    if d1 < d0:
+        raise ValueError(f"end {end!r} is before start {start!r}")
+    dates = [
+        (d0 + _dt.timedelta(days=i)).isoformat() for i in range((d1 - d0).days + 1)
+    ]
+
+    cb = None
+    if progress:
+        def cb(i, n, date):
+            if i < n:
+                print(f"  quotes {provider_symbol} {date} ({i + 1}/{n})", flush=True)
+
+    from manifoldbt._native import py_attach_quotes_bybit as _native_attach
+
+    return _native_attach(
+        store.data_root(),
+        store.metadata_db(),
+        symbol_id,
+        provider_symbol,
+        category,
+        dates,
+        cache_dir,
+        cb,
+    )
 
 
 def import_csv(
@@ -1616,6 +1756,8 @@ def __getattr__(name: str):
         return _importlib.import_module("manifoldbt.plot")
     if name == "diagnostics":
         return _importlib.import_module("manifoldbt.diagnostics")
+    if name == "ticks":
+        return _importlib.import_module("manifoldbt.ticks")
     raise AttributeError(f"module 'manifoldbt' has no attribute {name!r}")
 
 
@@ -1768,6 +1910,7 @@ __all__ = [
     "SweepResult",
     # Data ingestion
     "ingest",
+    "attach_quotes",
     "import_csv",
     "import_dataframe",
     # Run functions
@@ -1818,7 +1961,9 @@ __all__ = [
     "run_sweep_2d",
     "run_stability",
     "replay",
-    "py_run_monte_carlo",
+    # NOT exported: py_run_monte_carlo. It is the raw native binding under
+    # plot.monte_carlo's friendly layer (which warns before the native cap
+    # refuses); listing it in __all__ published an internal as API.
     # Stochastic simulation
     "run_stochastic",
     "StochasticModel",
@@ -1838,4 +1983,6 @@ __all__ = [
     "plot",
     # Diagnostics (lazy)
     "diagnostics",
+    # Tick-level layer (lazy)
+    "ticks",
 ]

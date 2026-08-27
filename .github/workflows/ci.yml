@@ -10,6 +10,11 @@ name: CI
 #   verify — the package-layout guard that was already here. Kept as-is.
 #   tests  — installs the published wheel from PyPI and runs the mirrored test
 #            suite against it, on every supported Python version.
+#   examples — runs the self-contained examples against a bare `pip install
+#            manifoldbt`, no extras. Nothing executed them before, and every
+#            one of them was broken on a fresh install: some wanted pandas,
+#            which is not a dependency, and the rest died on a chart after
+#            printing their results, because plotting is an extra.
 #   bench-report — the benchmark harness's own rendering tests
 #            (benchmarks/vs_vectorbt/test_report.py). They import no engine and
 #            need no wheel; without this job nothing collects them, because the
@@ -147,3 +152,37 @@ jobs:
       # rather than reading a green tick and assuming everything ran.
       - name: Run the mirrored test suite
         run: python -m pytest python/tests -q -rs
+
+  examples:
+    name: Self-contained examples
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Deliberately the bare install, with no extras and no licence: the point
+      # is to run these files the way the README's first line leaves a reader.
+      # An example that needs pandas, or that dies on a missing chart after
+      # printing its results, fails here.
+      - name: Install the published wheel, engine only
+        run: |
+          set -e
+          VERSION="$(grep -m1 '^version = ' pyproject.toml | sed 's/.*"\(.*\)".*/\1/')"
+          python -m pip install --upgrade pip
+          python -m pip install "manifoldbt==${VERSION}"
+
+      # Only the files that need neither the shared store (not in this
+      # repository) nor a network round-trip (22, 23 and 24 reach a live venue,
+      # which does not belong in a required check) nor a paid tier.
+      - name: Run them
+        run: |
+          set -e
+          for f in examples/13_*.py examples/18_*.py examples/21_*.py examples/25_*.py; do
+            echo "::group::$f"
+            python "$f"
+            echo "::endgroup::"
+          done

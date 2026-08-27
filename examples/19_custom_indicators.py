@@ -24,7 +24,6 @@ The whole `manifoldbt.indicators` library is written this way (`sma` ==
 function that composes `Expr`s". Three levels, from the common to the rare.
 """
 
-import os
 from time import perf_counter
 
 import manifoldbt as mbt
@@ -34,6 +33,8 @@ from manifoldbt.indicators import open, high, low, close, volume, sma, rsi, ema
 # scan/s (recursive state), param (sweepable parameter).
 from manifoldbt.expr import lit, col, when, scan, s, param
 from manifoldbt.helpers import time_range, Slippage, Interval
+
+from _bootstrap import open_store
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -198,13 +199,7 @@ config = mbt.BacktestConfig(
 
 # -- Run ----------------------------------------------------------------------
 if __name__ == "__main__":
-    root = os.path.join(os.path.dirname(__file__), "..")
-    data_root = os.path.abspath(os.path.join(root, "data"))
-    store = mbt.DataStore(
-        data_root=data_root,
-        metadata_db=os.path.abspath(os.path.join(root, "metadata", "metadata.sqlite")),
-        arrow_dir=os.path.join(data_root, "mega"),
-    )
+    store = open_store()
 
     t0 = perf_counter()
     result = mbt.run(strategy, config, store)

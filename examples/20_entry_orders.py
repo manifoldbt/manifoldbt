@@ -19,12 +19,13 @@ Usage:
     python examples/20_entry_orders.py
 """
 
-import os
 from time import perf_counter
 
 import manifoldbt as mbt
 from manifoldbt.indicators import atr, close, ema
 from manifoldbt.helpers import Interval, Slippage, time_range
+
+from _bootstrap import open_store
 
 # -- Signal -------------------------------------------------------------------
 fast = ema(close, 12)
@@ -71,17 +72,16 @@ config = mbt.BacktestConfig(
     fees=mbt.FeeConfig.binance_perps(),
     slippage=Slippage.fixed_bps(2),
     warmup_bars=60,
+    # A resting order is placed from one bar's signal and gated against the
+    # next, so its level has to come from a bar that has already closed. The
+    # engine refuses `signal_delay=0` here rather than filling at a price that
+    # did not exist when the order was placed.
+    execution=mbt.ExecutionConfig(signal_delay=1),
 )
 
 # -- Run ----------------------------------------------------------------------
 if __name__ == "__main__":
-    root = os.path.join(os.path.dirname(__file__), "..")
-    data_root = os.path.abspath(os.path.join(root, "data"))
-    store = mbt.DataStore(
-        data_root=data_root,
-        metadata_db=os.path.abspath(os.path.join(root, "metadata", "metadata.sqlite")),
-        arrow_dir=os.path.join(data_root, "mega"),
-    )
+    store = open_store()
 
     print(f"{'entry':<20} {'trades':>7} {'return':>9} {'sharpe':>8} {'elapsed':>9}")
     print("-" * 56)

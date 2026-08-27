@@ -1,4 +1,11 @@
-"""Convert Arrow / RecordBatch data from BacktestResult to numpy arrays."""
+"""Convert Arrow / RecordBatch data from BacktestResult to numpy arrays.
+
+Lives here rather than under `plot/` even though the charts are its biggest
+consumer. `plot/__init__.py` refuses to import without plotly, and importing
+any module inside that package runs it -- which made `Result.equity_df()` and
+the exposure diagnostics, neither of which draws anything, require the
+plotting extra. Nothing in this file imports plotly, and nothing should.
+"""
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Tuple

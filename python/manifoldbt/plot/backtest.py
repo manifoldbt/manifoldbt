@@ -19,7 +19,7 @@ from manifoldbt.plot._theme import (
     WHITE,
     theme_context,
 )
-from manifoldbt.plot._convert import (
+from manifoldbt._convert import (
     daily_returns_array,
     equity_with_dates,
     positions_arrays,

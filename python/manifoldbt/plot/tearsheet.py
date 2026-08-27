@@ -15,7 +15,7 @@ from manifoldbt.plot._theme import (
     WHITE,
     theme_context,
 )
-from manifoldbt.plot._convert import equity_with_dates
+from manifoldbt._convert import equity_with_dates
 from manifoldbt.plot._utils import auto_title, chart_div, format_pct, resolve_show
 from manifoldbt.plot.backtest import (
     annual_returns,

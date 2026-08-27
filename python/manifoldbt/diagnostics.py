@@ -367,7 +367,7 @@ def risk_check(
         print(report)
         report.assert_clean()
     """
-    from manifoldbt.plot._convert import positions_arrays
+    from manifoldbt._convert import positions_arrays
 
     pos = positions_arrays(result)
     agg = _compute_per_timestamp(pos)
@@ -501,7 +501,7 @@ def _exposure_for_result(result) -> dict:
     Returns dict with int64 ns timestamps as keys, values are dicts of
     {utilization, exposure, positions: {symbol_id: qty}}.
     """
-    from manifoldbt.plot._convert import positions_arrays
+    from manifoldbt._convert import positions_arrays
 
     pos = positions_arrays(result)
     ts_ns = pos["timestamp"].view(np.int64) if pos["timestamp"].dtype.kind == "M" else pos["timestamp"]

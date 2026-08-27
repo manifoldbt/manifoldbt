@@ -45,7 +45,6 @@ import os
 import tempfile
 
 import numpy as np
-import pandas as pd
 
 import manifoldbt as mbt
 from manifoldbt.indicators import close
@@ -60,14 +59,18 @@ o = px
 c = np.roll(px, -1)
 c[-1] = px[-1]
 amp = np.abs(rng.normal(0.0, 0.004, N_DAYS))
-frame = pd.DataFrame({
-    "timestamp": pd.date_range("2022-01-01", periods=N_DAYS, freq="1D", tz="UTC"),
+# A dict of columns, which `import_dataframe` accepts exactly like a
+# DataFrame. Nothing here needs pandas, so the file runs on the plain
+# `pip install manifoldbt`. Naive timestamps are read as UTC.
+DAYS = (np.datetime64("2022-01-01") + np.arange(N_DAYS)).astype("datetime64[ns]")
+frame = {
+    "timestamp": DAYS,
     "open": o,
     "high": np.maximum(o, c) * (1 + amp),
     "low": np.minimum(o, c) * (1 - amp),
     "close": c,
     "volume": rng.uniform(1_000, 5_000, N_DAYS),
-})
+}
 
 
 def store_of(df, tag):
@@ -80,11 +83,11 @@ def store_of(df, tag):
 
 
 def config_of(df):
-    ts = pd.DatetimeIndex(df["timestamp"])
+    ts = df["timestamp"].astype("int64")          # ns since epoch
     return mbt.BacktestConfig(
         universe=[1],
-        time_range_start=int(ts[0].value),
-        time_range_end=int(ts[-1].value) + 86_400_000_000_000,
+        time_range_start=int(ts[0]),
+        time_range_end=int(ts[-1]) + 86_400_000_000_000,
         bar_interval=Interval.days(1),
         initial_capital=10_000,
         execution=mbt.ExecutionConfig(
@@ -153,11 +156,11 @@ if __name__ == "__main__":
     # -- 3. Perturbing the future ---------------------------------------------
     split = 500
     reference = equity(mbt.run(leaky(global_mean), config_of(frame), store))
-    corrupted = frame.copy()
+    corrupted = {k: v.copy() for k, v in frame.items()}
     tail = slice(split + 1, None)
     factor = 1.0 + np.random.default_rng(99).uniform(-0.05, 0.05, N_DAYS - split - 1)
     for col in ("open", "high", "low", "close"):
-        corrupted.loc[corrupted.index[tail], col] = corrupted[col].to_numpy()[tail] * factor
+        corrupted[col][tail] *= factor
     perturbed = equity(mbt.run(leaky(global_mean), config_of(frame),
                                store_of(corrupted, "pert")))
     n = min(len(reference), len(perturbed), split + 1)
@@ -170,7 +173,7 @@ if __name__ == "__main__":
     # -- 4. The method that works ---------------------------------------------
     # Treat the mean as what it is: a pipeline step, not a constant. A
     # researcher standing at bar 500 only has the first 500 bars.
-    truncated = frame.iloc[:split + 1]
+    truncated = {k: v[:split + 1] for k, v in frame.items()}
     honest_mean = float(truncated["close"].mean())
     with_future = equity(mbt.run(leaky(global_mean), config_of(truncated),
                                  store_of(truncated, "t1")))

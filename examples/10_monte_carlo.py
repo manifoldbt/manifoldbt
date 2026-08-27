@@ -10,11 +10,12 @@ Data: shared store — real market data from `data/` (see examples/README.md)
 Usage:
     python examples/10_monte_carlo.py
 """
-import os
 import time
 import manifoldbt as mbt
 from manifoldbt.indicators import close, ema
 from manifoldbt.helpers import time_range, Slippage, Interval
+
+from _bootstrap import open_store, plots_available
 
 # -- Strategy -----------------------------------------------------------------
 fast = ema(close, 12)
@@ -52,13 +53,7 @@ config = mbt.BacktestConfig(
 
 # -- Run ----------------------------------------------------------------------
 if __name__ == "__main__":
-    root = os.path.join(os.path.dirname(__file__), "..")
-    data_root = os.path.abspath(os.path.join(root, "data"))
-    store = mbt.DataStore(
-        data_root=data_root,
-        metadata_db=os.path.abspath(os.path.join(root, "metadata", "metadata.sqlite")),
-        arrow_dir=os.path.join(data_root, "mega"),
-    )
+    store = open_store()
 
     # 1. Run base backtest
     print("Running base backtest...")
@@ -68,4 +63,5 @@ if __name__ == "__main__":
     print(f"Elapsed: {time.perf_counter() - t0:.3f}s\n")
 
     # 2. Monte Carlo fan chart
-    mbt.plot.monte_carlo(result, n_simulations=10000, seed=42)
+    if plots_available():
+        mbt.plot.monte_carlo(result, n_simulations=10000, seed=42)

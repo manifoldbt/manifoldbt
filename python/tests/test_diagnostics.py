@@ -119,3 +119,64 @@ def test_prepare_for_diagnostics_passes_through_list_universe(tmp_path):
 
     assert prepared.universe == [1]
     assert json.loads(prepared.to_json())["universe"] == [1]
+
+
+# ===========================================================================
+# Static rule: a resting order cannot be priced off the bar it fills on
+# ===========================================================================
+
+def _resting_strategy():
+    return (
+        bt.Strategy.create("resting")
+        .signal("s", bt.lit(1.0))
+        .size(bt.col("s"))
+        .limit_entry(offset_bps=25)
+    )
+
+
+def test_resting_order_with_delay_zero_is_refused(tmp_path):
+    """`plan_entry` prices the order from bar `t - signal_delay` and the gate
+    runs on bar `t` in the same pass, so delay 0 reads the fill bar twice."""
+    store = _StubStore(_make_metadata_db(tmp_path / "m.sqlite"))
+    config = bt.BacktestConfig(
+        universe=[1], time_range_start=0, time_range_end=10**12,
+        execution=bt.ExecutionConfig(signal_delay=0),
+    )
+    with pytest.raises(ValueError, match="signal_delay"):
+        bt._prepared_config_json(config, _resting_strategy(), store)
+
+
+def test_market_order_with_delay_zero_is_fine(tmp_path):
+    """Delay 0 is exactly what a market fill is for; only resting orders read
+    the bar twice."""
+    store = _StubStore(_make_metadata_db(tmp_path / "m.sqlite"))
+    config = bt.BacktestConfig(
+        universe=[1], time_range_start=0, time_range_end=10**12,
+        execution=bt.ExecutionConfig(signal_delay=0),
+    )
+    market = bt.Strategy.create("market").signal("s", bt.lit(1.0)).size(bt.col("s"))
+    bt._prepared_config_json(config, market, store)  # must not raise
+
+
+def test_resting_order_with_delay_one_is_fine(tmp_path):
+    store = _StubStore(_make_metadata_db(tmp_path / "m.sqlite"))
+    config = bt.BacktestConfig(
+        universe=[1], time_range_start=0, time_range_end=10**12,
+        execution=bt.ExecutionConfig(signal_delay=1),
+    )
+    bt._prepared_config_json(config, _resting_strategy(), store)  # must not raise
+
+
+def test_the_check_runs_before_the_config_memo(tmp_path):
+    """The memo keys on the config alone, so a config first seen with a market
+    strategy must not let a resting one through on the next call.
+    """
+    store = _StubStore(_make_metadata_db(tmp_path / "m.sqlite"))
+    config = bt.BacktestConfig(
+        universe=[1], time_range_start=0, time_range_end=10**12,
+        execution=bt.ExecutionConfig(signal_delay=0),
+    )
+    market = bt.Strategy.create("market").signal("s", bt.lit(1.0)).size(bt.col("s"))
+    bt._prepared_config_json(config, market, store)          # populates the memo
+    with pytest.raises(ValueError, match="signal_delay"):
+        bt._prepared_config_json(config, _resting_strategy(), store)

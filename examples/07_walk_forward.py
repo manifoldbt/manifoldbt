@@ -10,11 +10,12 @@ Data: shared store — real market data from `data/` (see examples/README.md)
 Usage:
     python examples/07_walk_forward.py
 """
-import os
 import time
 import manifoldbt as mbt
 from manifoldbt.indicators import close, ema
 from manifoldbt.helpers import time_range, Slippage, Interval
+
+from _bootstrap import open_store, plots_available
 
 # -- Strategy with tunable parameters ----------------------------------------
 # The sweep engine substitutes each grid value into the param() references at
@@ -53,13 +54,7 @@ config = mbt.BacktestConfig(
 
 # -- Run ----------------------------------------------------------------------
 if __name__ == "__main__":
-    root = os.path.join(os.path.dirname(__file__), "..")
-    data_root = os.path.abspath(os.path.join(root, "data"))
-    store = mbt.DataStore(
-        data_root=data_root,
-        metadata_db=os.path.abspath(os.path.join(root, "metadata", "metadata.sqlite")),
-        arrow_dir=os.path.join(data_root, "mega"),
-    )
+    store = open_store()
 
     wf_config = {
         "method": "Anchored",
@@ -94,5 +89,5 @@ if __name__ == "__main__":
 
     print(f"\n{len(folds)} folds in {elapsed:.2f}s")
 
-    if folds:
+    if folds and plots_available():
         mbt.plot.walk_forward({"optimize_metric": metric, "folds": folds})

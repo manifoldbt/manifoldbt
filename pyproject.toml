@@ -5,7 +5,7 @@
 
 [project]
 name = "manifoldbt"
-version = "0.20.1"
+version = "0.21.0"
 description = "Rust-powered backtesting engine for quantitative research"
 readme = "README.md"
 requires-python = ">=3.9"

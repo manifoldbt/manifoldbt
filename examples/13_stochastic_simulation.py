@@ -16,6 +16,8 @@ Usage:
 import time
 import manifoldbt as mbt
 
+from _bootstrap import plots_available
+
 N = 10_000_000  # 10M paths
 DEVICE = "cuda"  # "cpu" or "cuda"
 
@@ -140,6 +142,9 @@ if __name__ == "__main__":
     print(f"   Elapsed: {elapsed:.3f}s\n")
 
     # ── 6. Fan chart visualization ──────────────────────────────────────────
+    if not plots_available():
+        raise SystemExit(0)
+
     print("6. Plotting fan chart...")
     mbt.plot.stochastic_paths(
         result,

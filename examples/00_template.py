@@ -9,11 +9,12 @@ Usage:
     python examples/00_template.py
 """
 
-import os
 from time import perf_counter
 import manifoldbt as mbt
 from manifoldbt.indicators import close
 from manifoldbt.helpers import time_range, Slippage, Interval
+
+from _bootstrap import open_store, plots_available
 
 # -- Indicators ---------------------------------------------------------------
 # All 63 indicators available: rsi, ema, sma, bollinger, macd, atr, etc.
@@ -50,7 +51,7 @@ config = mbt.BacktestConfig(
     universe={"binance": ["BTC-USDT:perp"]},
     time_range_start=start,
     time_range_end=end,
-    bar_interval=Interval.minutes(1),      # bar resolution
+    bar_interval=Interval.hours(1),        # bar resolution
     initial_capital=10_000,
     execution=mbt.ExecutionConfig(
         allow_short=False,
@@ -64,17 +65,12 @@ config = mbt.BacktestConfig(
 
 # -- Run ----------------------------------------------------------------------
 if __name__ == "__main__":
-    root = os.path.join(os.path.dirname(__file__), "..")
-    data_root = os.path.abspath(os.path.join(root, "data"))
-    store = mbt.DataStore(
-        data_root=data_root,
-        metadata_db=os.path.abspath(os.path.join(root, "metadata", "metadata.sqlite")),
-        arrow_dir=os.path.join(data_root, "mega"),
-    )
+    store = open_store()
 
     t0 = perf_counter()
     result = mbt.run(strategy, config, store)
     print(result.summary())
     print(f"\nElapsed: {perf_counter() - t0:.2f}s")
 
-    mbt.plot.tearsheet(result)
+    if plots_available():
+        mbt.plot.tearsheet(result)

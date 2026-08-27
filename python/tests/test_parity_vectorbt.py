@@ -208,21 +208,28 @@ def test_market_stop_loss_parity(tmp_path):
 # --------------------------------------------------------------------------- #
 # Scenario C — resting limit entry at a determined price + take-profit
 # --------------------------------------------------------------------------- #
-def _resting_limit_reference(df, signal_bar, offset_frac, tp_frac, capital):
+def _resting_limit_reference(df, signal_bar, offset_frac, tp_frac, capital,
+                             size_bar=None):
     """Independent NumPy model of a resting buy-limit + take-profit.
 
     Mirrors the measured manifoldbt rule: the limit rests at
     ``signal_close * (1 - offset_frac)``, fills on the first bar AFTER the
-    signal bar whose low touches it (fill AT the level), sizes at the signal
-    close, then a passive TP at ``fill * (1 + tp_frac)`` closes it on the first
-    later bar whose high reaches it.
+    signal bar whose low touches it (fill AT the level), then a passive TP at
+    ``fill * (1 + tp_frac)`` closes it on the first later bar whose high
+    reaches it.
+
+    Two different bars decide the level and the size. The LEVEL comes from the
+    signal bar. The SIZE (``size_at_fill_price=False``) comes from the close of
+    the bar the order is placed on, which is the signal bar shifted by
+    ``signal_delay`` — the same bar at delay 0, the next one at delay 1.
+    ``size_bar`` says which; it defaults to the signal bar.
     """
     close = df["close"].to_numpy(float)
     high = df["high"].to_numpy(float)
     low = df["low"].to_numpy(float)
     signal_close = close[signal_bar]
     limit = signal_close * (1.0 - offset_frac)
-    qty = capital / signal_close  # size_at_fill_price=False
+    qty = capital / close[signal_bar if size_bar is None else size_bar]
 
     fill_bar = next((i for i in range(signal_bar + 1, len(low)) if low[i] <= limit), None)
     assert fill_bar is not None, "limit never filled in reference"
@@ -246,6 +253,12 @@ def test_limit_entry_matches_independent_reference(tmp_path):
     Signal at bar 0 (close 100). Limit rests 2% below (98). Bar 1 low 97 <= 98
     fills at 98. TP +5% off the fill (102.9) is reached at bar 3 (open 102 < the
     target, so it fills the passive target at the level, not on a gap).
+
+    Runs at ``delay=1``, unlike the market-entry scenarios above: a resting
+    order is gated against the bar it was placed from, so delay 0 would price
+    it off the same bar whose low decides the fill. The engine refuses that.
+    The reference model already assumes this shape (level from the signal bar,
+    fill from the next one), so the expected numbers are unchanged.
     """
     df = _bars(
         o=[100, 99, 101, 102, 104, 105],
@@ -254,20 +267,24 @@ def test_limit_entry_matches_independent_reference(tmp_path):
         c=[100, 99, 101, 103, 104, 105],
         start="2023-01-02",
     )
-    # Signal fires only on bar 0 so exactly one resting order is placed.
-    entry = when((col("close") >= lit(99.5)) & (col("close") <= lit(100.5)),
-                 lit(1.0), lit(0.0))
+    # The target holds until the take-profit bar, so the bracket decides the
+    # exit. A target that dropped back to 0 first would plan a signal exit and
+    # the take-profit would never be reached: at delay 1 that is what happens,
+    # and at delay 0 it was only hidden because the target had already been
+    # recorded as 0 by the time the entry filled.
+    entry = when(col("close") <= lit(103.0), lit(1.0), lit(0.0))
     strat = (bt.Strategy.create("lim_tp")
              .signal("d", col("close"))
              .size(entry)
              .limit_entry(offset_bps=200, time_in_force="GTC")  # 200 bps = 2%
              .take_profit(pct=5.0))
 
-    res = _mbt_run(df, strat, tmp_path, "C")
+    res = _mbt_run(df, strat, tmp_path, "C", delay=1)
     m_entry, m_exit, reason = _mbt_trades(res)
 
+    # Level from bar 0 (the signal), size from bar 1 (where delay 1 places it).
     ref = _resting_limit_reference(df, signal_bar=0, offset_frac=0.02,
-                                   tp_frac=0.05, capital=CAPITAL)
+                                   tp_frac=0.05, capital=CAPITAL, size_bar=1)
     _assert_close(m_entry, ref["limit"], "limit fill price")   # 98.0
     _assert_close(m_exit, ref["tp"], "tp exit price")          # 102.9
     assert reason == REASON_TP

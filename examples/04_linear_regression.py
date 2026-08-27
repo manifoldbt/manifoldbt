@@ -16,11 +16,12 @@ Data: shared store — real market data from `data/` (see examples/README.md)
 Usage:
     python examples/04_linear_regression.py
 """
-import os
 import time
 import manifoldbt as mbt
 from manifoldbt.indicators import close, high, low, volume
 from manifoldbt.helpers import time_range, Slippage, Interval
+
+from _bootstrap import open_store, plots_available
 
 # -- Regression indicators ----------------------------------------------------
 # Rolling linear regression over 16 bars (16 * 15min = 4h window)
@@ -89,13 +90,7 @@ config = mbt.BacktestConfig(
 
 # -- Run -----------------------------------------------------------------------
 if __name__ == "__main__":
-    root = os.path.join(os.path.dirname(__file__), "..")
-    data_root = os.path.abspath(os.path.join(root, "data"))
-    store = mbt.DataStore(
-        data_root=data_root,
-        metadata_db=os.path.abspath(os.path.join(root, "metadata", "metadata.sqlite")),
-        arrow_dir=os.path.join(data_root, "mega"),
-    )
+    store = open_store()
 
     t0 = time.perf_counter()
     result = mbt.run(strategy, config, store)
@@ -103,4 +98,5 @@ if __name__ == "__main__":
 
     print(result.summary())
     print(f"\nElapsed: {elapsed:.3f}s")
-    mbt.plot.summary(result)
+    if plots_available():
+        mbt.plot.summary(result)

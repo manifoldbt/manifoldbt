@@ -39,6 +39,8 @@ from manifoldbt.indicators import ema, close
 from manifoldbt.expr import col, exo, lit, when, hold
 from manifoldbt.helpers import time_range, Interval, Slippage
 
+from _bootstrap import open_store, plots_available
+
 
 # =============================================================================
 # Parameters
@@ -129,12 +131,17 @@ def fetch_hashrate_csv(path: str = "hashrate.csv"):
     The CSV should have:
       timestamp     — date or datetime (parsed automatically)
       hashrate      — daily avg hashrate in EH/s (float)
+
+    This branch is the one place in the file that wants pandas, for its date
+    parser: a hashrate CSV downloaded from anywhere stamps its dates in a
+    format of its own choosing. It is opt-in -- without a CSV the example
+    generates its own series and needs nothing beyond the engine.
     """
     import pandas as pd
     df = pd.read_csv(path, parse_dates=["timestamp"])
     df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
     df = df.sort_values("timestamp").reset_index(drop=True)
-    return df
+    return {"timestamp": df["timestamp"].to_numpy(), "hashrate": df["hashrate"].to_numpy()}
 
 
 def generate_sample_hashrate(start="2020-01-01", end="2026-03-01"):
@@ -145,10 +152,11 @@ def generate_sample_hashrate(start="2020-01-01", end="2026-03-01"):
     - China ban crash (May-Jul 2021): -50%
     - Recovery + continued growth
     - Random noise (~5% daily vol)
-    """
-    import pandas as pd
 
-    dates = pd.date_range(start, end, freq="D", tz="UTC")
+    `register_exo` takes a dict of columns as readily as a DataFrame, so this
+    needs numpy only -- which the engine already depends on.
+    """
+    dates = np.arange(np.datetime64(start), np.datetime64(end), np.timedelta64(1, "D"))
     n = len(dates)
 
     # Base: exponential growth from ~120 EH/s to ~800 EH/s
@@ -156,9 +164,9 @@ def generate_sample_hashrate(start="2020-01-01", end="2026-03-01"):
     base = 120 * np.exp(0.40 * t)  # ~50% annual growth
 
     # China ban shock: May-Jul 2021
-    ban_start = pd.Timestamp("2021-05-15", tz="UTC")
-    ban_end = pd.Timestamp("2021-07-15", tz="UTC")
-    recovery_end = pd.Timestamp("2022-01-01", tz="UTC")
+    ban_start = np.datetime64("2021-05-15")
+    ban_end = np.datetime64("2021-07-15")
+    recovery_end = np.datetime64("2022-01-01")
 
     shock = np.ones(n)
     for i, d in enumerate(dates):
@@ -178,7 +186,7 @@ def generate_sample_hashrate(start="2020-01-01", end="2026-03-01"):
 
     hashrate = base * shock * noise
 
-    return pd.DataFrame({"timestamp": dates, "hashrate": hashrate})
+    return {"timestamp": dates.astype("datetime64[ns]"), "hashrate": hashrate}
 
 
 # =============================================================================
@@ -187,18 +195,10 @@ def generate_sample_hashrate(start="2020-01-01", end="2026-03-01"):
 if __name__ == "__main__":
     import os
 
-    root = os.path.dirname(os.path.abspath(__file__))
-    data_root = os.path.abspath(os.path.join(root, "..", "data"))
-    meta_db = os.path.join(root, "..", "metadata", "metadata.sqlite")
-
-    store = mbt.DataStore(
-        data_root=data_root,
-        metadata_db=meta_db,
-        arrow_dir=os.path.join(data_root, "mega"),
-    )
+    store = open_store()
 
     # -- Register hashrate exo data -------------------------------------------
-    csv_path = os.path.join(root, "hashrate.csv")
+    csv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hashrate.csv")
     if os.path.exists(csv_path):
         print("Loading hashrate from CSV...")
         hr_df = fetch_hashrate_csv(csv_path)
@@ -207,8 +207,9 @@ if __name__ == "__main__":
         hr_df = generate_sample_hashrate()
 
     mbt.register_exo("hashrate", hr_df, store=store)
-    print(f"  Registered {len(hr_df)} hashrate data points")
-    print(f"  Range: {hr_df['timestamp'].iloc[0]} -> {hr_df['timestamp'].iloc[-1]}")
+    stamps = hr_df["timestamp"]
+    print(f"  Registered {len(stamps)} hashrate data points")
+    print(f"  Range: {stamps[0]} -> {stamps[-1]}")
     print()
 
     # -- Run backtest ---------------------------------------------------------
@@ -223,4 +224,6 @@ if __name__ == "__main__":
 
     print(result.summary())
     print(f"\nElapsed: {elapsed:.3f}s")
-    result.plot_equity()
+
+    if plots_available():
+        result.plot_equity()

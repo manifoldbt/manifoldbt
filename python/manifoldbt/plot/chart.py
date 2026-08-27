@@ -6,7 +6,7 @@ from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
-from manifoldbt.plot._convert import trades_arrays
+from manifoldbt._convert import trades_arrays
 from manifoldbt.plot._theme import (
     ACCENT,
     ACCENT_ALT,

@@ -85,13 +85,21 @@ config = mbt.BacktestConfig(
 
 if __name__ == "__main__":
     result = mbt.run(strategy, config, store)
-    trades = result.trades.to_pandas()
+
+    # `result.trades` is an Arrow table. Read it column-wise rather than through
+    # `.to_pandas()`, so the file runs on the plain `pip install manifoldbt`.
+    cols = ["symbol_id", "quantity", "fill_price", "exit_reason"]
+    trades = [dict(zip(cols, row))
+              for row in zip(*(result.trades.column(c).to_pylist() for c in cols))]
 
     names = {LONG_ID: "long 100k", SHORT_ID: "short 110k"}
     print("\nTrades, by leg:")
-    for _, t in trades[trades.symbol_id != UNDERLYING_ID].iterrows():
-        what = "settled" if t.exit_reason == 5 else "traded"
-        print(f"  {names[t.symbol_id]:<12} {what:<8} {t.quantity:>4.1f} @ {t.fill_price:.6f} BTC")
+    for t in trades:
+        if t["symbol_id"] == UNDERLYING_ID:
+            continue
+        what = "settled" if t["exit_reason"] == 5 else "traded"
+        print(f"  {names[t['symbol_id']]:<12} {what:<8} {t['quantity']:>4.1f} "
+              f"@ {t['fill_price']:.6f} BTC")
 
     equity = float(result.equity_curve[-1])
     print(f"\nFinal equity: {equity:.6f} BTC  ({equity - 10.0:+.6f})")

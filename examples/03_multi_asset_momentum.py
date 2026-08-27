@@ -10,11 +10,12 @@ Data: shared store — real market data from `data/` (see examples/README.md)
 Usage:
     python examples/03_multi_asset_momentum.py
 """
-import os
 import time
 import manifoldbt as mbt
 from manifoldbt.indicators import close, ema, roc, high, low
 from manifoldbt.helpers import time_range, Slippage, Interval
+
+from _bootstrap import open_store, plots_available
 
 # -- Indicators ---------------------------------------------------------------
 mom = ema(roc(close, 14), 6)                       # 7-day momentum, smoothed
@@ -41,7 +42,7 @@ config = mbt.BacktestConfig(
         "binance": ["BTC-USDT:perp", "ETH-USDT:perp", "LTC-USDT:perp",
                      "DOT-USDT:perp", "XRP-USDT:perp"],
     },
-    # Legacy equivalent: universe=[201, 202, 204, 206, 208]
+    # Legacy equivalent, with the ids setup_data.py assigns: universe=[1, 2, 3, 5, 6]
     time_range_start=start,
     time_range_end=end,
     bar_interval=Interval.hours(12),
@@ -58,13 +59,7 @@ config = mbt.BacktestConfig(
 
 # -- Run ----------------------------------------------------------------------
 if __name__ == "__main__":
-    root = os.path.join(os.path.dirname(__file__), "..")
-    data_root = os.path.abspath(os.path.join(root, "data"))
-    store = mbt.DataStore(
-        data_root=data_root,
-        metadata_db=os.path.abspath(os.path.join(root, "metadata", "metadata.sqlite")),
-        arrow_dir=os.path.join(data_root, "mega"),
-    )
+    store = open_store()
 
     t0 = time.perf_counter()
     result = mbt.run(strategy, config, store)
@@ -72,4 +67,5 @@ if __name__ == "__main__":
 
     print(result.summary())
     print(f"\nElapsed: {elapsed:.3f}s")
-    mbt.plot.summary(result)
+    if plots_available():
+        mbt.plot.summary(result)
