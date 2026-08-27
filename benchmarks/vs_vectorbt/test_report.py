@@ -111,3 +111,24 @@ def test_no_size_at_all_means_no_cause_line():
     del point["divergence_scale"]
 
     assert "Cause in " not in report.render(_results_file([point]))
+
+
+def test_a_divergence_on_an_untimed_point_stays_out_of_the_annex():
+    """The annex explains its own table.
+
+    A documented point whose timing was never published appears nowhere in the
+    report, so a measured size for it would be an explanation with nothing to
+    explain. Feeding render() `documented` instead of `timed` produced exactly
+    that: four lines under a three-row table.
+    """
+    points = [
+        _bracket_point(10_000, 90, 230, 140),
+        _bracket_point(100_000, 925, 2309, 1384),
+        _bracket_point(1_000_000, 9100, 23000, 21000),
+        _bracket_point(50_000, 500, 1200, 700, timed=False),
+    ]
+
+    text = report.render(_results_file(points))
+
+    assert "at 50,000 bars" not in text
+    assert len(_size_lines(text)) == 3
