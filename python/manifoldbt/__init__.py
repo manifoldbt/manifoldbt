@@ -1,4 +1,28 @@
-"""manifoldbt: Fast research backtesting with Rust core + Python DSL."""
+"""manifoldbt: Fast research backtesting with Rust core + Python DSL.
+
+Quickstart::
+
+    import manifoldbt as bt
+    from manifoldbt.indicators import sma
+
+    store = bt.DataStore("data", "metadata/metadata.sqlite")  # backend auto-detected
+    pos = bt.when(sma(bt.col("close"), 20) > sma(bt.col("close"), 50),
+                  bt.lit(1.0), bt.lit(0.0))
+    strat = bt.Strategy.create("sma-cross").signal("position", pos).size(pos)
+    start, end = bt.time_range("2022-01-01", "2025-01-01")   # UNIX nanoseconds
+    cfg = bt.BacktestConfig(universe=["BTCUSDT"], time_range_start=start,
+                            time_range_end=end,
+                            bar_interval=bt.Interval.hours(1),
+                            initial_capital=100_000.0)
+    result = bt.run(strat, cfg, store)
+    print(result.summary())
+    print(result.metrics["sharpe"])
+
+``manifoldbt.guide()`` prints a compact API cheat sheet (data import, config
+fields, metrics, cross-asset references, worked recipes, common errors). It
+answers most questions that would otherwise need a pile of ``help()`` calls --
+including whether the DSL can express a stateful or multi-symbol strategy.
+"""
 import copy
 import json
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -39,6 +63,7 @@ from manifoldbt._native import (
     py_import_dataframe as _import_dataframe_native,
 )
 from manifoldbt._serde import scalar_value_to_json
+from manifoldbt.crossasset import prepare_cross_asset as _prepare_cross_asset
 from manifoldbt.config import (
     BacktestConfig,
     ExecutionConfig,
@@ -917,10 +942,10 @@ def attach_quotes(
     """
     import datetime as _dt
 
-    # No Python-side gate: the native side gates this as Pro+ (the tier is not
-    # on sale yet, and its refusal says so). A _require_pro here would stop a
-    # Pro user one layer early with the WRONG message -- an upgrade they
-    # already own. Same policy as manifoldbt.ticks.
+    # No Python-side check: the native side answers for this call, and its
+    # refusal is the accurate one. A _require_pro here would stop a Pro user
+    # one layer early with the WRONG message -- an upgrade they already own.
+    # Same policy as manifoldbt.ticks.
     if provider != "bybit":
         raise ValueError(
             f"unknown quote provider {provider!r}: 'bybit' is the only source "
@@ -1019,12 +1044,21 @@ def import_csv(
 
 _BARS_REQUIRED_COLUMNS = ("timestamp", "open", "high", "low", "close", "volume")
 
+# The nullable f64 columns of the canonical bar schema. A caller who has them
+# (own quotes on equities, forex, options; a venue's buy/sell split) keeps them;
+# a caller who does not gets nulls, which the engine reads as "this venue does
+# not publish it". Anything else in the frame is still dropped on purpose:
+# the store schema is fixed, and an unknown column would be a silent no-op.
+_BARS_OPTIONAL_COLUMNS = ("buy_volume", "sell_volume", "bid", "ask", "spread")
+
 
 def _df_to_bars_batch(data):
     """Normalise a pandas/polars DataFrame (or dict) to a pyarrow RecordBatch.
 
     Output contract (what the native import expects): columns
-    ``timestamp`` (timestamp[ns, UTC]), ``open/high/low/close/volume`` (f64).
+    ``timestamp`` (timestamp[ns, UTC]), ``open/high/low/close/volume`` (f64),
+    plus whichever of ``buy_volume/sell_volume/bid/ask/spread`` the frame
+    carries (nullable f64, kept in that order after the required ones).
     Naive timestamps are assumed UTC. A pandas DatetimeIndex is promoted to
     the ``timestamp`` column when the column is absent.
     """
@@ -1053,7 +1087,8 @@ def _df_to_bars_batch(data):
             f"DataFrame is missing required column(s): {', '.join(missing)}. "
             f"Expected: {', '.join(_BARS_REQUIRED_COLUMNS)}"
         )
-    table = table.select(list(_BARS_REQUIRED_COLUMNS))
+    optional = [c for c in _BARS_OPTIONAL_COLUMNS if c in table.column_names]
+    table = table.select(list(_BARS_REQUIRED_COLUMNS) + optional)
 
     # --- timestamp → timestamp[ns, UTC] ---
     ts_type = table.schema.field("timestamp").type
@@ -1068,8 +1103,8 @@ def _df_to_bars_batch(data):
             0, pa.field("timestamp", target_ts), table.column(0).cast(target_ts)
         )
 
-    # --- value columns → float64 ---
-    for i, name in enumerate(_BARS_REQUIRED_COLUMNS[1:], start=1):
+    # --- value columns → float64 (the optional ones stay nullable) ---
+    for i, name in enumerate(_BARS_REQUIRED_COLUMNS[1:] + tuple(optional), start=1):
         if table.schema.field(i).type != pa.float64():
             table = table.set_column(
                 i, pa.field(name, pa.float64()), table.column(i).cast(pa.float64())
@@ -1098,11 +1133,19 @@ def import_dataframe(
     The in-memory twin of :func:`import_csv`: edit your data as a DataFrame,
     then import it directly — no intermediate CSV. Returns a :class:`DataStore`
     ready for :func:`run` (same store, metadata and versioning as ``bt.ingest``).
+    Reopen it later with ``DataStore(data_root, metadata_db)``: the Arrow IPC
+    layout under ``<data_root>/mega`` is detected automatically.
 
     Accepts a pandas DataFrame, polars DataFrame, or dict of columns with
     ``timestamp`` (datetime; naive values are assumed UTC), ``open``, ``high``,
     ``low``, ``close``, ``volume``. A pandas DatetimeIndex is used as
     ``timestamp`` if that column is absent. Rows must be sorted by timestamp.
+
+    Optional columns are kept when present: ``bid``, ``ask``, ``spread``,
+    ``buy_volume``, ``sell_volume`` (missing values allowed). With ``bid`` and
+    ``ask`` but no ``spread``, the spread is derived as ``ask - bid``. Bars
+    that carry quotes get real ``execution_price="MidPrice"`` fills and real
+    per-bar spread costs; bars without them fall back to the close, as before.
 
     Example::
 
@@ -1173,6 +1216,38 @@ def _ingest_single(
 # Core API
 # ---------------------------------------------------------------------------
 
+def _apply_cross_asset(strategy, config: BacktestConfig, store: DataStore):
+    """Rewrite a bare ``symbol_ref()`` strategy to the orchestrator-ready form.
+
+    The engine evaluates SymbolRef only with a dict universe, provider-qualified
+    references and no SymbolRef inside position sizing. Strategies written the
+    natural way (``symbol_ref("BTCUSDT", "close")`` with a list universe) are
+    rewritten here -- see :mod:`manifoldbt.crossasset`. Returns
+    ``(strategy_json, config)``; both are the originals when there is nothing
+    to rewrite, and resolution failures fall back to the engine's own error.
+    """
+    try:
+        doc = strategy.to_json_dict()
+    except Exception:
+        return strategy.to_json(), config
+    try:
+        meta_db = store.metadata_db()
+    except Exception:
+        meta_db = None
+    try:
+        prepared = _prepare_cross_asset(doc, config.universe, meta_db)
+    except ValueError:
+        prepared = None
+    if prepared is None:
+        return strategy.to_json(), config
+    new_doc, dict_universe = prepared
+    if dict_universe is None:
+        return json.dumps(new_doc), config
+    cfg = copy.deepcopy(config)
+    cfg.universe = dict_universe
+    return json.dumps(new_doc), cfg
+
+
 def run(
     strategy: Strategy,
     config: BacktestConfig,
@@ -1186,8 +1261,9 @@ def run(
     try:
         config = _cap_output_resolution(config)
         store = _resolve_store(config, store)
+        strategy_json, config = _apply_cross_asset(strategy, config, store)
         cfg_json = _prepared_config_json(config, strategy, store)
-        raw = _run_native(strategy.to_json(), cfg_json, store)
+        raw = _run_native(strategy_json, cfg_json, store)
         return Result(raw)
     except (ValueError, RuntimeError) as exc:
         raise _classify_error(exc) from exc
@@ -1214,19 +1290,25 @@ def run_sweep(
 
     Returns:
         A :class:`SweepResult` with ``.to_df()``, ``.best()``, ``.plot_metric()``.
+        Results come in the engine's enumeration order: axes sorted by
+        parameter name, last axis varying fastest, whatever order the dict
+        was written in (:func:`manifoldbt.dataframe.grid_combos` lists it).
+        ``to_df()`` labels each row from the run's own manifest, so it does
+        not depend on that order.
     """
     _require_pro_over_combos(_grid_combos(param_grid), "Parameter sweep")
     _validate_swept_params(strategy, param_grid.keys(), "Parameter sweep")
     try:
         config = _cap_output_resolution(config)
         store = _resolve_store(config, store)
+        strategy_json, config = _apply_cross_asset(strategy, config, store)
         cfg_json = _prepared_config_json(config, strategy, store)
         grid_json = json.dumps({
             name: [scalar_value_to_json(v) for v in values]
             for name, values in param_grid.items()
         })
         raw_results = _run_sweep_native(
-            strategy.to_json(),
+            strategy_json,
             grid_json,
             cfg_json,
             store,
@@ -1385,7 +1467,12 @@ def run_sweep_lite(
         combo through :func:`run`.
 
     Returns:
-        One :class:`BatchResultLite` per combo (Cartesian product order).
+        One :class:`BatchResultLite` per combo, in the engine's enumeration
+        order: axes sorted by parameter NAME, last axis varying fastest. This
+        is not the dict's insertion order, so a reshape on the dict's order
+        silently transposes the grid. :func:`manifoldbt.dataframe.grid_combos`
+        lists the combinations in this order, and
+        :func:`manifoldbt.dataframe.results_to_df` labels the results with it.
     """
     _require_pro_over_combos(_grid_combos(param_grid), "Parameter sweep")
     _validate_swept_params(strategy, param_grid.keys(), "Parameter sweep")
@@ -1393,6 +1480,7 @@ def run_sweep_lite(
     try:
         config = _cap_output_resolution(config)
         store = _resolve_store(config, store)
+        strategy_json, config = _apply_cross_asset(strategy, config, store)
         cfg_json = _prepared_config_json(config, strategy, store)
         grid_json = json.dumps({
             name: [scalar_value_to_json(v) for v in values]
@@ -1403,7 +1491,7 @@ def run_sweep_lite(
         # len() are unchanged.
         from manifoldbt._reprs import wrap_sweep_lite
         return wrap_sweep_lite(_run_sweep_lite_native(
-            strategy.to_json(),
+            strategy_json,
             grid_json,
             cfg_json,
             store,
@@ -1901,6 +1989,116 @@ def register_exo(
 # Public API
 # ---------------------------------------------------------------------------
 
+
+def guide() -> None:
+    """Print a compact API cheat sheet, written for coding agents and new users.
+
+    Everything here is importable from the top-level module unless noted.
+    Call ``bt.guide()`` and read the output; it answers most of what a pile of
+    ``help()`` calls would, including whether the DSL can express a given
+    strategy shape (see the worked recipes at the end -- it can).
+
+    Prints and returns None, like :func:`help`.
+    """
+    print(_GUIDE)
+
+
+_GUIDE = """\
+manifoldbt cheat sheet
+======================
+
+Data
+----
+store = bt.DataStore(data_root, metadata_db)   # backend auto-detected, incl. Arrow IPC
+store.list_symbols()                           # [(id, ticker), ...]
+bt.import_dataframe(df, symbol="X", symbol_id=1, interval="1h",
+                    data_root=..., metadata_db=...)   # cols: timestamp/open/high/low/close/volume
+bt.ingest(provider="binance", symbol="BTCUSDT", symbol_id=1,
+          start="2024-01-01", end="2024-06-01", interval="1m")
+
+Strategy (expression DSL -- no per-bar Python)
+----------------------------------------------
+from manifoldbt.indicators import sma, ema, rsi   # 104 indicator functions
+sig  = bt.when(cond, then, otherwise)             # conditions combine with & | ~
+pos  = bt.when(z >= bt.lit(2.0), bt.lit(-1.0),
+       bt.when(z <= bt.lit(-2.0), bt.lit(1.0),
+       bt.when(abs(z) <= bt.lit(0.5), bt.lit(0.0), bt.hold())))  # hold() = keep previous
+strat = (bt.Strategy.create("name")
+         .signal("position", pos)     # signals are named series
+         .size(pos))                  # target fraction of equity; +long / -short
+other = bt.symbol_ref("ETHUSDT", "close")   # cross-asset reference; auto-wired by run()
+z     = (bt.col("close") / other).zscore(200)   # rolling ops are methods on expressions
+
+Config
+------
+start, end = bt.time_range("2022-01-01", "2025-01-01")   # UNIX NANOSECONDS -- never raw ints
+cfg = bt.BacktestConfig(
+    universe=["BTCUSDT"],             # tickers, ids, or {"provider": [...]}
+    time_range_start=start, time_range_end=end,
+    bar_interval=bt.Interval.hours(1),
+    initial_capital=100_000.0,
+    warmup_bars=50,
+    execution=bt.ExecutionConfig(signal_delay=1,          # bars between signal and fill
+                                 execution_price="AtClose",
+                                 allow_short=False, max_position_pct=1.0,
+                                 position_sizing_mode="FractionOfEquity"),
+    fees=bt.FeeConfig(taker_fee_bps=5.0, maker_fee_bps=5.0),   # or FeeConfig.zero()
+    slippage=bt.Slippage.none(),      # or Slippage.fixed_bps(2)
+)
+
+Run and read results
+--------------------
+res = bt.run(strat, cfg, store)
+res.metrics                     # dict: total_return, sharpe, sortino, max_drawdown,
+                                # cagr, calmar, volatility, ... and trade_stats
+res.metrics["trade_stats"]      # total_trades counts FILLS; round-trips are under
+                                # "round_trips"; also win_rate, profit_factor, ...
+res.equity_df(); res.trades_df(); res.daily_returns_series(); res.summary()
+
+Research
+--------
+bt.run_sweep(strat, {"fast": [10, 20], "slow": [50, 100]}, cfg, store)
+bt.run_walk_forward(...)   # and run_stability, run_stochastic, run_portfolio
+
+Worked recipes -- yes, the DSL expresses these
+----------------------------------------------
+Stateful thresholds (hysteresis). hold() keeps the previous position, so a band
+between entry and exit needs no Python loop:
+
+    z = (bt.col("close") / bt.symbol_ref("ETHUSDT", "close")).zscore(200)
+    pos = bt.when(z >= bt.lit(2.0), bt.lit(-1.0),          # short the spread
+          bt.when(z <= bt.lit(-2.0), bt.lit(1.0),          # long the spread
+          bt.when((z >= bt.lit(-0.5)) & (z <= bt.lit(0.5)), bt.lit(0.0),
+          bt.hold())))                                     # else: keep position
+    strat = bt.Strategy.create("pair").signal("pos", pos).size(bt.col("pos"))
+    cfg = bt.BacktestConfig(universe=["BTCUSDT"], ...)     # plain list is fine
+
+Several legs against one anchor. Same expression, several traded symbols: each
+one gets its own state and its own position, equity is shared. The anchor is
+simply left out of the universe.
+
+    cfg = bt.BacktestConfig(universe=["SOLUSDT", "AVAXUSDT", "DOTUSDT"], ...)
+    # each leg's z is computed against symbol_ref("ETHUSDT", ...); ETH is not traded
+
+Cross-sectional (rank/zscore across the universe at each bar). The op must be
+the WHOLE signal -- the engine refuses anything wrapped around it rather than
+silently ignoring it, and a cross-sectional signal cannot feed another signal:
+
+    strat = bt.Strategy.create("xs").signal("pos", bt.col("close").cs_zscore()).size(bt.col("pos"))
+
+Common errors
+-------------
+"empty bar dataset ... over time_range [a, b) ns"  -> the window is wrong, not the
+    data: time_range values are UNIX nanoseconds; build them with bt.time_range().
+"symbol not found"                                 -> store.list_symbols() shows what exists.
+"requires orchestrator-level multi-symbol handling" -> a symbol_ref() reached the
+    per-symbol evaluator; use bt.run() (it rewrites automatically) or qualify the
+    reference as "provider:TICKER" with a dict universe.
+"cross-sectional op ... must be the whole signal"  -> give the cs op its own
+    signal; thresholding one is not supported (see the recipe above).
+"""
+
+
 __all__ = [
     # Core types
     "BacktestResult",
@@ -1975,6 +2173,8 @@ __all__ = [
     # Version
     "__version__",
     "check_for_update",
+    # Agent/API cheat sheet
+    "guide",
     # Indicators (submodule)
     "indicators",
     # Managed compute (submodule)

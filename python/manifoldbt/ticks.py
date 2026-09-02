@@ -36,10 +36,9 @@ Example::
     print(bt.ticks.run_orderflow("tape.csv", enter_thr=0.35))
 
 .. note::
-   The whole layer requires a **Pro+** license: every function raises
-   ``PermissionError`` without one. ``sweep_orderflow_thr`` additionally fans
-   out, so it draws on the same per-session combination budget as the bar
-   sweeps: one threshold is one combination.
+   No licence currently sold enables this layer: every function raises
+   ``PermissionError`` today. ``sweep_orderflow_thr`` additionally fans out,
+   so it is counted like a bar sweep: one threshold is one combination.
 
 .. note::
    The queue in :func:`run_market_maker` is *modelled* from the trade tape, not

@@ -27,11 +27,10 @@ Demonstrates:
   - `bt.ticks.simulate_brackets(...)`: the whole trade log re-asked in one
     Rust call - the tape read once, every bracket resolved in parallel
 
-NOT RUNNABLE YET. The tick layer (`bt.ticks`) belongs to the Pro+ tier, and
-that tier is not on sale: the code ships ahead of the plan that will carry it.
-No licence unlocks it today, a Pro one included, so this file is here to be
-READ. It will run when the tier opens; nothing in it is a placeholder, and the
-numbers it prints are the ones it will print then.
+NOT RUNNABLE YET. The tick layer (`bt.ticks`) is not unlocked by any licence
+sold today, a Pro one included: the code ships ahead of its availability, so
+this file is here to be READ. It will run when the layer opens; nothing in it
+is a placeholder, and the numbers it prints are the ones it will print then.
 
 Requires pandas as well, alone among the files here: the comparison below
 re-indexes the bars by timestamp and joins the trade log against them, which

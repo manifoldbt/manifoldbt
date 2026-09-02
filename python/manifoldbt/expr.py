@@ -624,6 +624,140 @@ class Expr:
         return f"Expr.{self._variant}(...)"
 
 
+class MultiExpr(tuple):
+    """The several series a multi-output indicator returns.
+
+    It unpacks and indexes exactly like the plain tuple it replaces::
+
+        upper, middle, lower = bollinger_bands(close, 20)
+        upper = bollinger_bands(close, 20)[0]
+
+    What it adds is a refusal that says something. Handing the whole tuple to
+    something that wants ONE series used to fail deep in the plumbing: an
+    ``AttributeError`` on ``_param_meta`` (an engine-private attribute the
+    caller never wrote) when it reached a signal, and a bare
+    ``'>' not supported between instances of 'tuple' and 'int'`` when it was
+    compared. Neither names the call, so neither is actionable -- least of all
+    for a caller that only sees the traceback. Every such use now names the
+    call, lists what it returns, and shows the unpacking.
+
+    Equality is left alone: ``==`` against another tuple still compares
+    element by element, so ordinary container checks keep working. Only a
+    comparison against a number or an expression -- always a mistake -- is
+    refused.
+    """
+
+    # Class-level defaults: attribute lookup must find these without falling
+    # through to __getattr__, which would recurse while building its message.
+    _call = "this indicator"
+    _names: tuple = ()
+
+    def __new__(cls, values: Any, call: str = "this indicator", names: Any = ()) -> "MultiExpr":
+        self = super().__new__(cls, values)
+        self._call = call
+        self._names = tuple(names)
+        return self
+
+    # -- Refusals ------------------------------------------------------------
+    #
+    # Python resolves operators on the tuple before any engine code runs, so
+    # this class is the only place left where the mistake can still be named.
+
+    def _reject(self, misuse: str) -> TypeError:
+        """The error to raise for `misuse`. Returned, not raised, so callers
+        outside this class can `raise value._reject(...)` at their own site."""
+        members = ", ".join(self._names)
+        return TypeError(
+            f"{self._call}() returns {len(self)} series, not one: ({members}). "
+            f"{misuse}\n"
+            f"Unpack it and use the series you meant:\n"
+            f"    {members} = {self._call}(...)"
+        )
+
+    def _reject_op(self, op: str) -> None:
+        raise self._reject(f"`{op}` needs a single series on each side.")
+
+    def __gt__(self, other: Any) -> Any:
+        self._reject_op(">")
+
+    def __lt__(self, other: Any) -> Any:
+        self._reject_op("<")
+
+    def __ge__(self, other: Any) -> Any:
+        self._reject_op(">=")
+
+    def __le__(self, other: Any) -> Any:
+        self._reject_op("<=")
+
+    def __eq__(self, other: Any) -> Any:
+        if isinstance(other, (Expr, int, float)):
+            self._reject_op("==")
+        return tuple.__eq__(self, other)
+
+    def __ne__(self, other: Any) -> Any:
+        if isinstance(other, (Expr, int, float)):
+            self._reject_op("!=")
+        return tuple.__ne__(self, other)
+
+    # Defining __eq__ would otherwise drop the inherited hash.
+    __hash__ = tuple.__hash__
+
+    def __add__(self, other: Any) -> Any:
+        self._reject_op("+")
+
+    def __radd__(self, other: Any) -> Any:
+        self._reject_op("+")
+
+    def __sub__(self, other: Any) -> Any:
+        self._reject_op("-")
+
+    def __rsub__(self, other: Any) -> Any:
+        self._reject_op("-")
+
+    def __mul__(self, other: Any) -> Any:
+        self._reject_op("*")
+
+    def __rmul__(self, other: Any) -> Any:
+        self._reject_op("*")
+
+    def __truediv__(self, other: Any) -> Any:
+        self._reject_op("/")
+
+    def __rtruediv__(self, other: Any) -> Any:
+        self._reject_op("/")
+
+    def __neg__(self) -> Any:
+        self._reject_op("-")
+
+    def __and__(self, other: Any) -> Any:
+        self._reject_op("&")
+
+    def __rand__(self, other: Any) -> Any:
+        self._reject_op("&")
+
+    def __or__(self, other: Any) -> Any:
+        self._reject_op("|")
+
+    def __ror__(self, other: Any) -> Any:
+        self._reject_op("|")
+
+    def __invert__(self) -> Any:
+        self._reject_op("~")
+
+    def __getattr__(self, name: str) -> Any:
+        if name.startswith("__") and name.endswith("__"):
+            # copy, pickle and hasattr() probe dunders: let them fail normally.
+            raise AttributeError(name)
+        if name.startswith("_"):
+            # An engine-internal probe (a signal on its way to JSON, say). The
+            # caller never wrote this name, so do not quote it back at them.
+            raise self._reject("It was used where a single expression belongs.")
+        raise self._reject(f"`.{name}` belongs to one series, not to the group.")
+
+    def __repr__(self) -> str:
+        return f"{self._call}(...) -> ({', '.join(self._names)})"
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -643,6 +777,13 @@ def _coerce(value: Any) -> Expr:
         return Expr("Literal", float(value))
     if isinstance(value, (float, str)) or value is None:
         return Expr("Literal", value)
+    if isinstance(value, MultiExpr):
+        raise value._reject("It was used where a single expression belongs.")
+    if isinstance(value, (list, tuple)) and any(isinstance(v, Expr) for v in value):
+        raise TypeError(
+            f"Cannot use a {type(value).__name__} of {len(value)} expressions where one "
+            f"is expected; unpack it and pass the one you meant."
+        )
     raise TypeError(f"Cannot coerce {type(value).__name__} to Expr")
 
 
@@ -695,7 +836,10 @@ def when(condition: Expr, true_value: Any = 1.0, false_value: Any = float("nan")
     Omit true_value to default to 1.0 (full position, clamped by max_position_pct).
     Omit false_value to hold current position.
     """
-    return Expr("IfElse", condition, _coerce(true_value), _coerce(false_value))
+    # The condition goes through _coerce like the two branches: unchecked, a
+    # multi-output indicator handed in whole reached the JSON as a tuple and
+    # only failed there, on an attribute the caller never wrote.
+    return Expr("IfElse", _coerce(condition), _coerce(true_value), _coerce(false_value))
 
 
 def choice(name: str, branches: "dict[str, Expr]", *, description: str = "") -> Expr:

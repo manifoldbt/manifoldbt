@@ -72,6 +72,35 @@ class Result:
         """
         return arrow_to_df(self._raw.trades, backend=backend)
 
+    def round_trips_df(self, backend: str = "auto") -> Any:
+        """Round trips as a DataFrame, one row per entry-to-flat cycle.
+
+        Rebuilt from the fill log with the engine's own pairing rules, so
+        the row count, win rate and expectancy match ``trade_stats``.
+        Columns: symbol_id, entry_timestamp, exit_timestamp, side (1 long,
+        2 short), entry_price, exit_price, quantity, fees, pnl, return_pct,
+        exit_reason (-1 when still open), holding_seconds, is_open,
+        entry_row, exit_row.
+
+        Args:
+            backend: ``"pandas"``, ``"polars"``, or ``"auto"``.
+        """
+        from manifoldbt._trades import round_trips
+        from manifoldbt.dataframe import _resolve_backend
+
+        cols = round_trips(self._raw)
+        backend = _resolve_backend(backend)
+        if backend == "pandas":
+            import pandas as pd
+            return pd.DataFrame(cols)
+        if backend == "polars":
+            import polars as pl
+            return pl.DataFrame({
+                k: (v.astype("datetime64[ms]") if v.dtype.kind == "M" else v)
+                for k, v in cols.items()
+            })
+        return cols
+
     def positions_df(self, backend: str = "auto") -> Any:
         """Position trace as a DataFrame.
 
@@ -204,8 +233,10 @@ class Result:
         """Plot backtest results.
 
         Args:
-            kind: Chart type — ``"tearsheet"``, ``"equity"``, ``"drawdown"``,
-                ``"monthly_returns"``, ``"summary"``.
+            kind: Chart type: ``"tearsheet"``, ``"equity"``, ``"drawdown"``,
+                ``"monthly_returns"``, ``"summary"``, ``"annual_returns"``,
+                ``"rolling_sharpe"``, ``"rolling_volatility"``,
+                ``"returns_histogram"``, ``"trades"``, ``"trade_pnl"``.
             **kwargs: Forwarded to the underlying plot function.
         """
         from manifoldbt import plot
@@ -220,6 +251,8 @@ class Result:
             "rolling_sharpe": plot.rolling_sharpe,
             "rolling_volatility": plot.rolling_volatility,
             "returns_histogram": plot.returns_histogram,
+            "trades": plot.trades,
+            "trade_pnl": plot.trade_pnl,
         }
         fn = dispatch.get(kind)
         if fn is None:

@@ -139,10 +139,10 @@ The self-contained and synthetic examples need none of this.
 
 ⚠ marks the two files whose fixture determines the outcome, as described above.
 
-**27 does not run today, on any licence.** The tick layer it uses belongs to
-the Pro+ tier, and that tier is not on sale: the code ships ahead of the plan
-that will carry it. The file is there to be read, and it will run unchanged
-when the tier opens. It is also the only example that wants pandas, for the
+**27 does not run today, on any licence.** The tick layer it uses is not
+unlocked by anything sold today: the code ships ahead of its availability.
+The file is there to be read, and it will run unchanged when the layer
+opens. It is also the only example that wants pandas, for the
 join between its trade log and its bars.
 
 Two files here are not examples and carry no number:

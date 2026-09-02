@@ -516,7 +516,9 @@ store = mbt.DataStore(data_root="data", metadata_db="...", dataset="bars_1m")
 ## Diagnostics
 
 ```python
-# Look-ahead bias detection
+# Look-ahead bias detection: a static walk for lead(), then two re-runs
+# over shorter windows. The re-runs cannot see a fixed read-ahead
+# (close.lead(1) trades the same in every window); the static walk names it.
 lookahead = mbt.diagnostics.detect_lookahead(strategy, config, store)
 print(lookahead)  # PASS or FAIL with details
 
@@ -758,7 +760,7 @@ its own signal first.
 | Function | Description |
 |----------|-------------|
 | `source.lag(n)` | Value n bars ago |
-| `source.lead(n)` | Value n bars ahead |
+| `source.lead(n)` | Value n bars ahead. **Future data**: in a strategy this is look-ahead by construction, and `detect_lookahead` fails it by name |
 | `source.diff(n)` | Difference over n bars |
 | `source.pct_change(n)` | Percentage change over n bars |
 | `source.rolling_mean(w)` | Rolling mean |

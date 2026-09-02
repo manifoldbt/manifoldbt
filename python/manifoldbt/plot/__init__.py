@@ -11,6 +11,8 @@ Quick start::
     result = bt.run(strategy, config, store)
     bt.plot.tearsheet(result)              # full-page dashboard
     bt.plot.equity(result)                 # single chart, opens on its own
+    bt.plot.trades(result)                 # round trips on the price
+    bt.plot.trade_pnl(result)              # PnL of every round trip
 
 Every chart is interactive (crosshair, hover, zoom) and **shows itself by
 default**: plotting is what you asked for, so no ``show=`` is needed. Charts
@@ -56,6 +58,9 @@ from manifoldbt.plot.backtest import (
 # Candlestick / indicator chart
 from manifoldbt.plot.chart import chart
 
+# Trade-level charts
+from manifoldbt.plot.trades import trade_pnl, trades
+
 # Research charts
 from manifoldbt.plot.research import (
     correlation_matrix,
@@ -89,6 +94,8 @@ __all__ = [
     "var_chart",
     "rolling_sharpe",
     "rolling_volatility",
+    "trades",
+    "trade_pnl",
     # Research plots
     "heatmap_2d",
     "surface_3d",

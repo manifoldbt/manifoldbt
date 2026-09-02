@@ -112,6 +112,58 @@ def arrow_to_series(
     return array
 
 
+def grid_combos(param_grid: Dict[str, List[Any]]) -> List[Dict[str, Any]]:
+    """The combinations of a parameter grid, in the order the engine runs them.
+
+    The engine enumerates a grid with its axes sorted by parameter NAME, the
+    last axis varying fastest, whatever order the dict was written in. A
+    product in insertion order (``itertools.product(*grid.values())``) only
+    agrees with it when the keys happen to be alphabetical; labelling sweep
+    rows that way put the right values on the wrong rows.
+
+    Each combo is a dict in the grid's own key order, so a table built from
+    them keeps the caller's column order while its rows follow the engine's.
+    """
+    import itertools
+
+    if not param_grid:
+        return []
+    axes = sorted(param_grid)
+    out: List[Dict[str, Any]] = []
+    for combo in itertools.product(*(param_grid[axis] for axis in axes)):
+        by_name = dict(zip(axes, combo))
+        out.append({name: by_name[name] for name in param_grid})
+    return out
+
+
+def _run_parameters(
+    result: Any, param_grid: Dict[str, List[Any]]
+) -> Optional[Dict[str, Any]]:
+    """The swept parameters a result was actually run with, from its manifest.
+
+    A full run records the parameter map it executed under
+    (``manifest["parameters"]``): a label read from there cannot drift from
+    the engine's enumeration, whatever order the results are handed over in.
+    Returns ``None`` when the object carries no manifest (lite results, plain
+    metric holders) or does not name every swept parameter; the caller then
+    falls back to the engine's enumeration order.
+    """
+    from manifoldbt._serde import scalar_value_from_json
+
+    manifest = getattr(result, "manifest", None)
+    if not isinstance(manifest, dict):
+        return None
+    params = manifest.get("parameters")
+    if not isinstance(params, dict):
+        return None
+    out: Dict[str, Any] = {}
+    for name in param_grid:
+        if name not in params:
+            return None
+        out[name] = scalar_value_from_json(params[name])
+    return out
+
+
 def results_to_df(
     results: Sequence[Any],
     param_grid: Optional[Dict[str, List[Any]]] = None,
@@ -123,25 +175,21 @@ def results_to_df(
 
     Args:
         results: Sequence of BacktestResult or Result objects.
-        param_grid: Optional parameter grid dict (used to label rows with param values).
-            When provided, the Cartesian product is expanded to match result order.
+        param_grid: Optional parameter grid dict, used to label rows with
+            ``param_*`` columns. A result that carries a manifest is labelled
+            with the parameters it actually ran with; one that does not (the
+            lite path) is labelled by position, in the engine's enumeration
+            order (see :func:`grid_combos`).
         backend: ``"pandas"``, ``"polars"``, or ``"auto"``.
 
     Returns:
         A DataFrame with one row per result and columns for each metric + parameter.
     """
-    import itertools
-
     backend = _resolve_backend(backend)
 
     rows: List[Dict[str, Any]] = []
 
-    # Expand parameter grid into list of param dicts
-    param_combos: Optional[List[Dict[str, Any]]] = None
-    if param_grid:
-        keys = list(param_grid.keys())
-        values = [param_grid[k] for k in keys]
-        param_combos = [dict(zip(keys, combo)) for combo in itertools.product(*values)]
+    param_combos = grid_combos(param_grid) if param_grid else None
 
     for i, result in enumerate(results):
         # Support both raw BacktestResult and Result wrapper
@@ -149,9 +197,13 @@ def results_to_df(
         row: Dict[str, Any] = {}
 
         # Add parameters
-        if param_combos is not None and i < len(param_combos):
-            for k, v in param_combos[i].items():
-                row[f"param_{k}"] = v
+        if param_grid:
+            labels = _run_parameters(result, param_grid)
+            if labels is None and param_combos is not None and i < len(param_combos):
+                labels = param_combos[i]
+            if labels is not None:
+                for k, v in labels.items():
+                    row[f"param_{k}"] = v
 
         # Flatten metrics dict
         if isinstance(metrics, dict):

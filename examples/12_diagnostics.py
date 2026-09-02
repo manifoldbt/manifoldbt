@@ -54,8 +54,10 @@ if __name__ == "__main__":
     store = open_store()
 
     # -- 1. Look-ahead bias detection -----------------------------------------
-    # Splits the time range and compares trades from shorter runs against
-    # the full run. If trades differ, the strategy uses future data.
+    # Walks the expressions for lead() (a fixed read-ahead trades the same in
+    # every window, so only a static check sees it), then splits the time
+    # range and compares trades from shorter runs against the full run. If
+    # trades differ, the strategy's result depends on how much data it saw.
     print("1. Look-ahead bias detection")
     print("-" * 40)
     t0 = time.perf_counter()

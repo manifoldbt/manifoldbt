@@ -16,7 +16,7 @@ from __future__ import annotations
 from typing import Tuple
 
 from manifoldbt.expr import (
-    Expr, col, lit, when, _coerce, _resolve_period, _resolve_span, s, scan,
+    Expr, MultiExpr, col, lit, when, _coerce, _resolve_period, _resolve_span, s, scan,
 )
 
 # ---------------------------------------------------------------------------
@@ -28,6 +28,10 @@ high = col("high")
 low = col("low")
 close = col("close")
 volume = col("volume")
+
+# What every band-shaped indicator returns, in order. Named here so the refusal
+# a caller meets on misuse quotes the same words as the reference docs.
+_BAND_NAMES = ("upper", "middle", "lower")
 vwap = col("vwap")
 timestamp = col("timestamp")
 
@@ -195,7 +199,7 @@ def bollinger_bands(
     upper = source.bollinger_upper(period, num_std)
     middle = source.rolling_mean(period)
     lower = source.bollinger_lower(period, num_std)
-    return upper, middle, lower
+    return MultiExpr((upper, middle, lower), "bollinger_bands", _BAND_NAMES)
 
 
 def bollinger_width(source: Expr, period: int = 20, num_std: float = 2.0) -> Expr:
@@ -246,7 +250,7 @@ def keltner_channels(
     # par un `float()` qui le casserait.
     middle = _c.ewm_mean(period if isinstance(period, Expr) else float(period))
     lower = Expr("KeltnerLower", _h, _l, _c, _resolve_period(period), _resolve_span(multiplier))
-    return upper, middle, lower
+    return MultiExpr((upper, middle, lower), "keltner_channels", _BAND_NAMES)
 
 
 def supertrend(
@@ -281,7 +285,11 @@ def macd(
     macd_line = source.macd_line(fast_period, slow_period)
     signal_line = source.macd_signal(fast_period, slow_period, signal_period)
     histogram = source.macd_hist(fast_period, slow_period, signal_period)
-    return macd_line, signal_line, histogram
+    return MultiExpr(
+        (macd_line, signal_line, histogram),
+        "macd",
+        ("macd_line", "signal_line", "histogram"),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -599,7 +607,9 @@ def donchian_channels(period: int = 20, *, h: Expr = None, l: Expr = None) -> Tu
     """
     upper = (h or high).rolling_max(period)
     lower = (l or low).rolling_min(period)
-    return upper, (upper + lower) / lit(2.0), lower
+    return MultiExpr(
+        (upper, (upper + lower) / lit(2.0), lower), "donchian_channels", _BAND_NAMES
+    )
 
 
 def vortex(period: int = 14, *, h: Expr = None, l: Expr = None, c: Expr = None) -> Tuple[Expr, Expr]:
@@ -613,9 +623,13 @@ def vortex(period: int = 14, *, h: Expr = None, l: Expr = None, c: Expr = None) 
     tr_sum = true_range(h=h, l=l, c=c).rolling_sum(period)
     vm_plus = abs_val((h or high) - (l or low).lag(1))
     vm_minus = abs_val((l or low) - (h or high).lag(1))
-    return (
-        vm_plus.rolling_sum(period) / (tr_sum + eps),
-        vm_minus.rolling_sum(period) / (tr_sum + eps),
+    return MultiExpr(
+        (
+            vm_plus.rolling_sum(period) / (tr_sum + eps),
+            vm_minus.rolling_sum(period) / (tr_sum + eps),
+        ),
+        "vortex",
+        ("vi_plus", "vi_minus"),
     )
 
 

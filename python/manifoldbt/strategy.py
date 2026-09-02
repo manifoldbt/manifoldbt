@@ -21,7 +21,37 @@ import json
 from typing import Any, Dict, List, Optional, Tuple
 
 from manifoldbt._serde import scalar_value_to_json
-from manifoldbt.expr import Expr, lit, param as _param
+from manifoldbt.expr import Expr, MultiExpr, lit, param as _param
+
+
+def _as_expr(value: Any, where: str) -> "Expr":
+    """The expression ``where`` needs, or an error naming what arrived instead.
+
+    Everything downstream -- parameter collection, JSON serialisation -- assumes
+    an ``Expr`` and says so in the language of its own internals when it is not
+    one: ``'tuple' object has no attribute '_param_meta'`` for a multi-output
+    indicator handed over whole, the same on ``str`` for an expression written
+    as text. Both are unactionable, so both are caught at the door instead.
+    """
+    if isinstance(value, Expr):
+        return value
+    if isinstance(value, MultiExpr):
+        raise value._reject(f"{where} takes one of them.")
+    if isinstance(value, (list, tuple)) and any(isinstance(v, Expr) for v in value):
+        raise TypeError(
+            f"{where} takes one expression, got a {type(value).__name__} of "
+            f"{len(value)}. Unpack it and pass the one you meant."
+        )
+    if isinstance(value, str):
+        raise TypeError(
+            f"{where} takes an expression, got the string {value!r}. Expressions "
+            f"are built, not parsed from text: col(\"close\"), sma(col(\"close\"), 20), "
+            f"col(\"fast\") > col(\"slow\")."
+        )
+    raise TypeError(
+        f"{where} takes an expression, got {type(value).__name__}. Wrap a constant "
+        f"in lit(), a column in col()."
+    )
 
 
 def _collect_params(expr: "Expr", out: Dict[str, Any]) -> None:
@@ -68,7 +98,13 @@ class Strategy:
     ) -> None:
         self.name = name
         self.signals = signals if signals is not None else {}
-        self.position_sizing = position_sizing if position_sizing is not None else lit(1.0)
+        for key, value in self.signals.items():
+            _as_expr(value, f"signal {key!r}")
+        self.position_sizing = (
+            lit(1.0)
+            if position_sizing is None
+            else _as_expr(position_sizing, "position sizing")
+        )
         self._parameters = parameters or {}
         self._constraints = constraints or []
         self._description = description
@@ -92,13 +128,13 @@ class Strategy:
 
     def signal(self, name: str, expr: Expr) -> "Strategy":
         """Add a named signal expression (returns self for chaining)."""
-        self.signals[name] = expr
+        self.signals[name] = _as_expr(expr, f"signal {name!r}")
         self._json_cache = None
         return self
 
     def size(self, expr: Expr) -> "Strategy":
         """Set the position sizing expression (returns self for chaining)."""
-        self.position_sizing = expr
+        self.position_sizing = _as_expr(expr, "position sizing")
         self._json_cache = None
         return self
 
@@ -296,6 +332,13 @@ class Strategy:
 
     def to_json_dict(self) -> dict:
         """Serialize to a dict matching Rust ``StrategyDef`` serde format."""
+        # `signals` is a plain public dict, so a caller can drop anything into it
+        # after construction. Re-check here rather than let the walk below trip
+        # over it.
+        for key, value in self.signals.items():
+            _as_expr(value, f"signal {key!r}")
+        _as_expr(self.position_sizing, "position sizing")
+
         # Auto-collect params from expressions (bt.param() in indicators)
         auto_params: Dict[str, Any] = {}
         for expr in self.signals.values():

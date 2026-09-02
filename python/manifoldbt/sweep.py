@@ -51,8 +51,11 @@ class SweepResult:
             backend: ``"pandas"``, ``"polars"``, or ``"auto"``.
 
         Returns:
-            DataFrame with one row per parameter combination.
-            Parameter columns are prefixed with ``param_``.
+            DataFrame with one row per parameter combination, in the order
+            the engine ran them: axes sorted by parameter name, last axis
+            varying fastest (not the dict's insertion order). Parameter
+            columns are prefixed with ``param_`` and read from each run's own
+            manifest, so a row's label is the combination that produced it.
         """
         return results_to_df(self._results, self._param_grid, backend=backend)
 

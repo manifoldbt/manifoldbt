@@ -34,7 +34,7 @@ sequential fill simulation with realistic fees, slippage, funding and look-ahead
 ## Why ManifoldBT
 
 - **Fast**: 10M bars in 329 ms. 79x faster than vectorbt, and 311x once you also want drawdown and Sharpe. [Measured in public CI](#performance), every run linked.
-- **Expressive**: fluent DSL with 63 indicators and 38 candlestick patterns, conditional logic, cross-asset references
+- **Expressive**: fluent DSL with 104 indicators and 38 candlestick patterns, conditional logic, cross-asset references
 - **Rigorous**: Monte Carlo, walk-forward, parameter sweeps, lookahead detection, exposure diagnostics
 - **Portable**: `pip install`, no Rust toolchain needed. Works on Python 3.9+.
 
@@ -246,6 +246,16 @@ its chart.
 `mbt.detect_lookahead` re-runs a strategy over different windows and compares
 the trades they have in common. That is what isolates bias coming from the
 engine or from a strategy's own use of time.
+
+One shape of leak is invisible to that comparison by construction: a signal
+that reads a fixed number of bars ahead (`close.lead(1)`, or a column
+precomputed with future bars and imported as data). Bar T sees the same T+1
+in every window, so the shorter run trades exactly like the full one and the
+re-runs report PASS, next to a Sharpe in the hundreds. No choice of split
+changes that. The detector therefore also walks the strategy's expressions
+and fails any explicit `lead()`, naming the signal; for an implicit one, the
+check that works is to perturb the bars after some K and require the equity
+up to K to be bit-identical, which `examples/25_lookahead_trap.py` does.
 
 A parameter derived from the data *before* the backtest is a different
 question: a threshold computed over the whole history in a notebook and then

@@ -210,3 +210,47 @@ def test_import_dataframe_daily_interval_runs(tmp_path):
     equity = result.equity_curve.to_pylist()
     assert len(equity) > 0
     assert equity[-1] > 1000.0
+
+
+def _read_bars_back(tmp_path, name="df"):
+    import glob
+
+    import pyarrow.ipc as ipc
+
+    data_root, _ = _store_paths(tmp_path, name)
+    f = glob.glob(os.path.join(data_root, "**", "*.arrow"), recursive=True)[0]
+    return ipc.open_file(f).read_all().to_pandas()
+
+
+def test_import_dataframe_keeps_provided_quotes(tmp_path):
+    """bid/ask a caller provides survive the import; spread is derived.
+
+    The store schema has always carried bid/ask/spread and the engine reads
+    them (MidPrice, spread_based slippage), but the import path dropped them
+    silently: a user reported 0 non-null values out of 400 provided.
+    """
+    import numpy as np
+
+    df = _bars_df()
+    df["bid"] = df["close"] - 0.05
+    df["ask"] = df["close"] + 0.05
+    df.loc[10, "bid"] = np.nan  # a missing quote stays missing, not 0 or NaN-poison
+
+    _import_df(df, tmp_path)
+    t = _read_bars_back(tmp_path)
+
+    assert t["bid"].notna().sum() == N_BARS - 1
+    assert t["ask"].notna().sum() == N_BARS
+    assert t["spread"].notna().sum() == N_BARS - 1
+    ok = t["bid"].notna()
+    assert np.allclose(t.loc[ok, "spread"].to_numpy(), 0.1)
+    assert np.allclose(t.loc[ok, "bid"].to_numpy(), df.loc[ok.to_numpy(), "bid"].to_numpy())
+    # Columns nobody provided stay null, exactly as before.
+    assert t["buy_volume"].isna().all() and t["sell_volume"].isna().all()
+
+
+def test_import_dataframe_without_quotes_is_unchanged(tmp_path):
+    _import_df(_bars_df(), tmp_path)
+    t = _read_bars_back(tmp_path)
+    for col in ("bid", "ask", "spread", "buy_volume", "sell_volume"):
+        assert t[col].isna().all(), col

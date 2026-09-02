@@ -5,7 +5,12 @@ import pyarrow as pa
 
 
 class DataStore:
-    """Bar data store (Parquet by default, or Arrow IPC via ``arrow_dir``) with SQLite metadata."""
+    """Bar data store (Parquet, or Arrow IPC via ``arrow_dir``) with SQLite metadata.
+
+    A store written by ``import_dataframe`` / ``import_csv`` / ``ingest`` lives in
+    Arrow IPC under ``<data_root>/mega`` and is detected automatically: reopening
+    with just ``DataStore(data_root, metadata_db)`` works.
+    """
 
     def __init__(
         self,

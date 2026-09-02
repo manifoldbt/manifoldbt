@@ -45,16 +45,30 @@ class LookaheadReport:
     def assert_clean(self) -> None:
         """Raise AssertionError if look-ahead bias was detected."""
         if not self.passed:
-            msg = (
-                f"Look-ahead bias detected ({self.method}): "
-                f"{self.mismatched} trades differ out of {self.total_trades_base}"
-            )
-            if self.details:
-                msg += f"\nFirst mismatch: {self.details[0]}"
+            if self.method == "static":
+                msg = (
+                    f"Look-ahead bias detected (static): {self.mismatched} "
+                    f"expression(s) read bars ahead of the current one"
+                )
+                if self.details:
+                    d = self.details[0]
+                    msg += f"\nFirst: {d['field']}: {d['base']}, {d['extended']}"
+            else:
+                msg = (
+                    f"Look-ahead bias detected ({self.method}): "
+                    f"{self.mismatched} trades differ out of {self.total_trades_base}"
+                )
+                if self.details:
+                    msg += f"\nFirst mismatch: {self.details[0]}"
             raise AssertionError(msg)
 
     def __str__(self) -> str:
         status = "PASS" if self.passed else "FAIL"
+        if self.method == "static":
+            lines = [f"  [static] {status}  (reads ahead={self.mismatched})"]
+            for d in self.details[:3]:
+                lines.append(f"    {d['field']}: {d['base']}, {d['extended']}")
+            return "\n".join(lines)
         lines = [
             f"  [{self.method}] {status}  "
             f"(trades={self.total_trades_base}, mismatched={self.mismatched})",
@@ -95,6 +109,9 @@ class DiagnosticsResult:
 # Public API
 # ---------------------------------------------------------------------------
 
+_MODES = ("all", "extension", "truncation", "static")
+
+
 def detect_lookahead(
     strategy,
     config,
@@ -103,25 +120,45 @@ def detect_lookahead(
     mode: str = "all",
     tolerance: float = 1e-9,
 ) -> DiagnosticsResult:
-    """Detect look-ahead bias — both global and rolling.
+    """Detect look-ahead bias: a static read of the strategy, then two re-runs.
 
-    Automatically splits the config's time range and compares trades
-    from shorter runs against the full run. No extra dates needed.
+    Three sub-tests:
+      * **static** -- walks the strategy's expressions for ``lead()``: a value
+        at bar T taken from bar T+n. Reported by signal, with the period.
+      * **extension** -- re-run on the first 2/3 of the data and compare the
+        trades with the full run. Catches look-ahead that depends on how much
+        data the run was given (a statistic over the whole series, a
+        normalisation by the last value).
+      * **truncation** -- the same comparison, split at 1/3.
 
-    Data is loaded once and sliced for each sub-test (no redundant I/O).
+    The re-runs load the data once and slice it (no redundant I/O). The
+    verdict is the conjunction: ``.passed`` is False as soon as one sub-test
+    fails.
 
-    Two sub-tests:
-      * **extension** — split at 2/3 of the period. Catches look-ahead that
-        depends on how much data the run was given.
-      * **truncation** — split at 1/3 of the period. Catches *rolling*
-        look-ahead (e.g. signal at bar T using bar T+1).
+    .. warning::
+       **What the re-runs cannot see.** A leak that reads a *fixed* number of
+       bars ahead (``close.lead(1)``, or a column precomputed with future bars
+       and imported as data) is deterministic: bar T sees the same T+1 whether
+       the run stops at 1/3, 2/3 or the end, so the trades of the shorter run
+       match the full run and both re-run sub-tests report PASS. Only the last
+       bar of a window differs (its T+1 does not exist), which is not enough
+       to produce a mismatch. This is a property of every method that re-runs
+       the same strategy over a different window, not a matter of tuning: no
+       split exposes an intra-series leak. A PASS from ``extension`` and
+       ``truncation`` next to a Sharpe in the hundreds is therefore not a
+       clean bill of health.
+
+       The ``static`` sub-test is the one that names an explicit ``lead()``.
+       For an implicit one (a column built outside the engine) the check that
+       works is to perturb the bars after some bar K and require the equity
+       up to K to be bit-identical: ``examples/25_lookahead_trap.py`` does it.
 
     .. note::
-       **Scope.** Both sub-tests re-run the *same strategy* over a different
+       **Scope.** The re-runs re-run the *same strategy* over a different
        window, which is what lets them isolate bias introduced by the engine or
        by the strategy's own use of time. A parameter computed from the data
-       *before* the backtest — ``threshold = df.close.mean()`` in a notebook,
-       then handed in as a number — is unchanged by re-running, so the trades
+       *before* the backtest -- ``threshold = df.close.mean()`` in a notebook,
+       then handed in as a number -- is unchanged by re-running, so the trades
        match and the verdict is clean: that bias entered upstream, in the
        research step, and is a different thing to check for.
 
@@ -135,26 +172,43 @@ def detect_lookahead(
         strategy: Strategy definition.
         config: BacktestConfig.
         store: DataStore.
-        mode: ``"all"`` (default), ``"extension"``, or ``"truncation"``.
+        mode: ``"all"`` (default), ``"static"``, ``"extension"``, or
+            ``"truncation"``. ``"static"`` needs neither data nor a store.
         tolerance: Float comparison tolerance for quantity/price/fees.
 
     Returns:
         DiagnosticsResult with ``.passed``, ``.assert_clean()``, ``print()``.
+
+    Raises:
+        ValueError: on an unknown ``mode``. It used to run no sub-test at all
+            and report PASS over an empty list.
     """
     # Pro feature: report it here so a notebook gets a clean LicenseError rather
     # than a traceback from deeper in the analysis.
     from manifoldbt import _require_pro
     _require_pro("Look-ahead bias detection")
 
+    # Checked natively too; here so a typo fails before any data is touched.
+    if mode not in _MODES:
+        raise ValueError(f"mode must be one of {_MODES}, got {mode!r}")
+
     from manifoldbt._native import py_detect_lookahead as _native_detect
 
-    # Resolve config/store exactly like run() (notably dict universe -> ids),
-    # otherwise config.to_json() emits a map the Rust loader rejects.
-    config, store = _prepare_for_diagnostics(config, strategy, store)
-
-    # All the run + comparison logic lives in Rust now; this is a thin wrapper
-    # that rebuilds the report objects from the native JSON.
-    raw = _native_detect(strategy.to_json(), config.to_json(), store, mode, tolerance)
+    # All the analysis lives in Rust (the static walk as much as the re-runs);
+    # this is a thin wrapper that rebuilds the report objects from the native
+    # JSON.
+    if mode == "static":
+        raw = _native_detect(strategy.to_json(), None, None, mode, tolerance)
+    else:
+        if config is None or store is None:
+            raise ValueError(
+                "the re-run sub-tests need a config and a data store; "
+                "only mode='static' runs without them"
+            )
+        # Resolve config/store exactly like run() (notably dict universe ->
+        # ids), otherwise config.to_json() emits a map the Rust loader rejects.
+        config, store = _prepare_for_diagnostics(config, strategy, store)
+        raw = _native_detect(strategy.to_json(), config.to_json(), store, mode, tolerance)
 
     reports = [
         LookaheadReport(
