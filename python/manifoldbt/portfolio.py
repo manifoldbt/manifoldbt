@@ -33,19 +33,27 @@ class Portfolio:
     def strategy(self, strategy: Strategy, weight: float = 1.0) -> "Portfolio":
         """Add a strategy with its capital allocation weight.
 
+        Each strategy runs as an independent backtest on ``initial_capital *
+        weight``; the portfolio equity is the sum of the legs. What that means
+        for per-strategy settings:
+
+        * ``stop_loss`` / ``take_profit`` / ``trailing_stop`` set on the
+          strategy are honored, exactly as in :func:`run`. A stop that must
+          apply to one direction only is written by splitting the legs into
+          two strategies and setting the stop on one of them.
+        * ``max_position_pct`` clamps on the LEG's equity, not the
+          portfolio's: a leg at weight 0.5 with ``max_position_pct=1.0`` can
+          never hold more than half the portfolio.
+        * With the default ``FractionOfEquity`` sizing each leg compounds on
+          its own equity. For the portfolio to equal the sum of the legs run
+          separately (or one strategy trading both legs), use
+          ``position_sizing_mode="FractionOfInitialCapital"``.
+
         Args:
             strategy: A Strategy instance.
-            weight: Fraction of total capital (0.0 to 1.0).
+            weight: Fraction of total capital (0.0 to 1.0). Weights must sum
+                to at most 1.0.
         """
-        if getattr(strategy, "_orders", None):
-            import warnings
-            warnings.warn(
-                f"Strategy '{strategy.name}' defines stop_loss/take_profit/"
-                "trailing_stop orders, but portfolio mode does not support "
-                "per-strategy orders yet: they are IGNORED in run_portfolio().",
-                UserWarning,
-                stacklevel=2,
-            )
         self._strategies.append({
             "name": strategy.name,
             "strategy_json": strategy.to_json(),

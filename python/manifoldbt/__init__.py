@@ -1817,6 +1817,10 @@ def run_portfolio(
         config: Backtest configuration (shared across all strategies).
         store: Data store.
 
+    Per-strategy ``stop_loss``/``take_profit``/``trailing_stop`` are honored:
+    each leg runs with the orders its own JSON carries. See
+    :meth:`Portfolio.strategy` for what else the split into legs implies.
+
     Returns:
         A :class:`Result` with combined portfolio metrics. Access per-strategy
         breakdown via ``result.per_strategy``.

@@ -157,42 +157,48 @@ class Strategy:
         self._json_cache = None
         return self
 
-    def stop_loss(self, pct: float) -> "Strategy":
+    def _exit_order(self, key: str, spec: Dict[str, Any], side: str) -> "Strategy":
+        from .config import exit_order
+
+        if self._orders is None:
+            self._orders = {}
+        self._orders[key] = exit_order(spec, side, key)
+        self._json_cache = None
+        return self
+
+    def stop_loss(self, pct: float, side: str = "both") -> "Strategy":
         """Convenience: attach a stop-loss order (returns self for chaining).
 
         Args:
             pct: Distance from entry as percentage (e.g. ``2.0`` = 2%).
+            side: ``"both"`` (default), ``"long"`` or ``"short"``: which
+                positions the stop arms on. A stop on the shorts only leaves
+                the longs without one.
         """
-        if self._orders is None:
-            self._orders = {}
-        self._orders["stop_loss"] = {"stop_pct": pct}
-        self._json_cache = None
-        return self
+        return self._exit_order("stop_loss", {"stop_pct": pct}, side)
 
-    def take_profit(self, pct: float) -> "Strategy":
+    def take_profit(self, pct: float, side: str = "both") -> "Strategy":
         """Convenience: attach a take-profit order (returns self for chaining).
 
         Args:
             pct: Distance from entry as percentage (e.g. ``5.0`` = 5%).
+            side: ``"both"`` (default), ``"long"`` or ``"short"``.
         """
-        if self._orders is None:
-            self._orders = {}
-        self._orders["take_profit"] = {"profit_pct": pct}
-        self._json_cache = None
-        return self
+        return self._exit_order("take_profit", {"profit_pct": pct}, side)
 
-    def trailing_stop(self, pct: float, use_high: bool = True) -> "Strategy":
+    def trailing_stop(
+        self, pct: float, use_high: bool = True, side: str = "both"
+    ) -> "Strategy":
         """Convenience: attach a trailing stop (returns self for chaining).
 
         Args:
             pct: Trail distance as percentage (e.g. ``3.0`` = 3%).
             use_high: Track bar high/low (True) or close (False).
+            side: ``"both"`` (default), ``"long"`` or ``"short"``.
         """
-        if self._orders is None:
-            self._orders = {}
-        self._orders["trailing_stop"] = {"trail_pct": pct, "use_high": use_high}
-        self._json_cache = None
-        return self
+        return self._exit_order(
+            "trailing_stop", {"trail_pct": pct, "use_high": use_high}, side
+        )
 
     def _entry(
         self,

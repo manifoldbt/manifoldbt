@@ -363,16 +363,32 @@ Slippage.spread_based(0.5)                  # spread-based
 
 ## Orders (SL/TP/Trailing)
 
+Each of the three takes `side="both"` (default), `"long"` or `"short"`: an
+order armed on one side leaves the other bare, so a strategy that trades
+both directions can stop its shorts and let its longs run. A distance swept
+from a grid (`stop_loss` as a sweep parameter) keeps the side the strategy
+set.
+
 ```python
 strategy = (
     mbt.Strategy.create("my_strat")
     .signal(...)
     .size(...)
-    .stop_loss(pct=3.0)           # 3% stop-loss
-    .take_profit(pct=5.0)         # 5% take-profit
-    .trailing_stop(pct=2.0)       # 2% trailing stop
+    .stop_loss(pct=3.0, side="short")   # 3% stop-loss, on the shorts only
+    .take_profit(pct=5.0)               # 5% take-profit, both sides
+    .trailing_stop(pct=2.0)             # 2% trailing stop, both sides
 )
 ```
+
+Orders travel with the strategy, so they apply wherever it runs: `run`,
+`run_batch`, `run_sweep` and `run_portfolio`.
+
+In a portfolio each leg is an independent run on `initial_capital * weight`
+and the portfolio equity is the sum of the legs. Two consequences:
+`max_position_pct` clamps on the leg's equity, not the portfolio's, and with
+the default `FractionOfEquity` sizing each leg compounds on its own. Set
+`position_sizing_mode="FractionOfInitialCapital"` when the portfolio must
+equal the sum of its legs run separately.
 
 ---
 

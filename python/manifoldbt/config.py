@@ -31,6 +31,27 @@ def entry_price(
     return {"Signal": signal}
 
 
+_ORDER_SIDES = {"both": None, "long": "Long", "short": "Short"}
+
+
+def exit_order(spec: dict, side: str, where: str) -> dict:
+    """``spec`` with the engine's name for ``side`` added when it is not the default.
+
+    ``side`` is ``"both"`` (the default: the order arms on longs and shorts
+    alike), ``"long"`` or ``"short"``. The JSON carries the key only when it
+    departs from the default, so a strategy that never asked for a side
+    serializes exactly as it did before the field existed.
+    """
+    key = side.lower() if isinstance(side, str) else side
+    if key not in _ORDER_SIDES:
+        raise ValueError(
+            f"{where}: side must be 'both', 'long' or 'short', got {side!r}."
+        )
+    if _ORDER_SIDES[key] is not None:
+        spec = {**spec, "side": _ORDER_SIDES[key]}
+    return spec
+
+
 @dataclass
 class OrderConfig:
     """Order management configuration for conditional entries, stop-loss,
@@ -48,6 +69,8 @@ class OrderConfig:
       stop_loss:  {"stop_pct": 2.0}   — % from entry price
       take_profit: {"profit_pct": 5.0} — % from entry price
       trailing_stop: {"trail_pct": 3.0, "use_high": true}
+      Each of the three also takes "side": "Both" (default), "Long" or
+      "Short"; an order armed on one side leaves the other bare.
 
     Note that a conditional entry runs on the general simulation loop, not the
     fast kernel, so sweeps over one are slower than sweeps over a market entry.
@@ -59,22 +82,27 @@ class OrderConfig:
     trailing_stop: Optional[dict] = None
 
     @classmethod
-    def bracket(cls, stop_pct: float, profit_pct: float) -> "OrderConfig":
+    def bracket(
+        cls, stop_pct: float, profit_pct: float, side: str = "both"
+    ) -> "OrderConfig":
         """Convenience: create a bracket order (SL + TP)."""
         return cls(
-            stop_loss={"stop_pct": stop_pct},
-            take_profit={"profit_pct": profit_pct},
+            stop_loss=exit_order({"stop_pct": stop_pct}, side, "bracket"),
+            take_profit=exit_order({"profit_pct": profit_pct}, side, "bracket"),
         )
 
     @classmethod
-    def stop_loss_only(cls, stop_pct: float) -> "OrderConfig":
+    def stop_loss_only(cls, stop_pct: float, side: str = "both") -> "OrderConfig":
         """Convenience: stop-loss only."""
-        return cls(stop_loss={"stop_pct": stop_pct})
+        return cls(stop_loss=exit_order({"stop_pct": stop_pct}, side, "stop_loss_only"))
 
     @classmethod
-    def trailing(cls, trail_pct: float, use_high: bool = True) -> "OrderConfig":
+    def trailing(
+        cls, trail_pct: float, use_high: bool = True, side: str = "both"
+    ) -> "OrderConfig":
         """Convenience: trailing stop only."""
-        return cls(trailing_stop={"trail_pct": trail_pct, "use_high": use_high})
+        return cls(trailing_stop=exit_order(
+            {"trail_pct": trail_pct, "use_high": use_high}, side, "trailing"))
 
     @classmethod
     def limit_entry_at(

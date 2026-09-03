@@ -130,8 +130,3 @@ def test_run_batch_carries_sl_tp(captured):
     assert _config_orders(cfg) is None
     assert all(_sl_of(s) == 1.5 for s in sent)
     assert _names(sent) == ["x", "y"]
-
-
-def test_portfolio_warns_on_ignored_orders():
-    with pytest.warns(UserWarning, match="IGNORED"):
-        bt.Portfolio().strategy(_strategy("p", sl=2.0), weight=1.0)
