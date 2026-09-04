@@ -1,34 +1,34 @@
 {
   "repo": "manifoldbt/manifoldbt",
-  "run_id": "33655385165",
-  "run_url": "https://github.com/manifoldbt/manifoldbt/actions/runs/33655385165",
-  "commit": "5253b70c351f0abfdaee7e3a760947e0c1e12c40",
+  "run_id": "33819887722",
+  "run_url": "https://github.com/manifoldbt/manifoldbt/actions/runs/33819887722",
+  "commit": "2ee9f29c36886fb8a5a8b04512502a2f9b323341",
   "run_started_at": "",
   "conclusion": "success",
-  "synced_at": "2026-09-02T16:50:40.841574+00:00",
+  "synced_at": "2026-09-04T00:28:23.884873+00:00",
   "backtests": {
     "schema_version": 2,
-    "generated_at": "2026-09-02T16:50:29.884357+00:00",
+    "generated_at": "2026-09-04T00:28:12.930485+00:00",
     "environment": {
       "os": "Linux",
       "os_release": "6.17.0-1022-azure",
       "arch": "x86_64",
-      "cpu": "AMD EPYC 9V45 96-Core Processor",
+      "cpu": "AMD EPYC 7763 64-Core Processor",
       "logical_cores": 4,
       "ram_gb": 16.8,
       "python": "3.12.14",
       "versions": {
-        "manifoldbt": "0.22.0",
+        "manifoldbt": "0.23.0",
         "vectorbt": "0.28.4",
         "raptorbt": "0.9.0",
         "numpy": "2.4.3",
         "numba": "0.64.0",
         "pandas": "2.3.3"
       },
-      "runner": "GitHub Actions 1000000430",
+      "runner": "GitHub Actions 1000000463",
       "ci": true,
-      "run_url": "https://github.com/manifoldbt/manifoldbt/actions/runs/33655385165",
-      "commit": "5253b70c351f0abfdaee7e3a760947e0c1e12c40",
+      "run_url": "https://github.com/manifoldbt/manifoldbt/actions/runs/33819887722",
+      "commit": "2ee9f29c36886fb8a5a8b04512502a2f9b323341",
       "pinned_cores": null,
       "engines": [
         "manifoldbt",
@@ -43,2112 +43,6 @@
       "raptorbt"
     ],
     "reps": 7,
-    "results": [
-      {
-        "workload": "sma_cross",
-        "title": "SMA 30/150 crossover, long-only, no cost",
-        "bars": 100000,
-        "data_digest": "81a87f47b436bdf3",
-        "engines": [
-          "manifoldbt",
-          "vectorbt",
-          "raptorbt"
-        ],
-        "parity": {
-          "vectorbt": {
-            "status": "exact",
-            "expected": "exact",
-            "publishable": true,
-            "diffs": {
-              "final_equity_vs_capital": 2.037268131971359e-15,
-              "round_trips_delta": 0,
-              "total_fees_vs_capital": 0.0
-            },
-            "metrics": {
-              "manifoldbt": {
-                "total_return": 0.0667552139716674,
-                "final_equity": 106675.52139716674,
-                "round_trips": 450,
-                "fills": 900,
-                "total_fees": 0.0
-              },
-              "vectorbt": {
-                "total_return": 0.06675521397166537,
-                "final_equity": 106675.52139716654,
-                "round_trips": 450,
-                "fills": null,
-                "total_fees": 0.0
-              }
-            },
-            "note": ""
-          },
-          "raptorbt": {
-            "status": "exact",
-            "expected": "exact",
-            "publishable": true,
-            "diffs": {
-              "final_equity_vs_capital": 0.0,
-              "round_trips_delta": 0,
-              "total_fees_vs_capital": 0.0
-            },
-            "metrics": {
-              "manifoldbt": {
-                "total_return": 0.0667552139716674,
-                "final_equity": 106675.52139716674,
-                "round_trips": 450,
-                "fills": 900,
-                "total_fees": 0.0
-              },
-              "raptorbt": {
-                "total_return": 0.0667552139716674,
-                "final_equity": 106675.52139716674,
-                "round_trips": 450,
-                "fills": null,
-                "total_fees": 0.0
-              }
-            },
-            "note": ""
-          }
-        },
-        "status": "exact",
-        "paired_with": [
-          "sma_cross_metrics"
-        ],
-        "timings": {
-          "manifoldbt": {
-            "samples_s": [
-              0.0036143519999995988,
-              0.002386372999978903,
-              0.0034239230000139287,
-              0.002333171999964634,
-              0.0035021319999941625,
-              0.002273420999983955,
-              0.0034150889999864376
-            ],
-            "min_s": 0.002273420999983955,
-            "median_s": 0.0034150889999864376,
-            "max_s": 0.0036143519999995988,
-            "iqr_s": 0.0011689600000295286,
-            "iqr_over_median": 0.3422926898930514
-          },
-          "vectorbt": {
-            "samples_s": [
-              0.0969588859999817,
-              0.10005069199996797,
-              0.09750158100001727,
-              0.10031969199997093,
-              0.09721932200000083,
-              0.0962783390000368,
-              0.10001376599996092
-            ],
-            "min_s": 0.0962783390000368,
-            "median_s": 0.09750158100001727,
-            "max_s": 0.10031969199997093,
-            "iqr_s": 0.0030918059999862635,
-            "iqr_over_median": 0.03171031657410474
-          },
-          "raptorbt": {
-            "samples_s": [
-              0.0058783090000247284,
-              0.005221289000019169,
-              0.00426481300002024,
-              0.005741682000007131,
-              0.004381760999990547,
-              0.00399632399995653,
-              0.003984145000003991
-            ],
-            "min_s": 0.003984145000003991,
-            "median_s": 0.004381760999990547,
-            "max_s": 0.0058783090000247284,
-            "iqr_s": 0.0017453580000506008,
-            "iqr_over_median": 0.39832341381795267
-          }
-        },
-        "speedup": {
-          "vectorbt": {
-            "median_of_ratios": 29.28584467355261,
-            "min": 26.826077260873447,
-            "max": 42.9971266591111
-          },
-          "raptorbt": {
-            "median_of_ratios": 1.6263797770735615,
-            "min": 1.166629917996226,
-            "max": 2.4608910102187767
-          }
-        },
-        "noisy": true,
-        "cpu_over_wall": {
-          "manifoldbt": null,
-          "vectorbt": 0.9588253127756637,
-          "raptorbt": null
-        }
-      },
-      {
-        "workload": "sma_cross_metrics",
-        "title": "SMA 30/150 crossover, with a performance summary",
-        "bars": 100000,
-        "data_digest": "81a87f47b436bdf3",
-        "engines": [
-          "manifoldbt",
-          "vectorbt",
-          "raptorbt"
-        ],
-        "parity": {
-          "vectorbt": {
-            "status": "exact",
-            "expected": "exact",
-            "publishable": true,
-            "diffs": {
-              "final_equity_vs_capital": 2.037268131971359e-15,
-              "round_trips_delta": 0,
-              "total_fees_vs_capital": 0.0,
-              "max_drawdown_rel": 9.824310693574996e-15,
-              "advisory_ratio_rel": {
-                "sharpe": 0.00034240713216008217,
-                "sortino": 0.0003424071321615219,
-                "volatility": 0.00034240713210234553
-              }
-            },
-            "metrics": {
-              "manifoldbt": {
-                "total_return": 0.0667552139716674,
-                "final_equity": 106675.52139716674,
-                "round_trips": 450,
-                "fills": 900,
-                "total_fees": 0.0,
-                "max_drawdown": -0.0791054091709309,
-                "sharpe": 2.1149665518058587,
-                "sortino": 4.021336803203378,
-                "volatility": 0.17066118340286957
-              },
-              "vectorbt": {
-                "total_return": 0.06675521397166537,
-                "final_equity": 106675.52139716654,
-                "round_trips": 450,
-                "fills": null,
-                "total_fees": 0.0,
-                "max_drawdown": -0.07910540917093167,
-                "sharpe": 2.1142426200536355,
-                "sortino": 4.0199603401119175,
-                "volatility": 0.17060276779841899
-              }
-            },
-            "note": ""
-          },
-          "raptorbt": {
-            "status": "exact",
-            "expected": "exact",
-            "publishable": true,
-            "diffs": {
-              "final_equity_vs_capital": 0.0,
-              "round_trips_delta": 0,
-              "total_fees_vs_capital": 0.0,
-              "max_drawdown_rel": 7.017364781125071e-16,
-              "ratio_basis": "native"
-            },
-            "metrics": {
-              "manifoldbt": {
-                "total_return": 0.0667552139716674,
-                "final_equity": 106675.52139716674,
-                "round_trips": 450,
-                "fills": 900,
-                "total_fees": 0.0,
-                "max_drawdown": -0.0791054091709309,
-                "sharpe": 2.1149665518058587,
-                "sortino": 4.021336803203378,
-                "volatility": 0.17066118340286957
-              },
-              "raptorbt": {
-                "total_return": 0.0667552139716674,
-                "final_equity": 106675.52139716674,
-                "round_trips": 450,
-                "fills": null,
-                "total_fees": 0.0,
-                "max_drawdown": -0.07910540917093084,
-                "sharpe": 0.9692748979846553,
-                "sortino": 1.3742016523326892,
-                "volatility": null
-              }
-            },
-            "note": ""
-          }
-        },
-        "status": "exact",
-        "paired_with": [
-          "sma_cross"
-        ],
-        "timings": {
-          "manifoldbt": {
-            "samples_s": [
-              0.0023669130000030236,
-              0.0023287949999826196,
-              0.002359511999998176,
-              0.0024150670000153696,
-              0.0023859730000026502,
-              0.0023549350000280356,
-              0.002356668000004447
-            ],
-            "min_s": 0.0023287949999826196,
-            "median_s": 0.002359511999998176,
-            "max_s": 0.0024150670000153696,
-            "iqr_s": 3.103799997461465e-05,
-            "iqr_over_median": 0.013154414969976267
-          },
-          "vectorbt": {
-            "samples_s": [
-              0.5430924309999909,
-              0.5436255530000267,
-              0.3627463130000024,
-              0.5404696479999984,
-              0.5422806050000304,
-              0.5394735510000146,
-              0.36260960499998873
-            ],
-            "min_s": 0.36260960499998873,
-            "median_s": 0.5404696479999984,
-            "max_s": 0.5436255530000267,
-            "iqr_s": 0.18034611799998856,
-            "iqr_over_median": 0.3336840813676721
-          },
-          "raptorbt": {
-            "samples_s": [
-              0.004416604000027746,
-              0.004146883999965212,
-              0.006267521999973269,
-              0.004163929000014832,
-              0.004002633999959926,
-              0.004176557999983288,
-              0.005030249000014919
-            ],
-            "min_s": 0.004002633999959926,
-            "median_s": 0.004176557999983288,
-            "max_s": 0.006267521999973269,
-            "iqr_s": 0.0008833650000497073,
-            "iqr_over_median": 0.21150550286940634
-          }
-        },
-        "speedup": {
-          "vectorbt": {
-            "median_of_ratios": 227.2786008053855,
-            "min": 153.737854692107,
-            "max": 233.4364136835075
-          },
-          "raptorbt": {
-            "median_of_ratios": 1.780699460448928,
-            "min": 1.6775688576339631,
-            "max": 2.656278925463449
-          }
-        },
-        "noisy": true,
-        "cpu_over_wall": {
-          "manifoldbt": null,
-          "vectorbt": 1.0045721994259589,
-          "raptorbt": null
-        }
-      },
-      {
-        "workload": "sma_cross",
-        "title": "SMA 30/150 crossover, long-only, no cost",
-        "bars": 1000000,
-        "data_digest": "3d9cc9bf5d0fca1b",
-        "engines": [
-          "manifoldbt",
-          "vectorbt",
-          "raptorbt"
-        ],
-        "parity": {
-          "vectorbt": {
-            "status": "exact",
-            "expected": "exact",
-            "publishable": true,
-            "diffs": {
-              "final_equity_vs_capital": 5.529727786779404e-15,
-              "round_trips_delta": 0,
-              "total_fees_vs_capital": 0.0
-            },
-            "metrics": {
-              "manifoldbt": {
-                "total_return": 0.20294254717537874,
-                "final_equity": 120294.25471753787,
-                "round_trips": 4534,
-                "fills": 9069,
-                "total_fees": 0.0
-              },
-              "vectorbt": {
-                "total_return": 0.2029425471753732,
-                "final_equity": 120294.25471753732,
-                "round_trips": 4534,
-                "fills": null,
-                "total_fees": 0.0
-              }
-            },
-            "note": ""
-          },
-          "raptorbt": {
-            "status": "exact",
-            "expected": "exact",
-            "publishable": true,
-            "diffs": {
-              "final_equity_vs_capital": 0.0,
-              "round_trips_delta": 0,
-              "total_fees_vs_capital": 0.0
-            },
-            "metrics": {
-              "manifoldbt": {
-                "total_return": 0.20294254717537874,
-                "final_equity": 120294.25471753787,
-                "round_trips": 4534,
-                "fills": 9069,
-                "total_fees": 0.0
-              },
-              "raptorbt": {
-                "total_return": 0.2029425471753787,
-                "final_equity": 120294.25471753787,
-                "round_trips": 4534,
-                "fills": null,
-                "total_fees": 0.0
-              }
-            },
-            "note": ""
-          }
-        },
-        "status": "exact",
-        "paired_with": [
-          "sma_cross_metrics"
-        ],
-        "timings": {
-          "manifoldbt": {
-            "samples_s": [
-              0.026732768999977452,
-              0.025418151999986094,
-              0.02582920700001523,
-              0.02683005599999433,
-              0.025716775000034886,
-              0.025388867000003756,
-              0.025666179999973338
-            ],
-            "min_s": 0.025388867000003756,
-            "median_s": 0.025716775000034886,
-            "max_s": 0.02683005599999433,
-            "iqr_s": 0.0013146169999913582,
-            "iqr_over_median": 0.051119045836407355
-          },
-          "vectorbt": {
-            "samples_s": [
-              1.245137012999976,
-              1.3898683759999813,
-              1.4796100089999982,
-              1.207253492999996,
-              1.4784823520000145,
-              1.2176768890000176,
-              1.4724980519999917
-            ],
-            "min_s": 1.207253492999996,
-            "median_s": 1.3898683759999813,
-            "max_s": 1.4796100089999982,
-            "iqr_s": 0.26080546299999696,
-            "iqr_over_median": 0.18764759850899757
-          },
-          "raptorbt": {
-            "samples_s": [
-              0.042459874000030595,
-              0.042479584000034265,
-              0.04194577999999183,
-              0.040109042999972644,
-              0.04156387799997674,
-              0.03974496199998612,
-              0.045265586000027724
-            ],
-            "min_s": 0.03974496199998612,
-            "median_s": 0.04194577999999183,
-            "max_s": 0.045265586000027724,
-            "iqr_s": 0.002370541000061621,
-            "iqr_over_median": 0.05651440979431263
-          }
-        },
-        "speedup": {
-          "vectorbt": {
-            "median_of_ratios": 54.68015046887522,
-            "min": 44.99630910201049,
-            "max": 57.49097046569832
-          },
-          "raptorbt": {
-            "median_of_ratios": 1.616216574586835,
-            "min": 1.494929529777393,
-            "max": 1.7636276999567035
-          }
-        },
-        "noisy": true,
-        "cpu_over_wall": {
-          "manifoldbt": null,
-          "vectorbt": 1.0020519216345292,
-          "raptorbt": null
-        }
-      },
-      {
-        "workload": "sma_cross_metrics",
-        "title": "SMA 30/150 crossover, with a performance summary",
-        "bars": 1000000,
-        "data_digest": "3d9cc9bf5d0fca1b",
-        "engines": [
-          "manifoldbt",
-          "vectorbt",
-          "raptorbt"
-        ],
-        "parity": {
-          "vectorbt": {
-            "status": "exact",
-            "expected": "exact",
-            "publishable": true,
-            "diffs": {
-              "final_equity_vs_capital": 5.529727786779404e-15,
-              "round_trips_delta": 0,
-              "total_fees_vs_capital": 0.0,
-              "max_drawdown_rel": 2.1971034684631794e-14,
-              "advisory_ratio_rel": {
-                "sharpe": 0.0003424071321004093,
-                "sortino": 0.00034240713210011137,
-                "volatility": 0.0003424071321038629
-              }
-            },
-            "metrics": {
-              "manifoldbt": {
-                "total_return": 0.20294254717537874,
-                "final_equity": 120294.25471753787,
-                "round_trips": 4534,
-                "fills": 9069,
-                "total_fees": 0.0,
-                "max_drawdown": -0.15159363779099877,
-                "sharpe": 0.6860158229410791,
-                "sortino": 1.3522858253365952,
-                "volatility": 0.16128875607357218
-              },
-              "vectorbt": {
-                "total_return": 0.2029425471753732,
-                "final_equity": 120294.25471753732,
-                "round_trips": 4534,
-                "fills": null,
-                "total_fees": 0.0,
-                "max_drawdown": -0.15159363779099544,
-                "sharpe": 0.6857810066333488,
-                "sortino": 1.3518229515166593,
-                "volatility": 0.16123354855661198
-              }
-            },
-            "note": ""
-          },
-          "raptorbt": {
-            "status": "exact",
-            "expected": "exact",
-            "publishable": true,
-            "diffs": {
-              "final_equity_vs_capital": 0.0,
-              "round_trips_delta": 0,
-              "total_fees_vs_capital": 0.0,
-              "max_drawdown_rel": 3.6618391141052195e-16,
-              "ratio_basis": "native"
-            },
-            "metrics": {
-              "manifoldbt": {
-                "total_return": 0.20294254717537874,
-                "final_equity": 120294.25471753787,
-                "round_trips": 4534,
-                "fills": 9069,
-                "total_fees": 0.0,
-                "max_drawdown": -0.15159363779099877,
-                "sharpe": 0.6860158229410791,
-                "sortino": 1.3522858253365952,
-                "volatility": 0.16128875607357218
-              },
-              "raptorbt": {
-                "total_return": 0.2029425471753787,
-                "final_equity": 120294.25471753787,
-                "round_trips": 4534,
-                "fills": null,
-                "total_fees": 0.0,
-                "max_drawdown": -0.15159363779099871,
-                "sharpe": 0.3005175738027797,
-                "sortino": 0.4254354879123199,
-                "volatility": null
-              }
-            },
-            "note": ""
-          }
-        },
-        "status": "exact",
-        "paired_with": [
-          "sma_cross"
-        ],
-        "timings": {
-          "manifoldbt": {
-            "samples_s": [
-              0.024702557000011893,
-              0.0256946939999807,
-              0.025478714999962904,
-              0.025638143000037417,
-              0.025813822000031905,
-              0.02554543899998407,
-              0.026469671000029393
-            ],
-            "min_s": 0.024702557000011893,
-            "median_s": 0.025638143000037417,
-            "max_s": 0.026469671000029393,
-            "iqr_s": 0.0003351070000690015,
-            "iqr_over_median": 0.013070642443507412
-          },
-          "vectorbt": {
-            "samples_s": [
-              5.07927996799998,
-              5.025657585999966,
-              5.184955215000002,
-              5.18398999499999,
-              5.163294893,
-              5.194831534999992,
-              5.163042009000037
-            ],
-            "min_s": 5.025657585999966,
-            "median_s": 5.163294893,
-            "max_s": 5.194831534999992,
-            "iqr_s": 0.10567524700002195,
-            "iqr_over_median": 0.02046663016348115
-          },
-          "raptorbt": {
-            "samples_s": [
-              0.04854657200002066,
-              0.048676905000036186,
-              0.04831011600003876,
-              0.049260930000002645,
-              0.048976557999992565,
-              0.05063001199999917,
-              0.04787639699998181
-            ],
-            "min_s": 0.04787639699998181,
-            "median_s": 0.048676905000036186,
-            "max_s": 0.05063001199999917,
-            "iqr_s": 0.0009508139999638843,
-            "iqr_over_median": 0.019533164648885902
-          }
-        },
-        "speedup": {
-          "vectorbt": {
-            "median_of_ratios": 202.19834154885652,
-            "min": 195.05501254603067,
-            "max": 205.6175791031485
-          },
-          "raptorbt": {
-            "median_of_ratios": 1.8972997489458179,
-            "min": 1.8087265610490075,
-            "max": 1.9819589712289047
-          }
-        },
-        "noisy": false,
-        "cpu_over_wall": {
-          "manifoldbt": null,
-          "vectorbt": 1.0001374855385643,
-          "raptorbt": null
-        }
-      },
-      {
-        "workload": "sma_cross",
-        "title": "SMA 30/150 crossover, long-only, no cost",
-        "bars": 10000000,
-        "data_digest": "3c0c54badb16a42c",
-        "engines": [
-          "manifoldbt",
-          "vectorbt",
-          "raptorbt"
-        ],
-        "parity": {
-          "vectorbt": {
-            "status": "exact",
-            "expected": "exact",
-            "publishable": true,
-            "diffs": {
-              "final_equity_vs_capital": 1.3096723705530167e-15,
-              "round_trips_delta": 0,
-              "total_fees_vs_capital": 0.0
-            },
-            "metrics": {
-              "manifoldbt": {
-                "total_return": 0.30013524943746295,
-                "final_equity": 130013.52494374629,
-                "round_trips": 46127,
-                "fills": 92254,
-                "total_fees": 0.0
-              },
-              "vectorbt": {
-                "total_return": 0.3001352494374642,
-                "final_equity": 130013.52494374642,
-                "round_trips": 46127,
-                "fills": null,
-                "total_fees": 0.0
-              }
-            },
-            "note": ""
-          },
-          "raptorbt": {
-            "status": "exact",
-            "expected": "exact",
-            "publishable": true,
-            "diffs": {
-              "final_equity_vs_capital": 0.0,
-              "round_trips_delta": 0,
-              "total_fees_vs_capital": 0.0
-            },
-            "metrics": {
-              "manifoldbt": {
-                "total_return": 0.30013524943746295,
-                "final_equity": 130013.52494374629,
-                "round_trips": 46127,
-                "fills": 92254,
-                "total_fees": 0.0
-              },
-              "raptorbt": {
-                "total_return": 0.3001352494374629,
-                "final_equity": 130013.52494374629,
-                "round_trips": 46127,
-                "fills": null,
-                "total_fees": 0.0
-              }
-            },
-            "note": ""
-          }
-        },
-        "status": "exact",
-        "paired_with": [
-          "sma_cross_metrics"
-        ],
-        "timings": {
-          "manifoldbt": {
-            "samples_s": [
-              0.2221784179999986,
-              0.22120424199999889,
-              0.22690671499992732,
-              0.22121043900006043,
-              0.21860049500003242,
-              0.22366351100004067,
-              0.22100929599992014
-            ],
-            "min_s": 0.21860049500003242,
-            "median_s": 0.22121043900006043,
-            "max_s": 0.22690671499992732,
-            "iqr_s": 0.00265421500012053,
-            "iqr_over_median": 0.011998597408505686
-          },
-          "vectorbt": {
-            "samples_s": [
-              16.615999760999955,
-              16.40873114200008,
-              16.590305274000002,
-              16.273467758000038,
-              17.214853918999893,
-              16.29086949300006,
-              16.705026049000026
-            ],
-            "min_s": 16.273467758000038,
-            "median_s": 16.590305274000002,
-            "max_s": 17.214853918999893,
-            "iqr_s": 0.41415655599996626,
-            "iqr_over_median": 0.024963769452092253
-          },
-          "raptorbt": {
-            "samples_s": [
-              0.47443986999996923,
-              0.47557956599996487,
-              0.4756507890000421,
-              0.47374391199991805,
-              0.4827168240000219,
-              0.4829827790000536,
-              0.5285705120001012
-            ],
-            "min_s": 0.47374391199991805,
-            "median_s": 0.4756507890000421,
-            "max_s": 0.5285705120001012,
-            "iqr_s": 0.008542909000084364,
-            "iqr_over_median": 0.017960464268426995
-          }
-        },
-        "speedup": {
-          "vectorbt": {
-            "median_of_ratios": 74.17909798492997,
-            "min": 72.83650972016217,
-            "max": 78.75029706130051
-          },
-          "raptorbt": {
-            "median_of_ratios": 2.1499568077901836,
-            "min": 2.0962393686770993,
-            "max": 2.3916211741622497
-          }
-        },
-        "noisy": false,
-        "cpu_over_wall": {
-          "manifoldbt": 1.0998389298107563,
-          "vectorbt": 0.999661897946353,
-          "raptorbt": 1.0018610299399915
-        }
-      },
-      {
-        "workload": "sma_cross_metrics",
-        "title": "SMA 30/150 crossover, with a performance summary",
-        "bars": 10000000,
-        "data_digest": "3c0c54badb16a42c",
-        "engines": [
-          "manifoldbt",
-          "vectorbt",
-          "raptorbt"
-        ],
-        "parity": {
-          "vectorbt": {
-            "status": "exact",
-            "expected": "exact",
-            "publishable": true,
-            "diffs": {
-              "final_equity_vs_capital": 1.3096723705530167e-15,
-              "round_trips_delta": 0,
-              "total_fees_vs_capital": 0.0,
-              "max_drawdown_rel": 3.562524715042434e-15,
-              "advisory_ratio_rel": {
-                "sharpe": 0.00034240713208859075,
-                "sortino": 0.00034240713208841586,
-                "volatility": 0.00034240713210212815
-              }
-            },
-            "metrics": {
-              "manifoldbt": {
-                "total_return": 0.30013524943746295,
-                "final_equity": 130013.52494374629,
-                "round_trips": 46127,
-                "fills": 92254,
-                "total_fees": 0.0,
-                "max_drawdown": -0.6232787775126699,
-                "sharpe": 0.16657583326366673,
-                "sortino": 0.3242480879539399,
-                "volatility": 0.1559664036866054
-              },
-              "vectorbt": {
-                "total_return": 0.3001352494374642,
-                "final_equity": 130013.52494374642,
-                "round_trips": 46127,
-                "fills": null,
-                "total_fees": 0.0,
-                "max_drawdown": -0.6232787775126677,
-                "sharpe": 0.16651881603342994,
-                "sortino": 0.3241371010987492,
-                "volatility": 0.15591301795726925
-              }
-            },
-            "note": ""
-          },
-          "raptorbt": {
-            "status": "exact",
-            "expected": "exact",
-            "publishable": true,
-            "diffs": {
-              "final_equity_vs_capital": 0.0,
-              "round_trips_delta": 0,
-              "total_fees_vs_capital": 0.0,
-              "max_drawdown_rel": 0.0,
-              "ratio_basis": "native"
-            },
-            "metrics": {
-              "manifoldbt": {
-                "total_return": 0.30013524943746295,
-                "final_equity": 130013.52494374629,
-                "round_trips": 46127,
-                "fills": 92254,
-                "total_fees": 0.0,
-                "max_drawdown": -0.6232787775126699,
-                "sharpe": 0.16657583326366673,
-                "sortino": 0.3242480879539399,
-                "volatility": 0.1559664036866054
-              },
-              "raptorbt": {
-                "total_return": 0.3001352494374629,
-                "final_equity": 130013.52494374629,
-                "round_trips": 46127,
-                "fills": null,
-                "total_fees": 0.0,
-                "max_drawdown": -0.6232787775126699,
-                "sharpe": 0.07064081213792228,
-                "sortino": 0.09993197026249025,
-                "volatility": null
-              }
-            },
-            "note": ""
-          }
-        },
-        "status": "exact",
-        "paired_with": [
-          "sma_cross"
-        ],
-        "timings": {
-          "manifoldbt": {
-            "samples_s": [
-              0.21955062299991823,
-              0.21862609100003283,
-              0.21946293899998182,
-              0.22269245000006777,
-              0.22505498600003193,
-              0.22493574199995692,
-              0.2203817000000754
-            ],
-            "min_s": 0.21862609100003283,
-            "median_s": 0.2203817000000754,
-            "max_s": 0.22505498600003193,
-            "iqr_s": 0.0054728029999751016,
-            "iqr_over_median": 0.02483329151183256
-          },
-          "vectorbt": {
-            "samples_s": [
-              63.85439378500007,
-              64.17997926700002,
-              64.18971604900003,
-              63.64906158400004,
-              63.686520900999994,
-              65.23233595600004,
-              64.8477585999999
-            ],
-            "min_s": 63.64906158400004,
-            "median_s": 64.17997926700002,
-            "max_s": 65.23233595600004,
-            "iqr_s": 1.161237698999912,
-            "iqr_over_median": 0.018093457060323417
-          },
-          "raptorbt": {
-            "samples_s": [
-              0.47778102899997066,
-              0.4787976799999569,
-              0.47882820899997114,
-              0.47938064699997085,
-              0.48187315199993463,
-              0.4804915270000265,
-              0.47586521800008086
-            ],
-            "min_s": 0.47586521800008086,
-            "median_s": 0.47882820899997114,
-            "max_s": 0.48187315199993463,
-            "iqr_s": 0.00271049800005585,
-            "iqr_over_median": 0.005660689886497504
-          }
-        },
-        "speedup": {
-          "vectorbt": {
-            "median_of_ratios": 290.8413235749454,
-            "min": 282.9820482226106,
-            "max": 294.25201185024764
-          },
-          "raptorbt": {
-            "median_of_ratios": 2.159277371941128,
-            "min": 2.136127956935001,
-            "max": 2.190029917334455
-          }
-        },
-        "noisy": false,
-        "cpu_over_wall": {
-          "manifoldbt": 1.0833785330573853,
-          "vectorbt": 0.9998003598685886,
-          "raptorbt": 1.005064852239108
-        }
-      },
-      {
-        "workload": "ema_rsi_fees",
-        "title": "EMA 12/26 crossover + RSI(14) filter, 5 bps taker fee",
-        "bars": 100000,
-        "data_digest": "81a87f47b436bdf3",
-        "engines": [
-          "manifoldbt",
-          "vectorbt"
-        ],
-        "parity": {
-          "vectorbt": {
-            "status": "exact",
-            "expected": "exact",
-            "publishable": true,
-            "diffs": {
-              "final_equity_vs_capital": 1.4551915228366853e-15,
-              "round_trips_delta": 0,
-              "total_fees_vs_capital": 5.0022208597511055e-17
-            },
-            "metrics": {
-              "manifoldbt": {
-                "total_return": -0.015701103422790075,
-                "final_equity": 98429.889657721,
-                "round_trips": 3176,
-                "fills": 6352,
-                "total_fees": 1542.3890014306103
-              },
-              "vectorbt": {
-                "total_return": -0.015701103422788482,
-                "final_equity": 98429.88965772114,
-                "round_trips": 3176,
-                "fills": null,
-                "total_fees": 1542.3890014306053
-              }
-            },
-            "note": ""
-          }
-        },
-        "status": "exact",
-        "unsupported": {
-          "raptorbt": "Two blockers, either one sufficient. Sizing: raptorbt has no fixed-quantity mode. `position_sizes` is a fraction of equity (measured: 0.5 buys exactly half the equity of the bar before the entry), `lot_size` rounds a computed size down to a multiple, and `alloted_capital` fixes the notional, not the quantity. Reproducing `units=5` would mean feeding a fraction derived from an equity curve that does not exist until the run is over. Indicator: `raptorbt.ema` seeds on a simple mean of the first `period` bars and emits from bar `period-1`, while manifoldbt seeds on the first observation and emits from bar 0 (measured: 11 leading NaN for span 12, and ema[11] equal to sma(12)[11] to the last bit). The two are the same recursion with a different warmup, so the signal differs early and the round-trip count with it. Its `sma` and `rsi` do match, which is why the other three workloads run."
-        },
-        "timings": {
-          "manifoldbt": {
-            "samples_s": [
-              0.0033886270000493823,
-              0.0033128719999240275,
-              0.0033611060000566795,
-              0.003350038999997196,
-              0.0032882759999210975,
-              0.0033292269999947166,
-              0.0034269440000116447
-            ],
-            "min_s": 0.0032882759999210975,
-            "median_s": 0.003350038999997196,
-            "max_s": 0.0034269440000116447,
-            "iqr_s": 7.575500012535485e-05,
-            "iqr_over_median": 0.02261316961546366
-          },
-          "vectorbt": {
-            "samples_s": [
-              0.10348846599981698,
-              0.10533507500008454,
-              0.10412188999998762,
-              0.10006700000008095,
-              0.10301511499983462,
-              0.10506098299993027,
-              0.10350721600002544
-            ],
-            "min_s": 0.10006700000008095,
-            "median_s": 0.10350721600002544,
-            "max_s": 0.10533507500008454,
-            "iqr_s": 0.002045868000095652,
-            "iqr_over_median": 0.019765462536400834
-          }
-        },
-        "speedup": {
-          "vectorbt": {
-            "median_of_ratios": 30.978460660934754,
-            "min": 29.870398523767847,
-            "max": 31.795697208494666
-          }
-        },
-        "noisy": false,
-        "cpu_over_wall": {
-          "manifoldbt": null,
-          "vectorbt": 0.993657504848121
-        }
-      },
-      {
-        "workload": "ema_rsi_fees",
-        "title": "EMA 12/26 crossover + RSI(14) filter, 5 bps taker fee",
-        "bars": 1000000,
-        "data_digest": "3d9cc9bf5d0fca1b",
-        "engines": [
-          "manifoldbt",
-          "vectorbt"
-        ],
-        "parity": {
-          "vectorbt": {
-            "status": "exact",
-            "expected": "exact",
-            "publishable": true,
-            "diffs": {
-              "final_equity_vs_capital": 7.275957614183426e-15,
-              "round_trips_delta": 0,
-              "total_fees_vs_capital": 2.1100277081131935e-15
-            },
-            "metrics": {
-              "manifoldbt": {
-                "total_return": -0.15327081570417533,
-                "final_equity": 84672.91842958247,
-                "round_trips": 31389,
-                "fills": 62779,
-                "total_fees": 15206.83039822937
-              },
-              "vectorbt": {
-                "total_return": -0.15327081570418272,
-                "final_equity": 84672.91842958174,
-                "round_trips": 31389,
-                "fills": null,
-                "total_fees": 15206.830398229158
-              }
-            },
-            "note": ""
-          }
-        },
-        "status": "exact",
-        "unsupported": {
-          "raptorbt": "Two blockers, either one sufficient. Sizing: raptorbt has no fixed-quantity mode. `position_sizes` is a fraction of equity (measured: 0.5 buys exactly half the equity of the bar before the entry), `lot_size` rounds a computed size down to a multiple, and `alloted_capital` fixes the notional, not the quantity. Reproducing `units=5` would mean feeding a fraction derived from an equity curve that does not exist until the run is over. Indicator: `raptorbt.ema` seeds on a simple mean of the first `period` bars and emits from bar `period-1`, while manifoldbt seeds on the first observation and emits from bar 0 (measured: 11 leading NaN for span 12, and ema[11] equal to sma(12)[11] to the last bit). The two are the same recursion with a different warmup, so the signal differs early and the round-trip count with it. Its `sma` and `rsi` do match, which is why the other three workloads run."
-        },
-        "timings": {
-          "manifoldbt": {
-            "samples_s": [
-              0.036388481999892974,
-              0.0363163929998791,
-              0.03507329500007472,
-              0.03732276000005186,
-              0.03651758800015159,
-              0.03610596900011842,
-              0.03516863900017597
-            ],
-            "min_s": 0.03507329500007472,
-            "median_s": 0.0363163929998791,
-            "max_s": 0.03732276000005186,
-            "iqr_s": 0.0013489489999756188,
-            "iqr_over_median": 0.03714435516710345
-          },
-          "vectorbt": {
-            "samples_s": [
-              1.27931214299997,
-              1.4365981409998767,
-              1.2784130719999212,
-              1.4407988680000017,
-              1.2786626360000355,
-              1.4302805790000548,
-              1.3512770100001035
-            ],
-            "min_s": 1.2784130719999212,
-            "median_s": 1.3512770100001035,
-            "max_s": 1.4407988680000017,
-            "iqr_s": 0.15793550499984121,
-            "iqr_over_median": 0.11687870350123779
-          }
-        },
-        "speedup": {
-          "vectorbt": {
-            "median_of_ratios": 38.42278371913517,
-            "min": 35.014980616866794,
-            "max": 39.61341070766897
-          }
-        },
-        "noisy": false,
-        "cpu_over_wall": {
-          "manifoldbt": null,
-          "vectorbt": 1.0004905090074359
-        }
-      },
-      {
-        "workload": "sma_cross_costs",
-        "title": "SMA 30/150 with a 5 bps fee and 2 bps of slippage",
-        "bars": 100000,
-        "data_digest": "81a87f47b436bdf3",
-        "engines": [
-          "manifoldbt",
-          "vectorbt"
-        ],
-        "parity": {
-          "vectorbt": {
-            "status": "exact",
-            "expected": "exact",
-            "publishable": true,
-            "diffs": {
-              "final_equity_vs_capital": 8.731149137020111e-16,
-              "round_trips_delta": 0,
-              "total_fees_vs_capital": 1.4210854715202004e-18
-            },
-            "metrics": {
-              "manifoldbt": {
-                "total_return": -0.002745042655159957,
-                "final_equity": 99725.49573448401,
-                "round_trips": 450,
-                "fills": 900,
-                "total_fees": 218.42799507745576
-              },
-              "vectorbt": {
-                "total_return": -0.0027450426551607963,
-                "final_equity": 99725.49573448392,
-                "round_trips": 450,
-                "fills": null,
-                "total_fees": 218.4279950774559
-              }
-            },
-            "note": ""
-          }
-        },
-        "status": "exact",
-        "unsupported": {
-          "raptorbt": "Same blocker as the other fixed-quantity workload: raptorbt has no units sizing, and a cost model on top of a fraction of equity compares policy rather than arithmetic. See `ema_rsi_fees` for the measurements behind that."
-        },
-        "timings": {
-          "manifoldbt": {
-            "samples_s": [
-              0.0025940040000023146,
-              0.002526142000078835,
-              0.005832478000002084,
-              0.002331279000145514,
-              0.0023066510000262497,
-              0.0023018239999146317,
-              0.0041235250000681845
-            ],
-            "min_s": 0.0023018239999146317,
-            "median_s": 0.002526142000078835,
-            "max_s": 0.005832478000002084,
-            "iqr_s": 0.0018168740000419348,
-            "iqr_over_median": 0.7192287686065291
-          },
-          "vectorbt": {
-            "samples_s": [
-              0.09727227299981678,
-              0.12600833100009368,
-              0.11309970399997837,
-              0.09675352199997178,
-              0.09729686999980913,
-              0.2832497259998945,
-              0.09708686799990573
-            ],
-            "min_s": 0.09675352199997178,
-            "median_s": 0.09729686999980913,
-            "max_s": 0.2832497259998945,
-            "iqr_s": 0.02892146300018794,
-            "iqr_over_median": 0.29724967514622697
-          }
-        },
-        "speedup": {
-          "vectorbt": {
-            "median_of_ratios": 41.502334981755766,
-            "min": 19.391364013707033,
-            "max": 123.05446724441116
-          }
-        },
-        "noisy": true,
-        "cpu_over_wall": {
-          "manifoldbt": null,
-          "vectorbt": 1.0101372832130866
-        }
-      },
-      {
-        "workload": "sma_cross_costs",
-        "title": "SMA 30/150 with a 5 bps fee and 2 bps of slippage",
-        "bars": 1000000,
-        "data_digest": "3d9cc9bf5d0fca1b",
-        "engines": [
-          "manifoldbt",
-          "vectorbt"
-        ],
-        "parity": {
-          "vectorbt": {
-            "status": "exact",
-            "expected": "exact",
-            "publishable": true,
-            "diffs": {
-              "final_equity_vs_capital": 1.6007106751203538e-15,
-              "round_trips_delta": 0,
-              "total_fees_vs_capital": 6.821210263296961e-17
-            },
-            "metrics": {
-              "manifoldbt": {
-                "total_return": -0.02986364258908214,
-                "final_equity": 97013.63574109178,
-                "round_trips": 4534,
-                "fills": 9069,
-                "total_fees": 2195.9426086254202
-              },
-              "vectorbt": {
-                "total_return": -0.02986364258908382,
-                "final_equity": 97013.63574109162,
-                "round_trips": 4534,
-                "fills": null,
-                "total_fees": 2195.9426086254134
-              }
-            },
-            "note": ""
-          }
-        },
-        "status": "exact",
-        "unsupported": {
-          "raptorbt": "Same blocker as the other fixed-quantity workload: raptorbt has no units sizing, and a cost model on top of a fraction of equity compares policy rather than arithmetic. See `ema_rsi_fees` for the measurements behind that."
-        },
-        "timings": {
-          "manifoldbt": {
-            "samples_s": [
-              0.02977717300018412,
-              0.025669891999996253,
-              0.02558137800019722,
-              0.025477280999893992,
-              0.025371572000040032,
-              0.02614681499994731,
-              0.026457481999841548
-            ],
-            "min_s": 0.025371572000040032,
-            "median_s": 0.025669891999996253,
-            "max_s": 0.02977717300018412,
-            "iqr_s": 0.0009802009999475558,
-            "iqr_over_median": 0.03818485095097786
-          },
-          "vectorbt": {
-            "samples_s": [
-              1.449749053000005,
-              1.2052894139999353,
-              1.4626586099998349,
-              1.1880336909998732,
-              1.4531918750001296,
-              1.2557238169999891,
-              1.4592638760000227
-            ],
-            "min_s": 1.1880336909998732,
-            "median_s": 1.449749053000005,
-            "max_s": 1.4626586099998349,
-            "iqr_s": 0.25397446200008744,
-            "iqr_over_median": 0.17518512012443202
-          }
-        },
-        "speedup": {
-          "vectorbt": {
-            "median_of_ratios": 48.68659133595526,
-            "min": 46.631102078939136,
-            "max": 57.27638299265953
-          }
-        },
-        "noisy": true,
-        "cpu_over_wall": {
-          "manifoldbt": null,
-          "vectorbt": 1.0016983128855668
-        }
-      },
-      {
-        "workload": "sma_cross_costs",
-        "title": "SMA 30/150 with a 5 bps fee and 2 bps of slippage",
-        "bars": 10000000,
-        "data_digest": "3c0c54badb16a42c",
-        "engines": [
-          "manifoldbt",
-          "vectorbt"
-        ],
-        "parity": {
-          "vectorbt": {
-            "status": "exact",
-            "expected": "exact",
-            "publishable": true,
-            "diffs": {
-              "final_equity_vs_capital": 7.8580342233181e-15,
-              "round_trips_delta": 0,
-              "total_fees_vs_capital": 3.1650415621697903e-15
-            },
-            "metrics": {
-              "manifoldbt": {
-                "total_return": -0.3024291776850745,
-                "final_equity": 69757.08223149255,
-                "round_trips": 46127,
-                "fills": 92254,
-                "total_fees": 21749.94829446186
-              },
-              "vectorbt": {
-                "total_return": -0.3024291776850666,
-                "final_equity": 69757.08223149333,
-                "round_trips": 46127,
-                "fills": null,
-                "total_fees": 21749.948294462178
-              }
-            },
-            "note": ""
-          }
-        },
-        "status": "exact",
-        "unsupported": {
-          "raptorbt": "Same blocker as the other fixed-quantity workload: raptorbt has no units sizing, and a cost model on top of a fraction of equity compares policy rather than arithmetic. See `ema_rsi_fees` for the measurements behind that."
-        },
-        "timings": {
-          "manifoldbt": {
-            "samples_s": [
-              0.2306859089999307,
-              0.22100270799978716,
-              0.21834727200007364,
-              0.21872040299990658,
-              0.22388139099984983,
-              0.22087140700000418,
-              0.21890857399989727
-            ],
-            "min_s": 0.21834727200007364,
-            "median_s": 0.22087140700000418,
-            "max_s": 0.2306859089999307,
-            "iqr_s": 0.005160987999943245,
-            "iqr_over_median": 0.02336648310454756
-          },
-          "vectorbt": {
-            "samples_s": [
-              16.59733568699994,
-              16.369632339999953,
-              16.24018501799992,
-              16.517202189000045,
-              17.182323818000214,
-              16.42562991900013,
-              16.830426988
-            ],
-            "min_s": 16.24018501799992,
-            "median_s": 16.517202189000045,
-            "max_s": 17.182323818000214,
-            "iqr_s": 0.46079464800004644,
-            "iqr_over_median": 0.027897863253555234
-          }
-        },
-        "speedup": {
-          "vectorbt": {
-            "median_of_ratios": 74.37777843175637,
-            "min": 71.94776550918387,
-            "max": 76.88336130684355
-          }
-        },
-        "noisy": false,
-        "cpu_over_wall": {
-          "manifoldbt": 1.0886245623140116,
-          "vectorbt": 0.9998042749353955
-        }
-      },
-      {
-        "workload": "multi_asset",
-        "title": "Five assets in one book, SMA 30/150, 5 bps fee",
-        "bars": 100000,
-        "data_digest": "81a87f47b436bdf3",
-        "engines": [
-          "manifoldbt",
-          "vectorbt"
-        ],
-        "parity": {
-          "vectorbt": {
-            "status": "exact",
-            "expected": "exact",
-            "publishable": true,
-            "diffs": {
-              "final_equity_vs_capital": 1.4551915228366853e-16,
-              "round_trips_delta": 0,
-              "total_fees_vs_capital": 5.115907697472722e-18
-            },
-            "metrics": {
-              "manifoldbt": {
-                "total_return": -0.004784214364567441,
-                "final_equity": 99521.57856354325,
-                "round_trips": 2350,
-                "fills": 4700,
-                "total_fees": 464.09434549765643
-              },
-              "vectorbt": {
-                "total_return": -0.004784214364567548,
-                "final_equity": 99521.57856354324,
-                "round_trips": 2350,
-                "fills": null,
-                "total_fees": 464.09434549765695
-              }
-            },
-            "note": ""
-          }
-        },
-        "status": "exact",
-        "unsupported": {
-          "raptorbt": "No multi-instrument portfolio on the entry point this harness drives: `run_single_backtest` is one instrument, and `run_multi_backtest` broadcasts over strategies rather than over assets. 0.9.0 does add `run_portfolio_backtest`, but its allocation model is a different one and would need its own parity work before any timing from it could be published. The units blocker applies here too."
-        },
-        "timings": {
-          "manifoldbt": {
-            "samples_s": [
-              0.014864597000041613,
-              0.007537156000125833,
-              0.007514051000043764,
-              0.007462714999974196,
-              0.00725348900004974,
-              0.0077240079999683076,
-              0.007462474000021757
-            ],
-            "min_s": 0.00725348900004974,
-            "median_s": 0.007514051000043764,
-            "max_s": 0.014864597000041613,
-            "iqr_s": 0.00026153399994655047,
-            "iqr_over_median": 0.034805992126620805
-          },
-          "vectorbt": {
-            "samples_s": [
-              0.13611278300004415,
-              0.13279903399984505,
-              0.13345881700001883,
-              0.13601287200003753,
-              0.13341899800002466,
-              0.13161586299997907,
-              0.1326362690001588
-            ],
-            "min_s": 0.13161586299997907,
-            "median_s": 0.13341899800002466,
-            "max_s": 0.13611278300004415,
-            "iqr_s": 0.0033766029998787417,
-            "iqr_over_median": 0.025308262320169108
-          }
-        },
-        "speedup": {
-          "vectorbt": {
-            "median_of_ratios": 17.76123385364852,
-            "min": 9.156843135381544,
-            "max": 18.393768571112435
-          }
-        },
-        "noisy": false,
-        "cpu_over_wall": {
-          "manifoldbt": null,
-          "vectorbt": 0.9935317493581033
-        }
-      },
-      {
-        "workload": "multi_asset",
-        "title": "Five assets in one book, SMA 30/150, 5 bps fee",
-        "bars": 1000000,
-        "data_digest": "3d9cc9bf5d0fca1b",
-        "engines": [
-          "manifoldbt",
-          "vectorbt"
-        ],
-        "parity": {
-          "vectorbt": {
-            "status": "exact",
-            "expected": "exact",
-            "publishable": true,
-            "diffs": {
-              "final_equity_vs_capital": 1.3096723705530167e-15,
-              "round_trips_delta": 0,
-              "total_fees_vs_capital": 2.7284841053187848e-17
-            },
-            "metrics": {
-              "manifoldbt": {
-                "total_return": -0.044719709844302735,
-                "final_equity": 95528.02901556973,
-                "round_trips": 22902,
-                "fills": 45806,
-                "total_fees": 4561.765315438204
-              },
-              "vectorbt": {
-                "total_return": -0.044719709844301396,
-                "final_equity": 95528.02901556986,
-                "round_trips": 22902,
-                "fills": null,
-                "total_fees": 4561.7653154382015
-              }
-            },
-            "note": ""
-          }
-        },
-        "status": "exact",
-        "unsupported": {
-          "raptorbt": "No multi-instrument portfolio on the entry point this harness drives: `run_single_backtest` is one instrument, and `run_multi_backtest` broadcasts over strategies rather than over assets. 0.9.0 does add `run_portfolio_backtest`, but its allocation model is a different one and would need its own parity work before any timing from it could be published. The units blocker applies here too."
-        },
-        "timings": {
-          "manifoldbt": {
-            "samples_s": [
-              0.08356140400019285,
-              0.08365195000010317,
-              0.08425308799996856,
-              0.08604129699983787,
-              0.08460106999996242,
-              0.08394422300011684,
-              0.08335007799996674
-            ],
-            "min_s": 0.08335007799996674,
-            "median_s": 0.08394422300011684,
-            "max_s": 0.08604129699983787,
-            "iqr_s": 0.0010396659997695679,
-            "iqr_over_median": 0.012385200108030315
-          },
-          "vectorbt": {
-            "samples_s": [
-              1.7281745650000175,
-              1.5292658830001074,
-              1.7455159840001215,
-              1.5296267480000552,
-              1.7096060189999207,
-              1.5227242680000472,
-              1.7038404669999636
-            ],
-            "min_s": 1.5227242680000472,
-            "median_s": 1.7038404669999636,
-            "max_s": 1.7455159840001215,
-            "iqr_s": 0.1989086819999102,
-            "iqr_over_median": 0.1167413768204124
-          }
-        },
-        "speedup": {
-          "vectorbt": {
-            "median_of_ratios": 20.207853387677957,
-            "min": 17.777820666777462,
-            "max": 20.717531255362093
-          }
-        },
-        "noisy": false,
-        "cpu_over_wall": {
-          "manifoldbt": 1.2894400913490252,
-          "vectorbt": 0.9992367144634392
-        }
-      },
-      {
-        "workload": "bracket_sl_tp",
-        "title": "SMA 10/50 entry with a 15 bps stop / 30 bps target bracket",
-        "bars": 100000,
-        "data_digest": "81a87f47b436bdf3",
-        "engines": [
-          "manifoldbt",
-          "vectorbt",
-          "raptorbt"
-        ],
-        "parity": {
-          "vectorbt": {
-            "status": "documented",
-            "expected": "documented",
-            "publishable": false,
-            "diffs": {
-              "final_equity_vs_capital": 0.01145740341531491,
-              "round_trips_delta": 94,
-              "total_fees_vs_capital": 0.0
-            },
-            "metrics": {
-              "manifoldbt": {
-                "total_return": -0.05756525685929326,
-                "final_equity": 94243.47431407067,
-                "round_trips": 2309,
-                "fills": 4618,
-                "total_fees": 0.0
-              },
-              "vectorbt": {
-                "total_return": -0.06902266027460821,
-                "final_equity": 93097.73397253918,
-                "round_trips": 2215,
-                "fills": null,
-                "total_fees": 0.0
-              }
-            },
-            "note": "Re-entry on the exit bar. When a bracket fires intrabar and the entry condition still holds at that bar's close, manifoldbt books two orders on that bar (the stop or target exit, then a fresh entry at the close); vectorbt processes one order per bar and re-enters on the next bar instead. Neither is wrong, and on controlled bars the bracket fills themselves match exactly (see the cross-engine parity suite shipped with the library). The harness counts the affected round-trips so the size of the divergence is measured, not asserted."
-          },
-          "raptorbt": {
-            "status": "documented",
-            "expected": "documented",
-            "publishable": false,
-            "diffs": {
-              "final_equity_vs_capital": 0.009248235144775827,
-              "round_trips_delta": 925,
-              "total_fees_vs_capital": 0.0
-            },
-            "metrics": {
-              "manifoldbt": {
-                "total_return": -0.05756525685929326,
-                "final_equity": 94243.47431407067,
-                "round_trips": 2309,
-                "fills": 4618,
-                "total_fees": 0.0
-              },
-              "raptorbt": {
-                "total_return": -0.06681349200406912,
-                "final_equity": 93318.65079959309,
-                "round_trips": 1384,
-                "fills": null,
-                "total_fees": 0.0
-              }
-            },
-            "note": "Same fork in the road, taken further: raptorbt does not re-arm at all. Once a bracket closes a position, the entry level being still true is not enough to open another one; it waits for the level to go false and true again. So on the same bars the three engines book a different number of round-trips from the same signal, manifoldbt re-entering on the exit bar, vectorbt on the next bar, raptorbt not until the next crossing. The count of affected round-trips is measured rather than asserted, and it is the same population for both challengers."
-          }
-        },
-        "status": "documented",
-        "divergence_scale": {
-          "raptorbt": {
-            "round_trips": 1384,
-            "final_equity": 93318.65079959309
-          },
-          "manifoldbt": {
-            "reentries_on_exit_bar": 925,
-            "round_trips": 2309,
-            "share_of_round_trips": 0.40060632308358596,
-            "sl_exits": 632,
-            "tp_exits": 388
-          }
-        },
-        "timings": {
-          "manifoldbt": {
-            "samples_s": [
-              0.00447098399990864,
-              0.0046583560001636215,
-              0.006014490000097794,
-              0.0046695430000909255,
-              0.0048242909999771655,
-              0.004956851000088136,
-              0.004554265000024316
-            ],
-            "min_s": 0.00447098399990864,
-            "median_s": 0.0046695430000909255,
-            "max_s": 0.006014490000097794,
-            "iqr_s": 0.0004025860000638204,
-            "iqr_over_median": 0.08621528917411858
-          },
-          "vectorbt": {
-            "samples_s": [
-              0.09484483699998236,
-              0.09460390399999596,
-              0.30416710700001204,
-              0.09653719699986141,
-              0.09382859299989832,
-              0.09413932100005695,
-              0.09399266000013995
-            ],
-            "min_s": 0.09382859299989832,
-            "median_s": 0.09460390399999596,
-            "max_s": 0.30416710700001204,
-            "iqr_s": 0.0025445369997214584,
-            "iqr_over_median": 0.02689674413142154
-          },
-          "raptorbt": {
-            "samples_s": [
-              0.004153437000013582,
-              0.004305044999910024,
-              0.004062720000092668,
-              0.004057738000028621,
-              0.004076206000036109,
-              0.00454923699999199,
-              0.005082360000187691
-            ],
-            "min_s": 0.004057738000028621,
-            "median_s": 0.004153437000013582,
-            "max_s": 0.005082360000187691,
-            "iqr_s": 0.0004865169998993224,
-            "iqr_over_median": 0.11713600083442494
-          }
-        },
-        "speedup": {
-          "vectorbt": {
-            "median_of_ratios": 20.63838182443009,
-            "min": 18.99175928394521,
-            "max": 50.57238552147669
-          },
-          "raptorbt": {
-            "median_of_ratios": 0.9177675503885636,
-            "min": 0.6754886948064772,
-            "max": 1.1159561422448092
-          }
-        },
-        "noisy": false,
-        "cpu_over_wall": {
-          "manifoldbt": null,
-          "vectorbt": 0.9861100449115517,
-          "raptorbt": null
-        }
-      },
-      {
-        "workload": "bracket_sl_tp",
-        "title": "SMA 10/50 entry with a 15 bps stop / 30 bps target bracket",
-        "bars": 1000000,
-        "data_digest": "3d9cc9bf5d0fca1b",
-        "engines": [
-          "manifoldbt",
-          "vectorbt",
-          "raptorbt"
-        ],
-        "parity": {
-          "vectorbt": {
-            "status": "documented",
-            "expected": "documented",
-            "publishable": false,
-            "diffs": {
-              "final_equity_vs_capital": 0.010543837599989565,
-              "round_trips_delta": 1092,
-              "total_fees_vs_capital": 0.0
-            },
-            "metrics": {
-              "manifoldbt": {
-                "total_return": -0.4507044147140229,
-                "final_equity": 54929.558528597714,
-                "round_trips": 23075,
-                "fills": 46151,
-                "total_fees": 0.0
-              },
-              "vectorbt": {
-                "total_return": -0.46124825231401245,
-                "final_equity": 53875.17476859876,
-                "round_trips": 21983,
-                "fills": null,
-                "total_fees": 0.0
-              }
-            },
-            "note": "Re-entry on the exit bar. When a bracket fires intrabar and the entry condition still holds at that bar's close, manifoldbt books two orders on that bar (the stop or target exit, then a fresh entry at the close); vectorbt processes one order per bar and re-enters on the next bar instead. Neither is wrong, and on controlled bars the bracket fills themselves match exactly (see the cross-engine parity suite shipped with the library). The harness counts the affected round-trips so the size of the divergence is measured, not asserted."
-          },
-          "raptorbt": {
-            "status": "documented",
-            "expected": "documented",
-            "publishable": false,
-            "diffs": {
-              "final_equity_vs_capital": 0.10072796246195649,
-              "round_trips_delta": 9330,
-              "total_fees_vs_capital": 0.0
-            },
-            "metrics": {
-              "manifoldbt": {
-                "total_return": -0.4507044147140229,
-                "final_equity": 54929.558528597714,
-                "round_trips": 23075,
-                "fills": 46151,
-                "total_fees": 0.0
-              },
-              "raptorbt": {
-                "total_return": -0.3499764522520664,
-                "final_equity": 65002.35477479336,
-                "round_trips": 13745,
-                "fills": null,
-                "total_fees": 0.0
-              }
-            },
-            "note": "Same fork in the road, taken further: raptorbt does not re-arm at all. Once a bracket closes a position, the entry level being still true is not enough to open another one; it waits for the level to go false and true again. So on the same bars the three engines book a different number of round-trips from the same signal, manifoldbt re-entering on the exit bar, vectorbt on the next bar, raptorbt not until the next crossing. The count of affected round-trips is measured rather than asserted, and it is the same population for both challengers."
-          }
-        },
-        "status": "documented",
-        "divergence_scale": {
-          "raptorbt": {
-            "round_trips": 13745,
-            "final_equity": 65002.35477479336
-          },
-          "manifoldbt": {
-            "reentries_on_exit_bar": 9330,
-            "round_trips": 23075,
-            "share_of_round_trips": 0.40433369447453954,
-            "sl_exits": 6363,
-            "tp_exits": 3906
-          }
-        },
-        "timings": {
-          "manifoldbt": {
-            "samples_s": [
-              0.04252434900013213,
-              0.04994352599987906,
-              0.04894595499990828,
-              0.048271559000113484,
-              0.04979559299999892,
-              0.04931915800011666,
-              0.04951986100013528
-            ],
-            "min_s": 0.04252434900013213,
-            "median_s": 0.04931915800011666,
-            "max_s": 0.04994352599987906,
-            "iqr_s": 0.0015240339998854324,
-            "iqr_over_median": 0.030901460237456355
-          },
-          "vectorbt": {
-            "samples_s": [
-              1.2040834279998762,
-              1.4924279809999916,
-              1.2677655439999853,
-              1.484447906000014,
-              1.2840762380001252,
-              1.4910551349998968,
-              1.2781588540001394
-            ],
-            "min_s": 1.2040834279998762,
-            "median_s": 1.2840762380001252,
-            "max_s": 1.4924279809999916,
-            "iqr_s": 0.22328959099991152,
-            "iqr_over_median": 0.17389122576372273
-          },
-          "raptorbt": {
-            "samples_s": [
-              0.04886071600003561,
-              0.04284820600014427,
-              0.04792976499993529,
-              0.04273798300005183,
-              0.04824330399992505,
-              0.04309368999997787,
-              0.0474016399998618
-            ],
-            "min_s": 0.04273798300005183,
-            "median_s": 0.0474016399998618,
-            "max_s": 0.04886071600003561,
-            "iqr_s": 0.0053950979997807735,
-            "iqr_over_median": 0.11381669494550195
-          }
-        },
-        "speedup": {
-          "vectorbt": {
-            "median_of_ratios": 28.31515252581844,
-            "min": 25.786945402982813,
-            "max": 30.752019134010652
-          },
-          "raptorbt": {
-            "median_of_ratios": 0.9572248193453594,
-            "min": 0.8579331383260371,
-            "max": 1.1490056202831884
-          }
-        },
-        "noisy": true,
-        "cpu_over_wall": {
-          "manifoldbt": null,
-          "vectorbt": 1.0018927473633124,
-          "raptorbt": null
-        }
-      },
-      {
-        "workload": "bracket_sl_tp",
-        "title": "SMA 10/50 entry with a 15 bps stop / 30 bps target bracket",
-        "bars": 10000000,
-        "data_digest": "3c0c54badb16a42c",
-        "engines": [
-          "manifoldbt",
-          "vectorbt",
-          "raptorbt"
-        ],
-        "parity": {
-          "vectorbt": {
-            "status": "documented",
-            "expected": "documented",
-            "publishable": false,
-            "diffs": {
-              "final_equity_vs_capital": 0.0008838890600599837,
-              "round_trips_delta": 10171,
-              "total_fees_vs_capital": 0.0
-            },
-            "metrics": {
-              "manifoldbt": {
-                "total_return": -0.9948342253853453,
-                "final_equity": 516.5774614654728,
-                "round_trips": 231082,
-                "fills": 462164,
-                "total_fees": 0.0
-              },
-              "vectorbt": {
-                "total_return": -0.9957181144454053,
-                "final_equity": 428.1885554594744,
-                "round_trips": 220911,
-                "fills": null,
-                "total_fees": 0.0
-              }
-            },
-            "note": "Re-entry on the exit bar. When a bracket fires intrabar and the entry condition still holds at that bar's close, manifoldbt books two orders on that bar (the stop or target exit, then a fresh entry at the close); vectorbt processes one order per bar and re-enters on the next bar instead. Neither is wrong, and on controlled bars the bracket fills themselves match exactly (see the cross-engine parity suite shipped with the library). The harness counts the affected round-trips so the size of the divergence is measured, not asserted."
-          },
-          "raptorbt": {
-            "status": "documented",
-            "expected": "documented",
-            "publishable": false,
-            "diffs": {
-              "final_equity_vs_capital": 0.022352514553554276,
-              "round_trips_delta": 93295,
-              "total_fees_vs_capital": 0.0
-            },
-            "metrics": {
-              "manifoldbt": {
-                "total_return": -0.9948342253853453,
-                "final_equity": 516.5774614654728,
-                "round_trips": 231082,
-                "fills": 462164,
-                "total_fees": 0.0
-              },
-              "raptorbt": {
-                "total_return": -0.972481710831791,
-                "final_equity": 2751.8289168209003,
-                "round_trips": 137787,
-                "fills": null,
-                "total_fees": 0.0
-              }
-            },
-            "note": "Same fork in the road, taken further: raptorbt does not re-arm at all. Once a bracket closes a position, the entry level being still true is not enough to open another one; it waits for the level to go false and true again. So on the same bars the three engines book a different number of round-trips from the same signal, manifoldbt re-entering on the exit bar, vectorbt on the next bar, raptorbt not until the next crossing. The count of affected round-trips is measured rather than asserted, and it is the same population for both challengers."
-          }
-        },
-        "status": "documented",
-        "divergence_scale": {
-          "raptorbt": {
-            "round_trips": 137787,
-            "final_equity": 2751.8289168209003
-          },
-          "manifoldbt": {
-            "reentries_on_exit_bar": 93295,
-            "round_trips": 231082,
-            "share_of_round_trips": 0.4037311430574428,
-            "sl_exits": 63245,
-            "tp_exits": 39487
-          }
-        },
-        "timings": {
-          "manifoldbt": {
-            "samples_s": [
-              0.41086193399996773,
-              0.44002539600001,
-              0.433130551999966,
-              0.4410396450000462,
-              0.43608317700000043,
-              0.43019227800004955,
-              0.431476542999917
-            ],
-            "min_s": 0.41086193399996773,
-            "median_s": 0.433130551999966,
-            "max_s": 0.4410396450000462,
-            "iqr_s": 0.00983311799996045,
-            "iqr_over_median": 0.022702434530550555
-          },
-          "vectorbt": {
-            "samples_s": [
-              17.23988402300006,
-              16.108614719000116,
-              16.90881003100003,
-              16.7125914799999,
-              16.410571323999875,
-              17.19142807000003,
-              16.741779280999936
-            ],
-            "min_s": 16.108614719000116,
-            "median_s": 16.741779280999936,
-            "max_s": 17.23988402300006,
-            "iqr_s": 0.7808567460001541,
-            "iqr_over_median": 0.04664120419305372
-          },
-          "raptorbt": {
-            "samples_s": [
-              0.48553619800009074,
-              0.48411483200015937,
-              0.4846027869998579,
-              0.48675955500016244,
-              0.4831472579999172,
-              0.48547490700002527,
-              0.49778382599993165
-            ],
-            "min_s": 0.4831472579999172,
-            "median_s": 0.48547490700002527,
-            "max_s": 0.49778382599993165,
-            "iqr_s": 0.0026447230000030686,
-            "iqr_over_median": 0.005447702779008784
-          }
-        },
-        "speedup": {
-          "vectorbt": {
-            "median_of_ratios": 38.801134273950915,
-            "min": 36.608375028880715,
-            "max": 41.96028543009636
-          },
-          "raptorbt": {
-            "median_of_ratios": 1.1188376916895393,
-            "min": 1.1001974804203083,
-            "max": 1.1817502616344324
-          }
-        },
-        "noisy": false,
-        "cpu_over_wall": {
-          "manifoldbt": 1.0420769069134375,
-          "vectorbt": 0.9998833986954851,
-          "raptorbt": 1.000757358201296
-        }
-      }
-    ],
-    "cold_start": {
-      "workload": "sma_cross",
-      "bars": 20000,
-      "engines": [
-        "manifoldbt",
-        "vectorbt",
-        "raptorbt"
-      ],
-      "samples_s": {
-        "manifoldbt": [
-          1.0882927689999633,
-          0.6563794930000313,
-          0.49896569299994553
-        ],
-        "vectorbt": [
-          4.559664545000032,
-          4.540346727000042,
-          4.533785885000043
-        ],
-        "raptorbt": [
-          0.24953667799991308,
-          0.24641353800006982,
-          0.2536052780001228
-        ],
-        "baseline": [
-          0.23054879200003597,
-          0.22390797299999576,
-          0.2290637239998432
-        ]
-      },
-      "median_s": {
-        "manifoldbt": 0.6563794930000313,
-        "vectorbt": 4.540346727000042,
-        "raptorbt": 0.24953667799991308,
-        "baseline": 0.2290637239998432
-      },
-      "engine_share_s": {
-        "manifoldbt": 0.4273157690001881,
-        "vectorbt": 4.311283003000199,
-        "raptorbt": 0.020472954000069876
-      },
-      "ratio": {
-        "vectorbt": 6.917258652076483,
-        "raptorbt": 0.38017135005145747
-      }
-    },
-    "memory": {
-      "workload": "sma_cross",
-      "bars": 2000000,
-      "engines": [
-        "manifoldbt",
-        "vectorbt",
-        "raptorbt"
-      ],
-      "manifoldbt": {
-        "before_mb": 730.902528,
-        "peak_mb": 730.914816,
-        "added_mb": 0.012288000000012289,
-        "added_mb_per_million_bars": 0.0061440000000061445,
-        "seconds": 0.04077603399991858,
-        "mode": "memory",
-        "engine": "mbt",
-        "workload": "sma_cross",
-        "bars": 2000000
-      },
-      "vectorbt": {
-        "before_mb": 603.385856,
-        "peak_mb": 851.488768,
-        "added_mb": 248.10291200000006,
-        "added_mb_per_million_bars": 124.05145600000003,
-        "seconds": 2.708806362999894,
-        "mode": "memory",
-        "engine": "vbt",
-        "workload": "sma_cross",
-        "bars": 2000000
-      },
-      "raptorbt": {
-        "before_mb": 328.64256,
-        "peak_mb": 344.358912,
-        "added_mb": 15.716351999999972,
-        "added_mb_per_million_bars": 7.858175999999986,
-        "seconds": 0.08958804099984263,
-        "mode": "memory",
-        "engine": "rbt",
-        "workload": "sma_cross",
-        "bars": 2000000
-      }
-    },
-    "sweeps": null,
-    "sweep_reps": null
-  },
-  "sweeps": {
-    "schema_version": 2,
-    "generated_at": "2026-09-02T16:43:43.282538+00:00",
-    "environment": {
-      "os": "Linux",
-      "os_release": "6.17.0-1022-azure",
-      "arch": "x86_64",
-      "cpu": "AMD EPYC 7763 64-Core Processor",
-      "logical_cores": 4,
-      "ram_gb": 16.8,
-      "python": "3.12.14",
-      "versions": {
-        "manifoldbt": "0.22.0",
-        "vectorbt": "0.28.4",
-        "raptorbt": "0.9.0",
-        "numpy": "2.4.3",
-        "numba": "0.64.0",
-        "pandas": "2.3.3"
-      },
-      "runner": "GitHub Actions 1000000435",
-      "ci": true,
-      "run_url": "https://github.com/manifoldbt/manifoldbt/actions/runs/33655385165",
-      "commit": "5253b70c351f0abfdaee7e3a760947e0c1e12c40",
-      "pinned_cores": null,
-      "engines": [
-        "manifoldbt",
-        "vectorbt",
-        "raptorbt"
-      ]
-    },
-    "reference": "manifoldbt",
-    "engines": [
-      "manifoldbt",
-      "vectorbt",
-      "raptorbt"
-    ],
-    "reps": 1,
     "results": [
       {
         "workload": "sma_cross",
@@ -2217,48 +111,2154 @@
           }
         },
         "status": "exact",
+        "paired_with": [
+          "sma_cross_metrics"
+        ],
         "timings": {
           "manifoldbt": {
             "samples_s": [
-              0.005741392999993877
+              0.005227665999996134,
+              0.004847580000046037,
+              0.0048247660000129144,
+              0.0033108069999912004,
+              0.0032606400000076974,
+              0.00324990799998659,
+              0.0033281009999655
             ],
-            "min_s": 0.005741392999993877,
-            "median_s": 0.005741392999993877,
-            "max_s": 0.005741392999993877,
+            "min_s": 0.00324990799998659,
+            "median_s": 0.0033281009999655,
+            "max_s": 0.005227665999996134,
+            "iqr_s": 0.0015869400000383393,
+            "iqr_over_median": 0.4768304808221836
+          },
+          "vectorbt": {
+            "samples_s": [
+              0.18515619900000502,
+              0.18463139099998216,
+              0.18611812200003897,
+              0.18470226300001968,
+              0.18554882000000816,
+              0.1824134910000339,
+              0.18982647399997177
+            ],
+            "min_s": 0.1824134910000339,
+            "median_s": 0.18515619900000502,
+            "max_s": 0.18982647399997177,
+            "iqr_s": 0.0014867310000568068,
+            "iqr_over_median": 0.008029604237321627
+          },
+          "raptorbt": {
+            "samples_s": [
+              0.010351707999973314,
+              0.009412989999987076,
+              0.008141104000003452,
+              0.009710319999953754,
+              0.007536285000014686,
+              0.007671590000029482,
+              0.007520956000007573
+            ],
+            "min_s": 0.007520956000007573,
+            "median_s": 0.008141104000003452,
+            "max_s": 0.010351707999973314,
+            "iqr_s": 0.0021740349999390673,
+            "iqr_over_median": 0.26704424853658
+          }
+        },
+        "speedup": {
+          "vectorbt": {
+            "median_of_ratios": 55.78768650679746,
+            "min": 35.418521190937206,
+            "max": 57.03747392339943
+          },
+          "raptorbt": {
+            "median_of_ratios": 2.2598340615520796,
+            "min": 1.687357272867049,
+            "max": 2.932916355432244
+          }
+        },
+        "noisy": true,
+        "cpu_over_wall": {
+          "manifoldbt": null,
+          "vectorbt": 1.0089365903839247,
+          "raptorbt": null
+        }
+      },
+      {
+        "workload": "sma_cross_metrics",
+        "title": "SMA 30/150 crossover, with a performance summary",
+        "bars": 100000,
+        "data_digest": "b7c2ad8cea687ce0",
+        "engines": [
+          "manifoldbt",
+          "vectorbt",
+          "raptorbt"
+        ],
+        "parity": {
+          "vectorbt": {
+            "status": "exact",
+            "expected": "exact",
+            "publishable": true,
+            "diffs": {
+              "final_equity_vs_capital": 1.8917489796876906e-15,
+              "round_trips_delta": 0,
+              "total_fees_vs_capital": 0.0,
+              "max_drawdown_rel": 2.806945912450058e-15,
+              "advisory_ratio_rel": {
+                "sharpe": 0.00034240713210042254,
+                "sortino": 0.0003424071320978874,
+                "volatility": 0.0003424071321000681
+              }
+            },
+            "metrics": {
+              "manifoldbt": {
+                "total_return": 0.06675521397166517,
+                "final_equity": 106675.52139716652,
+                "round_trips": 450,
+                "fills": 900,
+                "total_fees": 0.0,
+                "max_drawdown": -0.07910540917093023,
+                "sharpe": 2.1149665518057725,
+                "sortino": 4.02133680320316,
+                "volatility": 0.17066118340286904
+              },
+              "vectorbt": {
+                "total_return": 0.06675521397166725,
+                "final_equity": 106675.52139716671,
+                "round_trips": 450,
+                "fills": null,
+                "total_fees": 0.0,
+                "max_drawdown": -0.07910540917093001,
+                "sharpe": 2.1142426200536755,
+                "sortino": 4.019960340111955,
+                "volatility": 0.17060276779841885
+              }
+            },
+            "note": ""
+          },
+          "raptorbt": {
+            "status": "exact",
+            "expected": "exact",
+            "publishable": true,
+            "diffs": {
+              "final_equity_vs_capital": 0.0,
+              "round_trips_delta": 0,
+              "total_fees_vs_capital": 0.0,
+              "max_drawdown_rel": 5.263023585843841e-16,
+              "ratio_basis": "native"
+            },
+            "metrics": {
+              "manifoldbt": {
+                "total_return": 0.06675521397166517,
+                "final_equity": 106675.52139716652,
+                "round_trips": 450,
+                "fills": 900,
+                "total_fees": 0.0,
+                "max_drawdown": -0.07910540917093023,
+                "sharpe": 2.1149665518057725,
+                "sortino": 4.02133680320316,
+                "volatility": 0.17066118340286904
+              },
+              "raptorbt": {
+                "total_return": 0.06675521397166521,
+                "final_equity": 106675.52139716652,
+                "round_trips": 450,
+                "fills": null,
+                "total_fees": 0.0,
+                "max_drawdown": -0.07910540917093027,
+                "sharpe": 0.9692748979846307,
+                "sortino": 1.3742016523326603,
+                "volatility": null
+              }
+            },
+            "note": ""
+          }
+        },
+        "status": "exact",
+        "paired_with": [
+          "sma_cross"
+        ],
+        "timings": {
+          "manifoldbt": {
+            "samples_s": [
+              0.0032117420000190577,
+              0.0032869109999751345,
+              0.003303290999951969,
+              0.004983516000038435,
+              0.004969079000034071,
+              0.0048994879999781915,
+              0.004995889999975134
+            ],
+            "min_s": 0.0032117420000190577,
+            "median_s": 0.0048994879999781915,
+            "max_s": 0.004995889999975134,
+            "iqr_s": 0.0016966050000633004,
+            "iqr_over_median": 0.34628210132790455
+          },
+          "vectorbt": {
+            "samples_s": [
+              0.8392827790000297,
+              0.8169386980000013,
+              0.6976869060000013,
+              0.8194586979999485,
+              0.8286693960000093,
+              0.8566541970000117,
+              0.6970299289999957
+            ],
+            "min_s": 0.6970299289999957,
+            "median_s": 0.8194586979999485,
+            "max_s": 0.8566541970000117,
+            "iqr_s": 0.1415958730000284,
+            "iqr_over_median": 0.1727919580884567
+          },
+          "raptorbt": {
+            "samples_s": [
+              0.00827535700000226,
+              0.007676870000011604,
+              0.010180716000036227,
+              0.00815870700000687,
+              0.0075278690000004644,
+              0.007606667999993988,
+              0.009071095000024343
+            ],
+            "min_s": 0.0075278690000004644,
+            "median_s": 0.00815870700000687,
+            "max_s": 0.010180716000036227,
+            "iqr_s": 0.001464427000030355,
+            "iqr_over_median": 0.17949253478879948
+          }
+        },
+        "speedup": {
+          "vectorbt": {
+            "median_of_ratios": 174.8456567306267,
+            "min": 139.52067179290677,
+            "max": 261.31699837504055
+          },
+          "raptorbt": {
+            "median_of_ratios": 1.8157115148791292,
+            "min": 1.5149425074443068,
+            "max": 3.0819918681654928
+          }
+        },
+        "noisy": true,
+        "cpu_over_wall": {
+          "manifoldbt": null,
+          "vectorbt": 1.0007702685764468,
+          "raptorbt": null
+        }
+      },
+      {
+        "workload": "sma_cross",
+        "title": "SMA 30/150 crossover, long-only, no cost",
+        "bars": 1000000,
+        "data_digest": "0ef03e7a3c4d011c",
+        "engines": [
+          "manifoldbt",
+          "vectorbt",
+          "raptorbt"
+        ],
+        "parity": {
+          "vectorbt": {
+            "status": "exact",
+            "expected": "exact",
+            "publishable": true,
+            "diffs": {
+              "final_equity_vs_capital": 4.220055416226387e-15,
+              "round_trips_delta": 0,
+              "total_fees_vs_capital": 0.0
+            },
+            "metrics": {
+              "manifoldbt": {
+                "total_return": 0.20294254717538118,
+                "final_equity": 120294.25471753812,
+                "round_trips": 4534,
+                "fills": 9069,
+                "total_fees": 0.0
+              },
+              "vectorbt": {
+                "total_return": 0.20294254717537696,
+                "final_equity": 120294.2547175377,
+                "round_trips": 4534,
+                "fills": null,
+                "total_fees": 0.0
+              }
+            },
+            "note": ""
+          },
+          "raptorbt": {
+            "status": "exact",
+            "expected": "exact",
+            "publishable": true,
+            "diffs": {
+              "final_equity_vs_capital": 0.0,
+              "round_trips_delta": 0,
+              "total_fees_vs_capital": 0.0
+            },
+            "metrics": {
+              "manifoldbt": {
+                "total_return": 0.20294254717538118,
+                "final_equity": 120294.25471753812,
+                "round_trips": 4534,
+                "fills": 9069,
+                "total_fees": 0.0
+              },
+              "raptorbt": {
+                "total_return": 0.20294254717538115,
+                "final_equity": 120294.25471753812,
+                "round_trips": 4534,
+                "fills": null,
+                "total_fees": 0.0
+              }
+            },
+            "note": ""
+          }
+        },
+        "status": "exact",
+        "paired_with": [
+          "sma_cross_metrics"
+        ],
+        "timings": {
+          "manifoldbt": {
+            "samples_s": [
+              0.03660187899998846,
+              0.03613116999997601,
+              0.03557587899996406,
+              0.036782401000039044,
+              0.035953398000003745,
+              0.03584214899996141,
+              0.03567385999997441
+            ],
+            "min_s": 0.03557587899996406,
+            "median_s": 0.035953398000003745,
+            "max_s": 0.036782401000039044,
+            "iqr_s": 0.0009280190000140465,
+            "iqr_over_median": 0.02581171882596326
+          },
+          "vectorbt": {
+            "samples_s": [
+              2.078373025000019,
+              2.1996200990000148,
+              2.2755098719999864,
+              2.0339099669999996,
+              2.2691160799999466,
+              2.03193998200004,
+              2.2586886619999973
+            ],
+            "min_s": 2.03193998200004,
+            "median_s": 2.1996200990000148,
+            "max_s": 2.2755098719999864,
+            "iqr_s": 0.23520611299994698,
+            "iqr_over_median": 0.10693033451861789
+          },
+          "raptorbt": {
+            "samples_s": [
+              0.09926020299997163,
+              0.07630381199999192,
+              0.0766606139999908,
+              0.07484124500001599,
+              0.07533100799997783,
+              0.07343885400001682,
+              0.0751915050000207
+            ],
+            "min_s": 0.07343885400001682,
+            "median_s": 0.07533100799997783,
+            "max_s": 0.09926020299997163,
+            "iqr_s": 0.001819368999974813,
+            "iqr_over_median": 0.024151661424407708
+          }
+        },
+        "speedup": {
+          "vectorbt": {
+            "median_of_ratios": 60.878739852639015,
+            "min": 55.29573686605833,
+            "max": 63.96215458238671
+          },
+          "raptorbt": {
+            "median_of_ratios": 2.107747942052658,
+            "min": 2.0347025470125386,
+            "max": 2.711888179292733
+          }
+        },
+        "noisy": false,
+        "cpu_over_wall": {
+          "manifoldbt": null,
+          "vectorbt": 1.0001876466237896,
+          "raptorbt": 0.9981357709319877
+        }
+      },
+      {
+        "workload": "sma_cross_metrics",
+        "title": "SMA 30/150 crossover, with a performance summary",
+        "bars": 1000000,
+        "data_digest": "0ef03e7a3c4d011c",
+        "engines": [
+          "manifoldbt",
+          "vectorbt",
+          "raptorbt"
+        ],
+        "parity": {
+          "vectorbt": {
+            "status": "exact",
+            "expected": "exact",
+            "publishable": true,
+            "diffs": {
+              "final_equity_vs_capital": 4.220055416226387e-15,
+              "round_trips_delta": 0,
+              "total_fees_vs_capital": 0.0,
+              "max_drawdown_rel": 1.464735645642113e-15,
+              "advisory_ratio_rel": {
+                "sharpe": 0.0003424071321271261,
+                "sortino": 0.00034240713212705575,
+                "volatility": 0.0003424071321024856
+              }
+            },
+            "metrics": {
+              "manifoldbt": {
+                "total_return": 0.20294254717538118,
+                "final_equity": 120294.25471753812,
+                "round_trips": 4534,
+                "fills": 9069,
+                "total_fees": 0.0,
+                "max_drawdown": -0.15159363779099633,
+                "sharpe": 0.6860158229410881,
+                "sortino": 1.3522858253366064,
+                "volatility": 0.16128875607357201
+              },
+              "vectorbt": {
+                "total_return": 0.20294254717537696,
+                "final_equity": 120294.2547175377,
+                "round_trips": 4534,
+                "fills": null,
+                "total_fees": 0.0,
+                "max_drawdown": -0.1515936377909961,
+                "sharpe": 0.6857810066333395,
+                "sortino": 1.351822951516634,
+                "volatility": 0.16123354855661204
+              }
+            },
+            "note": ""
+          },
+          "raptorbt": {
+            "status": "exact",
+            "expected": "exact",
+            "publishable": true,
+            "diffs": {
+              "final_equity_vs_capital": 0.0,
+              "round_trips_delta": 0,
+              "total_fees_vs_capital": 0.0,
+              "max_drawdown_rel": 0.0,
+              "ratio_basis": "native"
+            },
+            "metrics": {
+              "manifoldbt": {
+                "total_return": 0.20294254717538118,
+                "final_equity": 120294.25471753812,
+                "round_trips": 4534,
+                "fills": 9069,
+                "total_fees": 0.0,
+                "max_drawdown": -0.15159363779099633,
+                "sharpe": 0.6860158229410881,
+                "sortino": 1.3522858253366064,
+                "volatility": 0.16128875607357201
+              },
+              "raptorbt": {
+                "total_return": 0.20294254717538115,
+                "final_equity": 120294.25471753812,
+                "round_trips": 4534,
+                "fills": null,
+                "total_fees": 0.0,
+                "max_drawdown": -0.15159363779099633,
+                "sharpe": 0.3005175738027932,
+                "sortino": 0.42543548791233987,
+                "volatility": null
+              }
+            },
+            "note": ""
+          }
+        },
+        "status": "exact",
+        "paired_with": [
+          "sma_cross"
+        ],
+        "timings": {
+          "manifoldbt": {
+            "samples_s": [
+              0.036188549999963016,
+              0.03564938799996753,
+              0.0365189629999918,
+              0.0357927069999846,
+              0.0358361079999554,
+              0.03567016499999909,
+              0.038163962999988144
+            ],
+            "min_s": 0.03564938799996753,
+            "median_s": 0.0358361079999554,
+            "max_s": 0.038163962999988144,
+            "iqr_s": 0.000848797999992712,
+            "iqr_over_median": 0.02368555201345437
+          },
+          "vectorbt": {
+            "samples_s": [
+              8.278213037,
+              8.258477563000042,
+              8.37995285300002,
+              8.36964648999998,
+              8.33811388700002,
+              8.315262945000029,
+              8.30353226699998
+            ],
+            "min_s": 8.258477563000042,
+            "median_s": 8.315262945000029,
+            "max_s": 8.37995285300002,
+            "iqr_s": 0.09143345299997918,
+            "iqr_over_median": 0.0109958582915238
+          },
+          "raptorbt": {
+            "samples_s": [
+              0.08524388900002577,
+              0.085148337000021,
+              0.0842965830000253,
+              0.08568455900001481,
+              0.08595952600001056,
+              0.0855172039999843,
+              0.08596099900000809
+            ],
+            "min_s": 0.0842965830000253,
+            "median_s": 0.0855172039999843,
+            "max_s": 0.08596099900000809,
+            "iqr_s": 0.0008111889999895538,
+            "iqr_over_median": 0.009485681968621222
+          }
+        },
+        "speedup": {
+          "vectorbt": {
+            "median_of_ratios": 231.65832644890185,
+            "min": 217.5752100745554,
+            "max": 233.8366441522174
+          },
+          "raptorbt": {
+            "median_of_ratios": 2.3884936538068637,
+            "min": 2.2524128062914954,
+            "max": 2.398684756729652
+          }
+        },
+        "noisy": false,
+        "cpu_over_wall": {
+          "manifoldbt": null,
+          "vectorbt": 0.999601686679619,
+          "raptorbt": 1.037116913873328
+        }
+      },
+      {
+        "workload": "sma_cross",
+        "title": "SMA 30/150 crossover, long-only, no cost",
+        "bars": 10000000,
+        "data_digest": "f4e6a3a8823f3768",
+        "engines": [
+          "manifoldbt",
+          "vectorbt",
+          "raptorbt"
+        ],
+        "parity": {
+          "vectorbt": {
+            "status": "exact",
+            "expected": "exact",
+            "publishable": true,
+            "diffs": {
+              "final_equity_vs_capital": 1.2369127944111823e-14,
+              "round_trips_delta": 0,
+              "total_fees_vs_capital": 0.0
+            },
+            "metrics": {
+              "manifoldbt": {
+                "total_return": 0.3001352494374474,
+                "final_equity": 130013.52494374473,
+                "round_trips": 46127,
+                "fills": 92254,
+                "total_fees": 0.0
+              },
+              "vectorbt": {
+                "total_return": 0.30013524943743497,
+                "final_equity": 130013.5249437435,
+                "round_trips": 46127,
+                "fills": null,
+                "total_fees": 0.0
+              }
+            },
+            "note": ""
+          },
+          "raptorbt": {
+            "status": "exact",
+            "expected": "exact",
+            "publishable": true,
+            "diffs": {
+              "final_equity_vs_capital": 1.4551915228366853e-16,
+              "round_trips_delta": 0,
+              "total_fees_vs_capital": 0.0
+            },
+            "metrics": {
+              "manifoldbt": {
+                "total_return": 0.3001352494374474,
+                "final_equity": 130013.52494374473,
+                "round_trips": 46127,
+                "fills": 92254,
+                "total_fees": 0.0
+              },
+              "raptorbt": {
+                "total_return": 0.3001352494374475,
+                "final_equity": 130013.52494374475,
+                "round_trips": 46127,
+                "fills": null,
+                "total_fees": 0.0
+              }
+            },
+            "note": ""
+          }
+        },
+        "status": "exact",
+        "paired_with": [
+          "sma_cross_metrics"
+        ],
+        "timings": {
+          "manifoldbt": {
+            "samples_s": [
+              0.32168045099996334,
+              0.31625116199995773,
+              0.32669992099999945,
+              0.32404342900008487,
+              0.31585524000001897,
+              0.3161342289999993,
+              0.3162338639999689
+            ],
+            "min_s": 0.31585524000001897,
+            "median_s": 0.31625116199995773,
+            "max_s": 0.32669992099999945,
+            "iqr_s": 0.007909200000085548,
+            "iqr_over_median": 0.025009236171870904
+          },
+          "vectorbt": {
+            "samples_s": [
+              25.203159513000003,
+              25.13913019100005,
+              25.002515808,
+              25.008075258000076,
+              25.775691822,
+              24.755377064000186,
+              25.204093507000152
+            ],
+            "min_s": 24.755377064000186,
+            "median_s": 25.13913019100005,
+            "max_s": 25.775691822,
+            "iqr_s": 0.2015776990001541,
+            "iqr_over_median": 0.008018483434733954
+          },
+          "raptorbt": {
+            "samples_s": [
+              0.879975992000027,
+              0.8696852230000331,
+              0.8730738060000931,
+              0.8727798300000131,
+              0.8694940309999311,
+              0.8724488130001191,
+              0.8731128940000872
+            ],
+            "min_s": 0.8694940309999311,
+            "median_s": 0.8727798300000131,
+            "max_s": 0.879975992000027,
+            "iqr_s": 0.0034276710000540334,
+            "iqr_over_median": 0.003927303178000782
+          }
+        },
+        "speedup": {
+          "vectorbt": {
+            "median_of_ratios": 78.34843377847315,
+            "min": 76.53052296881346,
+            "max": 81.60602883143066
+          },
+          "raptorbt": {
+            "median_of_ratios": 2.7499826957162274,
+            "min": 2.6724028684417545,
+            "max": 2.760972158251126
+          }
+        },
+        "noisy": false,
+        "cpu_over_wall": {
+          "manifoldbt": 1.099737079865835,
+          "vectorbt": 0.9996703741948766,
+          "raptorbt": 1.0064526561677554
+        }
+      },
+      {
+        "workload": "sma_cross_metrics",
+        "title": "SMA 30/150 crossover, with a performance summary",
+        "bars": 10000000,
+        "data_digest": "f4e6a3a8823f3768",
+        "engines": [
+          "manifoldbt",
+          "vectorbt",
+          "raptorbt"
+        ],
+        "parity": {
+          "vectorbt": {
+            "status": "exact",
+            "expected": "exact",
+            "publishable": true,
+            "diffs": {
+              "final_equity_vs_capital": 1.2369127944111823e-14,
+              "round_trips_delta": 0,
+              "total_fees_vs_capital": 0.0,
+              "max_drawdown_rel": 1.1043826616631323e-14,
+              "advisory_ratio_rel": {
+                "sharpe": 0.0003424071321157821,
+                "sortino": 0.0003424071321161821,
+                "volatility": 0.0003424071321037301
+              }
+            },
+            "metrics": {
+              "manifoldbt": {
+                "total_return": 0.3001352494374474,
+                "final_equity": 130013.52494374473,
+                "round_trips": 46127,
+                "fills": 92254,
+                "total_fees": 0.0,
+                "max_drawdown": -0.6232787775126734,
+                "sharpe": 0.16657583326366043,
+                "sortino": 0.3242480879539277,
+                "volatility": 0.15596640368660572
+              },
+              "vectorbt": {
+                "total_return": 0.30013524943743497,
+                "final_equity": 130013.5249437435,
+                "round_trips": 46127,
+                "fills": null,
+                "total_fees": 0.0,
+                "max_drawdown": -0.6232787775126802,
+                "sharpe": 0.16651881603341911,
+                "sortino": 0.324137101098728,
+                "volatility": 0.15591301795726933
+              }
+            },
+            "note": ""
+          },
+          "raptorbt": {
+            "status": "exact",
+            "expected": "exact",
+            "publishable": true,
+            "diffs": {
+              "final_equity_vs_capital": 1.4551915228366853e-16,
+              "round_trips_delta": 0,
+              "total_fees_vs_capital": 0.0,
+              "max_drawdown_rel": 0.0,
+              "ratio_basis": "native"
+            },
+            "metrics": {
+              "manifoldbt": {
+                "total_return": 0.3001352494374474,
+                "final_equity": 130013.52494374473,
+                "round_trips": 46127,
+                "fills": 92254,
+                "total_fees": 0.0,
+                "max_drawdown": -0.6232787775126734,
+                "sharpe": 0.16657583326366043,
+                "sortino": 0.3242480879539277,
+                "volatility": 0.15596640368660572
+              },
+              "raptorbt": {
+                "total_return": 0.3001352494374475,
+                "final_equity": 130013.52494374475,
+                "round_trips": 46127,
+                "fills": null,
+                "total_fees": 0.0,
+                "max_drawdown": -0.6232787775126734,
+                "sharpe": 0.07064081213793068,
+                "sortino": 0.09993197026250207,
+                "volatility": null
+              }
+            },
+            "note": ""
+          }
+        },
+        "status": "exact",
+        "paired_with": [
+          "sma_cross"
+        ],
+        "timings": {
+          "manifoldbt": {
+            "samples_s": [
+              0.3167635979999659,
+              0.3195772770000076,
+              0.31755329999998594,
+              0.3224045270000033,
+              0.3158640860001469,
+              0.3153079769999749,
+              0.3169805319998886
+            ],
+            "min_s": 0.3153079769999749,
+            "median_s": 0.3169805319998886,
+            "max_s": 0.3224045270000033,
+            "iqr_s": 0.0037131909998606716,
+            "iqr_over_median": 0.01171425568767099
+          },
+          "vectorbt": {
+            "samples_s": [
+              97.92875974999993,
+              98.22901896500002,
+              99.19999035299998,
+              97.71658979899996,
+              98.08817884599989,
+              98.97557851299985,
+              98.50907742499999
+            ],
+            "min_s": 97.71658979899996,
+            "median_s": 98.22901896500002,
+            "max_s": 99.19999035299998,
+            "iqr_s": 1.0468187629999193,
+            "iqr_over_median": 0.010656919656022537
+          },
+          "raptorbt": {
+            "samples_s": [
+              0.8787633000000596,
+              0.8785984310000003,
+              0.8794783299999835,
+              0.8790530439999884,
+              0.87880743300002,
+              0.880548632,
+              0.8792048709999563
+            ],
+            "min_s": 0.8785984310000003,
+            "median_s": 0.8790530439999884,
+            "max_s": 0.880548632,
+            "iqr_s": 0.0007150299999238996,
+            "iqr_over_median": 0.0008134093895747991
+          }
+        },
+        "speedup": {
+          "vectorbt": {
+            "median_of_ratios": 310.5391945254399,
+            "min": 303.0869036122404,
+            "max": 313.90128297644594
+          },
+          "raptorbt": {
+            "median_of_ratios": 2.773687284366931,
+            "min": 2.7265530424762905,
+            "max": 2.7926620835224543
+          }
+        },
+        "noisy": false,
+        "cpu_over_wall": {
+          "manifoldbt": 1.0744222645931718,
+          "vectorbt": 0.999887905371994,
+          "raptorbt": 1.0025259688181112
+        }
+      },
+      {
+        "workload": "ema_rsi_fees",
+        "title": "EMA 12/26 crossover + RSI(14) filter, 5 bps taker fee",
+        "bars": 100000,
+        "data_digest": "b7c2ad8cea687ce0",
+        "engines": [
+          "manifoldbt",
+          "vectorbt"
+        ],
+        "parity": {
+          "vectorbt": {
+            "status": "exact",
+            "expected": "exact",
+            "publishable": true,
+            "diffs": {
+              "final_equity_vs_capital": 1.3096723705530167e-15,
+              "round_trips_delta": 0,
+              "total_fees_vs_capital": 4.7748471843078734e-17
+            },
+            "metrics": {
+              "manifoldbt": {
+                "total_return": -0.01570110342278974,
+                "final_equity": 98429.88965772103,
+                "round_trips": 3176,
+                "fills": 6352,
+                "total_fees": 1542.3890014306103
+              },
+              "vectorbt": {
+                "total_return": -0.01570110342278846,
+                "final_equity": 98429.88965772116,
+                "round_trips": 3176,
+                "fills": null,
+                "total_fees": 1542.3890014306055
+              }
+            },
+            "note": ""
+          }
+        },
+        "status": "exact",
+        "unsupported": {
+          "raptorbt": "Two blockers, either one sufficient. Sizing: raptorbt has no fixed-quantity mode. `position_sizes` is a fraction of equity (measured: 0.5 buys exactly half the equity of the bar before the entry), `lot_size` rounds a computed size down to a multiple, and `alloted_capital` fixes the notional, not the quantity. Reproducing `units=5` would mean feeding a fraction derived from an equity curve that does not exist until the run is over. Indicator: `raptorbt.ema` seeds on a simple mean of the first `period` bars and emits from bar `period-1`, while manifoldbt seeds on the first observation and emits from bar 0 (measured: 11 leading NaN for span 12, and ema[11] equal to sma(12)[11] to the last bit). The two are the same recursion with a different warmup, so the signal differs early and the round-trip count with it. Its `sma` and `rsi` do match, which is why the other three workloads run."
+        },
+        "timings": {
+          "manifoldbt": {
+            "samples_s": [
+              0.004810379999980796,
+              0.005096168000136458,
+              0.004873729999872012,
+              0.004889239000021917,
+              0.016372946999808846,
+              0.004972456000132297,
+              0.005095406999998886
+            ],
+            "min_s": 0.004810379999980796,
+            "median_s": 0.004972456000132297,
+            "max_s": 0.016372946999808846,
+            "iqr_s": 0.0002224380002644466,
+            "iqr_over_median": 0.04473403088102306
+          },
+          "vectorbt": {
+            "samples_s": [
+              0.19384037999998327,
+              0.1984042159999717,
+              0.1970034180001221,
+              0.19468072299991945,
+              0.1946311889998924,
+              0.19857272299987017,
+              0.1983136960000138
+            ],
+            "min_s": 0.19384037999998327,
+            "median_s": 0.1970034180001221,
+            "max_s": 0.19857272299987017,
+            "iqr_s": 0.00377302700007931,
+            "iqr_over_median": 0.019152089026582123
+          }
+        },
+        "speedup": {
+          "vectorbt": {
+            "median_of_ratios": 39.81820545059196,
+            "min": 11.887364504518626,
+            "max": 40.421487855358336
+          }
+        },
+        "noisy": false,
+        "cpu_over_wall": {
+          "manifoldbt": null,
+          "vectorbt": 0.981499572780761
+        }
+      },
+      {
+        "workload": "ema_rsi_fees",
+        "title": "EMA 12/26 crossover + RSI(14) filter, 5 bps taker fee",
+        "bars": 1000000,
+        "data_digest": "0ef03e7a3c4d011c",
+        "engines": [
+          "manifoldbt",
+          "vectorbt"
+        ],
+        "parity": {
+          "vectorbt": {
+            "status": "exact",
+            "expected": "exact",
+            "publishable": true,
+            "diffs": {
+              "final_equity_vs_capital": 8.294591680169105e-15,
+              "round_trips_delta": 0,
+              "total_fees_vs_capital": 2.1100277081131935e-15
+            },
+            "metrics": {
+              "manifoldbt": {
+                "total_return": -0.1532708157041739,
+                "final_equity": 84672.91842958261,
+                "round_trips": 31389,
+                "fills": 62779,
+                "total_fees": 15206.83039822937
+              },
+              "vectorbt": {
+                "total_return": -0.15327081570418216,
+                "final_equity": 84672.91842958178,
+                "round_trips": 31389,
+                "fills": null,
+                "total_fees": 15206.830398229158
+              }
+            },
+            "note": ""
+          }
+        },
+        "status": "exact",
+        "unsupported": {
+          "raptorbt": "Two blockers, either one sufficient. Sizing: raptorbt has no fixed-quantity mode. `position_sizes` is a fraction of equity (measured: 0.5 buys exactly half the equity of the bar before the entry), `lot_size` rounds a computed size down to a multiple, and `alloted_capital` fixes the notional, not the quantity. Reproducing `units=5` would mean feeding a fraction derived from an equity curve that does not exist until the run is over. Indicator: `raptorbt.ema` seeds on a simple mean of the first `period` bars and emits from bar `period-1`, while manifoldbt seeds on the first observation and emits from bar 0 (measured: 11 leading NaN for span 12, and ema[11] equal to sma(12)[11] to the last bit). The two are the same recursion with a different warmup, so the signal differs early and the round-trip count with it. Its `sma` and `rsi` do match, which is why the other three workloads run."
+        },
+        "timings": {
+          "manifoldbt": {
+            "samples_s": [
+              0.05336374800003796,
+              0.05180119500005276,
+              0.05275276799989115,
+              0.053678300999990824,
+              0.05037918700008959,
+              0.052005970999971396,
+              0.05124151100017116
+            ],
+            "min_s": 0.05037918700008959,
+            "median_s": 0.052005970999971396,
+            "max_s": 0.053678300999990824,
+            "iqr_s": 0.0021222369998668,
+            "iqr_over_median": 0.04080756419042666
+          },
+          "vectorbt": {
+            "samples_s": [
+              2.114880266,
+              2.240363632000026,
+              2.123427698000114,
+              2.226670471999796,
+              2.1094421170000714,
+              2.2343472509999174,
+              2.107475092999948
+            ],
+            "min_s": 2.107475092999948,
+            "median_s": 2.123427698000114,
+            "max_s": 2.240363632000026,
+            "iqr_s": 0.12490513399984593,
+            "iqr_over_median": 0.05882240969046605
+          }
+        },
+        "speedup": {
+          "vectorbt": {
+            "median_of_ratios": 41.481761354558834,
+            "min": 39.63140418844823,
+            "max": 43.24926542713434
+          }
+        },
+        "noisy": false,
+        "cpu_over_wall": {
+          "manifoldbt": null,
+          "vectorbt": 1.0002238938507584
+        }
+      },
+      {
+        "workload": "sma_cross_costs",
+        "title": "SMA 30/150 with a 5 bps fee and 2 bps of slippage",
+        "bars": 100000,
+        "data_digest": "b7c2ad8cea687ce0",
+        "engines": [
+          "manifoldbt",
+          "vectorbt"
+        ],
+        "parity": {
+          "vectorbt": {
+            "status": "exact",
+            "expected": "exact",
+            "publishable": true,
+            "diffs": {
+              "final_equity_vs_capital": 8.731149137020111e-16,
+              "round_trips_delta": 0,
+              "total_fees_vs_capital": 1.4210854715202004e-18
+            },
+            "metrics": {
+              "manifoldbt": {
+                "total_return": -0.002745042655159957,
+                "final_equity": 99725.49573448401,
+                "round_trips": 450,
+                "fills": 900,
+                "total_fees": 218.42799507745576
+              },
+              "vectorbt": {
+                "total_return": -0.0027450426551607985,
+                "final_equity": 99725.49573448392,
+                "round_trips": 450,
+                "fills": null,
+                "total_fees": 218.4279950774559
+              }
+            },
+            "note": ""
+          }
+        },
+        "status": "exact",
+        "unsupported": {
+          "raptorbt": "Same blocker as the other fixed-quantity workload: raptorbt has no units sizing, and a cost model on top of a fraction of equity compares policy rather than arithmetic. See `ema_rsi_fees` for the measurements behind that."
+        },
+        "timings": {
+          "manifoldbt": {
+            "samples_s": [
+              0.003776644000026863,
+              0.0033357429999796295,
+              0.0033343400000376278,
+              0.0033452410000336386,
+              0.006533987000011621,
+              0.0033014690000072733,
+              0.003305446000013035
+            ],
+            "min_s": 0.0033014690000072733,
+            "median_s": 0.0033357429999796295,
+            "max_s": 0.006533987000011621,
+            "iqr_s": 0.0004711980000138283,
+            "iqr_over_median": 0.1412572851136031
+          },
+          "vectorbt": {
+            "samples_s": [
+              0.18493132999992667,
+              0.18835484800001723,
+              0.18612963800001125,
+              0.18295746299986604,
+              0.18418144799989022,
+              0.33372047900002144,
+              0.1812854239999524
+            ],
+            "min_s": 0.1812854239999524,
+            "median_s": 0.18493132999992667,
+            "max_s": 0.33372047900002144,
+            "iqr_s": 0.005397385000151189,
+            "iqr_over_median": 0.029185887540814904
+          }
+        },
+        "speedup": {
+          "vectorbt": {
+            "median_of_ratios": 54.844466979414435,
+            "min": 28.188217699172444,
+            "max": 101.0824208857591
+          }
+        },
+        "noisy": false,
+        "cpu_over_wall": {
+          "manifoldbt": null,
+          "vectorbt": 1.0127912552664227
+        }
+      },
+      {
+        "workload": "sma_cross_costs",
+        "title": "SMA 30/150 with a 5 bps fee and 2 bps of slippage",
+        "bars": 1000000,
+        "data_digest": "0ef03e7a3c4d011c",
+        "engines": [
+          "manifoldbt",
+          "vectorbt"
+        ],
+        "parity": {
+          "vectorbt": {
+            "status": "exact",
+            "expected": "exact",
+            "publishable": true,
+            "diffs": {
+              "final_equity_vs_capital": 1.6007106751203538e-15,
+              "round_trips_delta": 0,
+              "total_fees_vs_capital": 6.821210263296961e-17
+            },
+            "metrics": {
+              "manifoldbt": {
+                "total_return": -0.02986364258908214,
+                "final_equity": 97013.63574109178,
+                "round_trips": 4534,
+                "fills": 9069,
+                "total_fees": 2195.9426086254202
+              },
+              "vectorbt": {
+                "total_return": -0.02986364258908383,
+                "final_equity": 97013.63574109162,
+                "round_trips": 4534,
+                "fills": null,
+                "total_fees": 2195.9426086254134
+              }
+            },
+            "note": ""
+          }
+        },
+        "status": "exact",
+        "unsupported": {
+          "raptorbt": "Same blocker as the other fixed-quantity workload: raptorbt has no units sizing, and a cost model on top of a fraction of equity compares policy rather than arithmetic. See `ema_rsi_fees` for the measurements behind that."
+        },
+        "timings": {
+          "manifoldbt": {
+            "samples_s": [
+              0.03822316199989473,
+              0.03841803900013474,
+              0.036231059999863646,
+              0.03596089100005884,
+              0.035924983000086286,
+              0.03613562999998976,
+              0.036070827999992616
+            ],
+            "min_s": 0.035924983000086286,
+            "median_s": 0.03613562999998976,
+            "max_s": 0.03841803900013474,
+            "iqr_s": 0.0022622709998358914,
+            "iqr_over_median": 0.06260499678119719
+          },
+          "vectorbt": {
+            "samples_s": [
+              2.253372403000185,
+              2.025755947999869,
+              2.254170056000021,
+              2.0066398159999608,
+              2.249749442999928,
+              2.0082980890001636,
+              2.236711072999924
+            ],
+            "min_s": 2.0066398159999608,
+            "median_s": 2.236711072999924,
+            "max_s": 2.254170056000021,
+            "iqr_s": 0.24507431400002133,
+            "iqr_over_median": 0.10956905295386342
+          }
+        },
+        "speedup": {
+          "vectorbt": {
+            "median_of_ratios": 58.953061052520745,
+            "min": 52.72929073742583,
+            "max": 62.62353535406055
+          }
+        },
+        "noisy": false,
+        "cpu_over_wall": {
+          "manifoldbt": null,
+          "vectorbt": 1.001682985183497
+        }
+      },
+      {
+        "workload": "sma_cross_costs",
+        "title": "SMA 30/150 with a 5 bps fee and 2 bps of slippage",
+        "bars": 10000000,
+        "data_digest": "f4e6a3a8823f3768",
+        "engines": [
+          "manifoldbt",
+          "vectorbt"
+        ],
+        "parity": {
+          "vectorbt": {
+            "status": "exact",
+            "expected": "exact",
+            "publishable": true,
+            "diffs": {
+              "final_equity_vs_capital": 8.149072527885436e-15,
+              "round_trips_delta": 0,
+              "total_fees_vs_capital": 3.1650415621697903e-15
+            },
+            "metrics": {
+              "manifoldbt": {
+                "total_return": -0.30242917768507427,
+                "final_equity": 69757.08223149258,
+                "round_trips": 46127,
+                "fills": 92254,
+                "total_fees": 21749.94829446186
+              },
+              "vectorbt": {
+                "total_return": -0.30242917768506616,
+                "final_equity": 69757.08223149339,
+                "round_trips": 46127,
+                "fills": null,
+                "total_fees": 21749.948294462178
+              }
+            },
+            "note": ""
+          }
+        },
+        "status": "exact",
+        "unsupported": {
+          "raptorbt": "Same blocker as the other fixed-quantity workload: raptorbt has no units sizing, and a cost model on top of a fraction of equity compares policy rather than arithmetic. See `ema_rsi_fees` for the measurements behind that."
+        },
+        "timings": {
+          "manifoldbt": {
+            "samples_s": [
+              0.33172789000013836,
+              0.320737323000003,
+              0.3150275830000737,
+              0.31599577399992995,
+              0.31646089200012284,
+              0.3155875009999818,
+              0.3209228619998612
+            ],
+            "min_s": 0.3150275830000737,
+            "median_s": 0.31646089200012284,
+            "max_s": 0.33172789000013836,
+            "iqr_s": 0.005335360999879413,
+            "iqr_over_median": 0.016859463948794475
+          },
+          "vectorbt": {
+            "samples_s": [
+              25.027266325000028,
+              24.963102669000136,
+              24.880609277000076,
+              25.01161156399985,
+              25.701865632000136,
+              24.847444557000017,
+              25.356147383999996
+            ],
+            "min_s": 24.847444557000017,
+            "median_s": 25.01161156399985,
+            "max_s": 25.701865632000136,
+            "iqr_s": 0.4755381069999203,
+            "iqr_over_median": 0.01901269359565699
+          }
+        },
+        "speedup": {
+          "vectorbt": {
+            "median_of_ratios": 78.97914538167362,
+            "min": 75.44516779999894,
+            "max": 81.21656192509928
+          }
+        },
+        "noisy": false,
+        "cpu_over_wall": {
+          "manifoldbt": 1.0865386325458635,
+          "vectorbt": 0.9998404475821118
+        }
+      },
+      {
+        "workload": "multi_asset",
+        "title": "Five assets in one book, SMA 30/150, 5 bps fee",
+        "bars": 100000,
+        "data_digest": "b7c2ad8cea687ce0",
+        "engines": [
+          "manifoldbt",
+          "vectorbt"
+        ],
+        "parity": {
+          "vectorbt": {
+            "status": "exact",
+            "expected": "exact",
+            "publishable": true,
+            "diffs": {
+              "final_equity_vs_capital": 1.4551915228366853e-16,
+              "round_trips_delta": 0,
+              "total_fees_vs_capital": 5.115907697472722e-18
+            },
+            "metrics": {
+              "manifoldbt": {
+                "total_return": -0.004784214364567441,
+                "final_equity": 99521.57856354325,
+                "round_trips": 2350,
+                "fills": 4700,
+                "total_fees": 464.09434549765643
+              },
+              "vectorbt": {
+                "total_return": -0.004784214364567548,
+                "final_equity": 99521.57856354324,
+                "round_trips": 2350,
+                "fills": null,
+                "total_fees": 464.09434549765695
+              }
+            },
+            "note": ""
+          }
+        },
+        "status": "exact",
+        "unsupported": {
+          "raptorbt": "No multi-instrument portfolio on the entry point this harness drives: `run_single_backtest` is one instrument, and `run_multi_backtest` broadcasts over strategies rather than over assets. 0.9.0 does add `run_portfolio_backtest`, but its allocation model is a different one and would need its own parity work before any timing from it could be published. The units blocker applies here too."
+        },
+        "timings": {
+          "manifoldbt": {
+            "samples_s": [
+              0.02192476200002602,
+              0.01292108100005862,
+              0.01378740299992387,
+              0.013105517999974836,
+              0.012978119000081279,
+              0.018753007000213984,
+              0.013431663000119443
+            ],
+            "min_s": 0.01292108100005862,
+            "median_s": 0.013431663000119443,
+            "max_s": 0.02192476200002602,
+            "iqr_s": 0.005774888000132705,
+            "iqr_over_median": 0.4299458674686337
+          },
+          "vectorbt": {
+            "samples_s": [
+              0.22832822599980318,
+              0.22672109899986026,
+              0.23523129099999096,
+              0.22908040400011487,
+              0.2333124859999316,
+              0.2299812109999948,
+              0.22291171300003043
+            ],
+            "min_s": 0.22291171300003043,
+            "median_s": 0.22908040400011487,
+            "max_s": 0.23523129099999096,
+            "iqr_s": 0.006591387000071336,
+            "iqr_over_median": 0.028773246794466238
+          }
+        },
+        "speedup": {
+          "vectorbt": {
+            "median_of_ratios": 17.06131974246998,
+            "min": 10.414171246170525,
+            "max": 17.97737299206999
+          }
+        },
+        "noisy": true,
+        "cpu_over_wall": {
+          "manifoldbt": null,
+          "vectorbt": 1.0027613743770178
+        }
+      },
+      {
+        "workload": "multi_asset",
+        "title": "Five assets in one book, SMA 30/150, 5 bps fee",
+        "bars": 1000000,
+        "data_digest": "0ef03e7a3c4d011c",
+        "engines": [
+          "manifoldbt",
+          "vectorbt"
+        ],
+        "parity": {
+          "vectorbt": {
+            "status": "exact",
+            "expected": "exact",
+            "publishable": true,
+            "diffs": {
+              "final_equity_vs_capital": 1.0186340659856795e-15,
+              "round_trips_delta": 0,
+              "total_fees_vs_capital": 2.7284841053187848e-17
+            },
+            "metrics": {
+              "manifoldbt": {
+                "total_return": -0.0447197098443024,
+                "final_equity": 95528.02901556976,
+                "round_trips": 22902,
+                "fills": 45806,
+                "total_fees": 4561.765315438204
+              },
+              "vectorbt": {
+                "total_return": -0.044719709844301396,
+                "final_equity": 95528.02901556986,
+                "round_trips": 22902,
+                "fills": null,
+                "total_fees": 4561.7653154382015
+              }
+            },
+            "note": ""
+          }
+        },
+        "status": "exact",
+        "unsupported": {
+          "raptorbt": "No multi-instrument portfolio on the entry point this harness drives: `run_single_backtest` is one instrument, and `run_multi_backtest` broadcasts over strategies rather than over assets. 0.9.0 does add `run_portfolio_backtest`, but its allocation model is a different one and would need its own parity work before any timing from it could be published. The units blocker applies here too."
+        },
+        "timings": {
+          "manifoldbt": {
+            "samples_s": [
+              0.14243640299991966,
+              0.14289731200005917,
+              0.14208989400003702,
+              0.14090077499986364,
+              0.14268438400017658,
+              0.1425751249998939,
+              0.14175328699980128
+            ],
+            "min_s": 0.14090077499986364,
+            "median_s": 0.14243640299991966,
+            "max_s": 0.14289731200005917,
+            "iqr_s": 0.0009310970003753027,
+            "iqr_over_median": 0.006536931435820012
+          },
+          "vectorbt": {
+            "samples_s": [
+              2.523184524000044,
+              2.369537315999878,
+              2.520724357000063,
+              2.38936743499994,
+              2.507303568999987,
+              2.3700484470000447,
+              2.4998343320000913
+            ],
+            "min_s": 2.369537315999878,
+            "median_s": 2.4998343320000913,
+            "max_s": 2.523184524000044,
+            "iqr_s": 0.15067591000001812,
+            "iqr_over_median": 0.06027435821295562
+          }
+        },
+        "speedup": {
+          "vectorbt": {
+            "median_of_ratios": 17.57237546749954,
+            "min": 16.582098591182014,
+            "max": 17.740349338281625
+          }
+        },
+        "noisy": false,
+        "cpu_over_wall": {
+          "manifoldbt": 1.275949522954467,
+          "vectorbt": 0.9988358568089177
+        }
+      },
+      {
+        "workload": "bracket_sl_tp",
+        "title": "SMA 10/50 entry with a 15 bps stop / 30 bps target bracket",
+        "bars": 100000,
+        "data_digest": "b7c2ad8cea687ce0",
+        "engines": [
+          "manifoldbt",
+          "vectorbt",
+          "raptorbt"
+        ],
+        "parity": {
+          "vectorbt": {
+            "status": "documented",
+            "expected": "documented",
+            "publishable": false,
+            "diffs": {
+              "final_equity_vs_capital": 0.01145740341532248,
+              "round_trips_delta": 94,
+              "total_fees_vs_capital": 0.0
+            },
+            "metrics": {
+              "manifoldbt": {
+                "total_return": -0.05756525685928504,
+                "final_equity": 94243.4743140715,
+                "round_trips": 2309,
+                "fills": 4618,
+                "total_fees": 0.0
+              },
+              "vectorbt": {
+                "total_return": -0.06902266027460748,
+                "final_equity": 93097.73397253925,
+                "round_trips": 2215,
+                "fills": null,
+                "total_fees": 0.0
+              }
+            },
+            "note": "Re-entry on the exit bar. When a bracket fires intrabar and the entry condition still holds at that bar's close, manifoldbt books two orders on that bar (the stop or target exit, then a fresh entry at the close); vectorbt processes one order per bar and re-enters on the next bar instead. Neither is wrong, and on controlled bars the bracket fills themselves match exactly (see the cross-engine parity suite shipped with the library). The harness counts the affected round-trips so the size of the divergence is measured, not asserted."
+          },
+          "raptorbt": {
+            "status": "documented",
+            "expected": "documented",
+            "publishable": false,
+            "diffs": {
+              "final_equity_vs_capital": 0.009248235144781793,
+              "round_trips_delta": 925,
+              "total_fees_vs_capital": 0.0
+            },
+            "metrics": {
+              "manifoldbt": {
+                "total_return": -0.05756525685928504,
+                "final_equity": 94243.4743140715,
+                "round_trips": 2309,
+                "fills": 4618,
+                "total_fees": 0.0
+              },
+              "raptorbt": {
+                "total_return": -0.06681349200406679,
+                "final_equity": 93318.65079959332,
+                "round_trips": 1384,
+                "fills": null,
+                "total_fees": 0.0
+              }
+            },
+            "note": "Same fork in the road, taken further: raptorbt does not re-arm at all. Once a bracket closes a position, the entry level being still true is not enough to open another one; it waits for the level to go false and true again. So on the same bars the three engines book a different number of round-trips from the same signal, manifoldbt re-entering on the exit bar, vectorbt on the next bar, raptorbt not until the next crossing. The count of affected round-trips is measured rather than asserted, and it is the same population for both challengers."
+          }
+        },
+        "status": "documented",
+        "divergence_scale": {
+          "raptorbt": {
+            "round_trips": 1384,
+            "final_equity": 93318.65079959332
+          },
+          "manifoldbt": {
+            "reentries_on_exit_bar": 925,
+            "round_trips": 2309,
+            "share_of_round_trips": 0.40060632308358596,
+            "sl_exits": 632,
+            "tp_exits": 388
+          }
+        },
+        "timings": {
+          "manifoldbt": {
+            "samples_s": [
+              0.007166849999975966,
+              0.007249575000059849,
+              0.007168392000039603,
+              0.01005813599999783,
+              0.007437347999939448,
+              0.007867849000149363,
+              0.0067843790000097215
+            ],
+            "min_s": 0.0067843790000097215,
+            "median_s": 0.007249575000059849,
+            "max_s": 0.01005813599999783,
+            "iqr_s": 0.0007009990001733968,
+            "iqr_over_median": 0.09669518560296426
+          },
+          "vectorbt": {
+            "samples_s": [
+              0.18038331000002472,
+              0.17921248500010734,
+              0.34045100399998773,
+              0.1846850929998709,
+              0.17706433900002594,
+              0.17844085100000484,
+              0.18131571700018867
+            ],
+            "min_s": 0.17706433900002594,
+            "median_s": 0.18038331000002472,
+            "max_s": 0.34045100399998773,
+            "iqr_s": 0.0062442419998660625,
+            "iqr_over_median": 0.03461651745865627
+          },
+          "raptorbt": {
+            "samples_s": [
+              0.007607388999986142,
+              0.007565269999986413,
+              0.00754331899997851,
+              0.0075871819999520085,
+              0.007691197999974975,
+              0.008187040999928286,
+              0.00991876299985961
+            ],
+            "min_s": 0.00754331899997851,
+            "median_s": 0.007607388999986142,
+            "max_s": 0.00991876299985961,
+            "iqr_s": 0.000621770999941873,
+            "iqr_over_median": 0.0817325103189814
+          }
+        },
+        "speedup": {
+          "vectorbt": {
+            "median_of_ratios": 24.72041257572035,
+            "min": 18.3617613641246,
+            "max": 47.49335750585443
+          },
+          "raptorbt": {
+            "median_of_ratios": 1.0435466906575843,
+            "min": 0.7543328107666912,
+            "max": 1.4620001329296899
+          }
+        },
+        "noisy": false,
+        "cpu_over_wall": {
+          "manifoldbt": null,
+          "vectorbt": 1.005942235143163,
+          "raptorbt": null
+        }
+      },
+      {
+        "workload": "bracket_sl_tp",
+        "title": "SMA 10/50 entry with a 15 bps stop / 30 bps target bracket",
+        "bars": 1000000,
+        "data_digest": "0ef03e7a3c4d011c",
+        "engines": [
+          "manifoldbt",
+          "vectorbt",
+          "raptorbt"
+        ],
+        "parity": {
+          "vectorbt": {
+            "status": "documented",
+            "expected": "documented",
+            "publishable": false,
+            "diffs": {
+              "final_equity_vs_capital": 0.010543837599986582,
+              "round_trips_delta": 1092,
+              "total_fees_vs_capital": 0.0
+            },
+            "metrics": {
+              "manifoldbt": {
+                "total_return": -0.45070441471402267,
+                "final_equity": 54929.558528597736,
+                "round_trips": 23075,
+                "fills": 46151,
+                "total_fees": 0.0
+              },
+              "vectorbt": {
+                "total_return": -0.46124825231400923,
+                "final_equity": 53875.17476859908,
+                "round_trips": 21983,
+                "fills": null,
+                "total_fees": 0.0
+              }
+            },
+            "note": "Re-entry on the exit bar. When a bracket fires intrabar and the entry condition still holds at that bar's close, manifoldbt books two orders on that bar (the stop or target exit, then a fresh entry at the close); vectorbt processes one order per bar and re-enters on the next bar instead. Neither is wrong, and on controlled bars the bracket fills themselves match exactly (see the cross-engine parity suite shipped with the library). The harness counts the affected round-trips so the size of the divergence is measured, not asserted."
+          },
+          "raptorbt": {
+            "status": "documented",
+            "expected": "documented",
+            "publishable": false,
+            "diffs": {
+              "final_equity_vs_capital": 0.10072796246195154,
+              "round_trips_delta": 9330,
+              "total_fees_vs_capital": 0.0
+            },
+            "metrics": {
+              "manifoldbt": {
+                "total_return": -0.45070441471402267,
+                "final_equity": 54929.558528597736,
+                "round_trips": 23075,
+                "fills": 46151,
+                "total_fees": 0.0
+              },
+              "raptorbt": {
+                "total_return": -0.3499764522520711,
+                "final_equity": 65002.35477479289,
+                "round_trips": 13745,
+                "fills": null,
+                "total_fees": 0.0
+              }
+            },
+            "note": "Same fork in the road, taken further: raptorbt does not re-arm at all. Once a bracket closes a position, the entry level being still true is not enough to open another one; it waits for the level to go false and true again. So on the same bars the three engines book a different number of round-trips from the same signal, manifoldbt re-entering on the exit bar, vectorbt on the next bar, raptorbt not until the next crossing. The count of affected round-trips is measured rather than asserted, and it is the same population for both challengers."
+          }
+        },
+        "status": "documented",
+        "divergence_scale": {
+          "raptorbt": {
+            "round_trips": 13745,
+            "final_equity": 65002.35477479289
+          },
+          "manifoldbt": {
+            "reentries_on_exit_bar": 9330,
+            "round_trips": 23075,
+            "share_of_round_trips": 0.40433369447453954,
+            "sl_exits": 6363,
+            "tp_exits": 3906
+          }
+        },
+        "timings": {
+          "manifoldbt": {
+            "samples_s": [
+              0.06600199600006817,
+              0.07574424600011298,
+              0.07254266199993253,
+              0.07411089600009291,
+              0.071932156999992,
+              0.07405524699993293,
+              0.07396964400004435
+            ],
+            "min_s": 0.06600199600006817,
+            "median_s": 0.07396964400004435,
+            "max_s": 0.07574424600011298,
+            "iqr_s": 0.0021787390001009044,
+            "iqr_over_median": 0.029454501634475865
+          },
+          "vectorbt": {
+            "samples_s": [
+              2.025275727999997,
+              2.2620169710000937,
+              2.022808619999978,
+              2.255547231000037,
+              2.1033624420001615,
+              2.249134118000029,
+              2.1098881489999712
+            ],
+            "min_s": 2.022808619999978,
+            "median_s": 2.1098881489999712,
+            "max_s": 2.2620169710000937,
+            "iqr_s": 0.23027150300003996,
+            "iqr_over_median": 0.1091391992078738
+          },
+          "raptorbt": {
+            "samples_s": [
+              0.08268413999985569,
+              0.07517641399999775,
+              0.08318758899986278,
+              0.07501299099999414,
+              0.083380661000092,
+              0.07499767100011923,
+              0.08415520099993046
+            ],
+            "min_s": 0.07499767100011923,
+            "median_s": 0.08268413999985569,
+            "max_s": 0.08415520099993046,
+            "iqr_s": 0.00836767000009786,
+            "iqr_over_median": 0.10120042368599909
+          }
+        },
+        "speedup": {
+          "vectorbt": {
+            "median_of_ratios": 29.863878650224066,
+            "min": 27.884400216824954,
+            "max": 30.68506788791516
+          },
+          "raptorbt": {
+            "median_of_ratios": 1.137699148584249,
+            "min": 0.9925032985328762,
+            "max": 1.2527521137356252
+          }
+        },
+        "noisy": false,
+        "cpu_over_wall": {
+          "manifoldbt": 1.0622459442112289,
+          "vectorbt": 1.0001308714830501,
+          "raptorbt": 1.0025158367644047
+        }
+      },
+      {
+        "workload": "bracket_sl_tp",
+        "title": "SMA 10/50 entry with a 15 bps stop / 30 bps target bracket",
+        "bars": 10000000,
+        "data_digest": "f4e6a3a8823f3768",
+        "engines": [
+          "manifoldbt",
+          "vectorbt",
+          "raptorbt"
+        ],
+        "parity": {
+          "vectorbt": {
+            "status": "documented",
+            "expected": "documented",
+            "publishable": false,
+            "diffs": {
+              "final_equity_vs_capital": 0.0008838890600401106,
+              "round_trips_delta": 10171,
+              "total_fees_vs_capital": 0.0
+            },
+            "metrics": {
+              "manifoldbt": {
+                "total_return": -0.9948342253853452,
+                "final_equity": 516.5774614654839,
+                "round_trips": 231082,
+                "fills": 462164,
+                "total_fees": 0.0
+              },
+              "vectorbt": {
+                "total_return": -0.9957181144453853,
+                "final_equity": 428.18855546147284,
+                "round_trips": 220911,
+                "fills": null,
+                "total_fees": 0.0
+              }
+            },
+            "note": "Re-entry on the exit bar. When a bracket fires intrabar and the entry condition still holds at that bar's close, manifoldbt books two orders on that bar (the stop or target exit, then a fresh entry at the close); vectorbt processes one order per bar and re-enters on the next bar instead. Neither is wrong, and on controlled bars the bracket fills themselves match exactly (see the cross-engine parity suite shipped with the library). The harness counts the affected round-trips so the size of the divergence is measured, not asserted."
+          },
+          "raptorbt": {
+            "status": "documented",
+            "expected": "documented",
+            "publishable": false,
+            "diffs": {
+              "final_equity_vs_capital": 0.022352514553554532,
+              "round_trips_delta": 93295,
+              "total_fees_vs_capital": 0.0
+            },
+            "metrics": {
+              "manifoldbt": {
+                "total_return": -0.9948342253853452,
+                "final_equity": 516.5774614654839,
+                "round_trips": 231082,
+                "fills": 462164,
+                "total_fees": 0.0
+              },
+              "raptorbt": {
+                "total_return": -0.9724817108317907,
+                "final_equity": 2751.828916820937,
+                "round_trips": 137787,
+                "fills": null,
+                "total_fees": 0.0
+              }
+            },
+            "note": "Same fork in the road, taken further: raptorbt does not re-arm at all. Once a bracket closes a position, the entry level being still true is not enough to open another one; it waits for the level to go false and true again. So on the same bars the three engines book a different number of round-trips from the same signal, manifoldbt re-entering on the exit bar, vectorbt on the next bar, raptorbt not until the next crossing. The count of affected round-trips is measured rather than asserted, and it is the same population for both challengers."
+          }
+        },
+        "status": "documented",
+        "divergence_scale": {
+          "raptorbt": {
+            "round_trips": 137787,
+            "final_equity": 2751.828916820937
+          },
+          "manifoldbt": {
+            "reentries_on_exit_bar": 93295,
+            "round_trips": 231082,
+            "share_of_round_trips": 0.4037311430574428,
+            "sl_exits": 63245,
+            "tp_exits": 39487
+          }
+        },
+        "timings": {
+          "manifoldbt": {
+            "samples_s": [
+              0.678919274000009,
+              0.6813731110000845,
+              0.6709381739999571,
+              0.6726766409999527,
+              0.6711596229999941,
+              0.6679724269999952,
+              0.6727332800001022
+            ],
+            "min_s": 0.6679724269999952,
+            "median_s": 0.6726766409999527,
+            "max_s": 0.6813731110000845,
+            "iqr_s": 0.00798110000005181,
+            "iqr_over_median": 0.011864690274048585
+          },
+          "vectorbt": {
+            "samples_s": [
+              25.78610749099994,
+              24.659695464999913,
+              25.69214133399987,
+              25.476049241000055,
+              25.01990445699994,
+              25.577286293000043,
+              25.59699502600006
+            ],
+            "min_s": 24.659695464999913,
+            "median_s": 25.577286293000043,
+            "max_s": 25.78610749099994,
+            "iqr_s": 0.6722368769999321,
+            "iqr_over_median": 0.0262825723299625
+          },
+          "raptorbt": {
+            "samples_s": [
+              0.8835567469998296,
+              0.8817934809999315,
+              0.8801342900001146,
+              0.8810837239998364,
+              0.8799868880000759,
+              0.8819001210001716,
+              0.8784699580000961
+            ],
+            "min_s": 0.8784699580000961,
+            "median_s": 0.8810837239998364,
+            "max_s": 0.8835567469998296,
+            "iqr_s": 0.0019132330000957154,
+            "iqr_over_median": 0.002171454253416751
+          }
+        },
+        "speedup": {
+          "vectorbt": {
+            "median_of_ratios": 37.981109799807506,
+            "min": 36.1911778831508,
+            "max": 38.29285965475786
+          },
+          "raptorbt": {
+            "median_of_ratios": 1.3098176304889682,
+            "min": 1.294141883153681,
+            "max": 1.3202642584529585
+          }
+        },
+        "noisy": false,
+        "cpu_over_wall": {
+          "manifoldbt": 1.0433073199991634,
+          "vectorbt": 0.9998977588822339,
+          "raptorbt": 0.9972554865793956
+        }
+      }
+    ],
+    "cold_start": {
+      "workload": "sma_cross",
+      "bars": 20000,
+      "engines": [
+        "manifoldbt",
+        "vectorbt",
+        "raptorbt"
+      ],
+      "samples_s": {
+        "manifoldbt": [
+          0.5450850339998397,
+          0.44399405099989053,
+          0.4267380960000082
+        ],
+        "vectorbt": [
+          7.38039741700004,
+          7.0770734000000175,
+          7.02430864300004
+        ],
+        "raptorbt": [
+          0.3946434939998653,
+          0.39164477799999986,
+          0.3945374360000642
+        ],
+        "baseline": [
+          0.35081373399998483,
+          0.3551087700000153,
+          0.3559531440000683
+        ]
+      },
+      "median_s": {
+        "manifoldbt": 0.44399405099989053,
+        "vectorbt": 7.0770734000000175,
+        "raptorbt": 0.3945374360000642,
+        "baseline": 0.3551087700000153
+      },
+      "engine_share_s": {
+        "manifoldbt": 0.08888528099987525,
+        "vectorbt": 6.721964630000002,
+        "raptorbt": 0.039428666000048906
+      },
+      "ratio": {
+        "vectorbt": 15.939568073180698,
+        "raptorbt": 0.8886097349988175
+      }
+    },
+    "memory": {
+      "workload": "sma_cross",
+      "bars": 2000000,
+      "engines": [
+        "manifoldbt",
+        "vectorbt",
+        "raptorbt"
+      ],
+      "manifoldbt": {
+        "before_mb": 732.28288,
+        "peak_mb": 732.295168,
+        "added_mb": 0.012288000000012289,
+        "added_mb_per_million_bars": 0.0061440000000061445,
+        "seconds": 0.06026261300007718,
+        "mode": "memory",
+        "engine": "mbt",
+        "workload": "sma_cross",
+        "bars": 2000000
+      },
+      "vectorbt": {
+        "before_mb": 604.176384,
+        "peak_mb": 868.790272,
+        "added_mb": 264.613888,
+        "added_mb_per_million_bars": 132.306944,
+        "seconds": 4.353631641999982,
+        "mode": "memory",
+        "engine": "vbt",
+        "workload": "sma_cross",
+        "bars": 2000000
+      },
+      "raptorbt": {
+        "before_mb": 330.4448,
+        "peak_mb": 370.970624,
+        "added_mb": 40.525824,
+        "added_mb_per_million_bars": 20.262912,
+        "seconds": 0.16018985699997756,
+        "mode": "memory",
+        "engine": "rbt",
+        "workload": "sma_cross",
+        "bars": 2000000
+      }
+    },
+    "sweeps": null,
+    "sweep_reps": null
+  },
+  "sweeps": {
+    "schema_version": 2,
+    "generated_at": "2026-09-04T00:07:40.997848+00:00",
+    "environment": {
+      "os": "Linux",
+      "os_release": "6.17.0-1022-azure",
+      "arch": "x86_64",
+      "cpu": "Intel(R) Xeon(R) 6973P-C",
+      "logical_cores": 4,
+      "ram_gb": 16.8,
+      "python": "3.12.14",
+      "versions": {
+        "manifoldbt": "0.23.0",
+        "vectorbt": "0.28.4",
+        "raptorbt": "0.9.0",
+        "numpy": "2.4.3",
+        "numba": "0.64.0",
+        "pandas": "2.3.3"
+      },
+      "runner": "GitHub Actions 1000000456",
+      "ci": true,
+      "run_url": "https://github.com/manifoldbt/manifoldbt/actions/runs/33819887722",
+      "commit": "2ee9f29c36886fb8a5a8b04512502a2f9b323341",
+      "pinned_cores": null,
+      "engines": [
+        "manifoldbt",
+        "vectorbt",
+        "raptorbt"
+      ]
+    },
+    "reference": "manifoldbt",
+    "engines": [
+      "manifoldbt",
+      "vectorbt",
+      "raptorbt"
+    ],
+    "reps": 1,
+    "results": [
+      {
+        "workload": "sma_cross",
+        "title": "SMA 30/150 crossover, long-only, no cost",
+        "bars": 100000,
+        "data_digest": "81a87f47b436bdf3",
+        "engines": [
+          "manifoldbt",
+          "vectorbt",
+          "raptorbt"
+        ],
+        "parity": {
+          "vectorbt": {
+            "status": "exact",
+            "expected": "exact",
+            "publishable": true,
+            "diffs": {
+              "final_equity_vs_capital": 2.037268131971359e-15,
+              "round_trips_delta": 0,
+              "total_fees_vs_capital": 0.0
+            },
+            "metrics": {
+              "manifoldbt": {
+                "total_return": 0.0667552139716674,
+                "final_equity": 106675.52139716674,
+                "round_trips": 450,
+                "fills": 900,
+                "total_fees": 0.0
+              },
+              "vectorbt": {
+                "total_return": 0.06675521397166537,
+                "final_equity": 106675.52139716654,
+                "round_trips": 450,
+                "fills": null,
+                "total_fees": 0.0
+              }
+            },
+            "note": ""
+          },
+          "raptorbt": {
+            "status": "exact",
+            "expected": "exact",
+            "publishable": true,
+            "diffs": {
+              "final_equity_vs_capital": 0.0,
+              "round_trips_delta": 0,
+              "total_fees_vs_capital": 0.0
+            },
+            "metrics": {
+              "manifoldbt": {
+                "total_return": 0.0667552139716674,
+                "final_equity": 106675.52139716674,
+                "round_trips": 450,
+                "fills": 900,
+                "total_fees": 0.0
+              },
+              "raptorbt": {
+                "total_return": 0.0667552139716674,
+                "final_equity": 106675.52139716674,
+                "round_trips": 450,
+                "fills": null,
+                "total_fees": 0.0
+              }
+            },
+            "note": ""
+          }
+        },
+        "status": "exact",
+        "timings": {
+          "manifoldbt": {
+            "samples_s": [
+              0.0055216009999981
+            ],
+            "min_s": 0.0055216009999981,
+            "median_s": 0.0055216009999981,
+            "max_s": 0.0055216009999981,
             "iqr_s": 0.0,
             "iqr_over_median": 0.0
           },
           "vectorbt": {
             "samples_s": [
-              0.3503564500000209
+              0.27466549600001144
             ],
-            "min_s": 0.3503564500000209,
-            "median_s": 0.3503564500000209,
-            "max_s": 0.3503564500000209,
+            "min_s": 0.27466549600001144,
+            "median_s": 0.27466549600001144,
+            "max_s": 0.27466549600001144,
             "iqr_s": 0.0,
             "iqr_over_median": 0.0
           },
           "raptorbt": {
             "samples_s": [
-              0.010138897000018687
+              0.007427388999985851
             ],
-            "min_s": 0.010138897000018687,
-            "median_s": 0.010138897000018687,
-            "max_s": 0.010138897000018687,
+            "min_s": 0.007427388999985851,
+            "median_s": 0.007427388999985851,
+            "max_s": 0.007427388999985851,
             "iqr_s": 0.0,
             "iqr_over_median": 0.0
           }
         },
         "speedup": {
           "vectorbt": {
-            "median_of_ratios": 61.022899843364584,
-            "min": 61.022899843364584,
-            "max": 61.022899843364584
+            "median_of_ratios": 49.74381452048164,
+            "min": 49.74381452048164,
+            "max": 49.74381452048164
           },
           "raptorbt": {
-            "median_of_ratios": 1.7659298013617077,
-            "min": 1.7659298013617077,
-            "max": 1.7659298013617077
+            "median_of_ratios": 1.345151342878344,
+            "min": 1.345151342878344,
+            "max": 1.345151342878344
           }
         },
         "noisy": false,
@@ -2280,7 +2280,7 @@
           "fast": 50,
           "slow": 100
         },
-        "data_digest": "ccec9b97c4ca2b6f",
+        "data_digest": "554df142406ad3f0",
         "engines": [
           "manifoldbt",
           "vectorbt",
@@ -2296,10 +2296,10 @@
           "vectorbt": {
             "status": "exact",
             "combos_compared": 5000,
-            "worst_abs_return_delta": 1.2663481374630692e-15,
+            "worst_abs_return_delta": 1.635844237846129e-15,
             "worst_component": "return",
             "worst_pair": [
-              101,
+              5,
               118
             ]
           },
@@ -2309,31 +2309,31 @@
             "worst_abs_return_delta": 1.1102230246251565e-16,
             "worst_component": "return",
             "worst_pair": [
-              19,
-              113
+              5,
+              328
             ]
           }
         },
         "status": "exact",
         "timings": {
           "seconds": {
-            "manifoldbt": 0.4941260279999824,
-            "vectorbt": 6.338738485999983,
-            "raptorbt": 6.767757136
+            "manifoldbt": 0.34358129999998255,
+            "vectorbt": 8.754641823999975,
+            "raptorbt": 4.3083194079999885
           },
           "ratio": {
-            "vectorbt": 12.828181732617026,
-            "raptorbt": 13.696419035833994
+            "vectorbt": 25.48055387182137,
+            "raptorbt": 12.539446727747428
           },
           "reps": 2,
-          "per_combo_us": 98.82520559999648
+          "per_combo_us": 68.71625999999651
         },
         "memory": {
-          "manifoldbt": 24.6,
-          "vectorbt": 2531.0,
-          "raptorbt": 34.9
+          "manifoldbt": 21.0,
+          "vectorbt": 2532.9,
+          "raptorbt": 37.2
         },
-        "memory_baseline_mb": 2170.1,
+        "memory_baseline_mb": 2168.8,
         "tier_after": {
           "pro": true,
           "budget_used": 0,
@@ -2348,7 +2348,7 @@
           "fast": 125,
           "slow": 160
         },
-        "data_digest": "ccec9b97c4ca2b6f",
+        "data_digest": "554df142406ad3f0",
         "engines": [
           "manifoldbt",
           "raptorbt"
@@ -2373,18 +2373,18 @@
             "worst_abs_return_delta": 1.1102230246251565e-16,
             "worst_component": "return",
             "worst_pair": [
-              11,
-              733
+              5,
+              328
             ]
           },
           "vectorbt": {
             "status": "exact",
             "combos_compared": 250,
-            "worst_abs_return_delta": 2.2707530300536405e-15,
+            "worst_abs_return_delta": 1.635844237846129e-15,
             "worst_component": "return",
             "worst_pair": [
-              9,
-              78
+              5,
+              118
             ],
             "checked_at_combos": 250,
             "scope": "anchor grid, not this grid"
@@ -2393,22 +2393,22 @@
         "status": "exact",
         "timings": {
           "seconds": {
-            "manifoldbt": 1.9126486129999876,
-            "raptorbt": 26.878733610999973,
+            "manifoldbt": 1.348298179999972,
+            "raptorbt": 16.901687563000053,
             "vectorbt": null
           },
           "ratio": {
-            "raptorbt": 14.053147780679225
+            "raptorbt": 12.535570998842706
           },
           "reps": 2,
-          "per_combo_us": 95.63243064999938
+          "per_combo_us": 67.4149089999986
         },
         "memory": {
-          "manifoldbt": 60.4,
+          "manifoldbt": 60.6,
           "vectorbt": null,
           "raptorbt": null
         },
-        "memory_baseline_mb": 603.2,
+        "memory_baseline_mb": 609.2,
         "tier_after": {
           "pro": true,
           "budget_used": 0,
@@ -2423,7 +2423,7 @@
           "fast": 100,
           "slow": 100
         },
-        "data_digest": "e89a96644ec074e4",
+        "data_digest": "116ce87b2230b7dd",
         "engines": [
           "manifoldbt",
           "raptorbt"
@@ -2448,18 +2448,18 @@
             "worst_abs_return_delta": 1.1796119636642288e-16,
             "worst_component": "return",
             "worst_pair": [
-              7,
-              323
+              17,
+              343
             ]
           },
           "vectorbt": {
             "status": "exact",
             "combos_compared": 250,
-            "worst_abs_return_delta": 9.196202827022049e-15,
+            "worst_abs_return_delta": 1.214306433183765e-14,
             "worst_component": "return",
             "worst_pair": [
-              11,
-              53
+              7,
+              63
             ],
             "checked_at_combos": 250,
             "scope": "anchor grid, not this grid"
@@ -2468,22 +2468,22 @@
         "status": "exact",
         "timings": {
           "seconds": {
-            "manifoldbt": 9.739294900999994,
-            "raptorbt": 160.59564872800001,
+            "manifoldbt": 7.628075654000099,
+            "raptorbt": 96.16505464800002,
             "vectorbt": null
           },
           "ratio": {
-            "raptorbt": 16.489453329060883
+            "raptorbt": 12.606725340692167
           },
           "reps": 2,
-          "per_combo_us": 973.9294900999994
+          "per_combo_us": 762.8075654000099
         },
         "memory": {
-          "manifoldbt": 107.0,
+          "manifoldbt": 77.0,
           "vectorbt": null,
           "raptorbt": null
         },
-        "memory_baseline_mb": 1727.0,
+        "memory_baseline_mb": 1734.7,
         "tier_after": {
           "pro": true,
           "budget_used": 0,
