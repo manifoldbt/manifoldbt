@@ -134,6 +134,48 @@ signal = mbt.when(fast > slow, 0.25,
 signal = mbt.when(rsi < 30, 1.0)  # buy oversold, hold otherwise
 ```
 
+### `mbt.hold()` holds the POSITION, not the value
+
+`mbt.hold()` is NaN, and the engine reads NaN at the top of the position
+expression as *leave the position where it is*. It holds the position the
+simulator currently carries, not the last value of the expression around it.
+Two consequences worth knowing before you write a regime filter:
+
+- after a stop-loss or take-profit fired, `hold()` keeps the position **flat**.
+  It does not replay the last signal value and buy back in.
+- under a filter, `hold()` holds whatever the filter last wrote:
+
+```python
+state = mbt.when(imb >= thr, 1.0,
+        mbt.when(imb <= -thr, -1.0, mbt.hold()))
+pos   = mbt.when(regime_open, state, 0.0)      # reads as a trap
+```
+
+While the filter is closed the target is `0.0`, so the position goes flat. When
+it reopens on a bar where `state` falls through to `hold()`, the engine holds
+that flat position: exposure only returns on the **next** threshold crossing.
+Measured on a flow strategy, a filter open 55% of the time left 0.7% exposure.
+Nothing warns, and routing `state` through a named `.signal()` changes nothing.
+
+Both behaviours are legitimate. Pick the one you meant:
+
+| Intent | Write |
+|--------|-------|
+| Exit while the regime is hostile, re-enter only on a **new** signal | keep `hold()` inside the `when`: `mbt.when(regime_open, <...hold()...>, 0.0)` |
+| Persistent state that you **mask** | build the state as a series, then mask it (below) |
+
+```python
+# .ffill() carries the last non-NaN value of the SERIES. The omitted false
+# branch of when() is already NaN, so this is the whole idiom:
+state = mbt.when(imb >= thr, 1.0,
+        mbt.when(imb <= -thr, -1.0)).ffill()
+pos   = mbt.when(regime_open, state, 0.0)      # back on the bar the filter reopens
+```
+
+Masking a `ffill` state does not destroy it. `cond.value_when(value)` writes the
+same series with an explicit trigger; with no filter and nothing else moving the
+position, the three spellings give the same trades.
+
 ### Arithmetic on expressions
 
 ```python
@@ -163,7 +205,7 @@ execution=mbt.ExecutionConfig(position_sizing_mode="FractionOfInitialCapital")
 | `1.0`  | Full long position                      |
 | `0.0`  | Flat (close position)                   |
 | `-0.5` | Short 50% (requires `allow_short=True`) |
-| `NaN`  | Hold current position unchanged         |
+| `NaN`  | Hold the current POSITION unchanged (`mbt.hold()`) |
 
 ---
 
@@ -315,6 +357,25 @@ Two conditions, and the sweep says so when either fails: the name must resolve
 to a **signal** rather than a bar column (a column is read per execution row, a
 different rule), and the strategy must have no exit orders, whose entry-bar
 re-check needs the general loop. `run()` is unaffected either way.
+
+### Filling at the open
+
+`execution_price="AtOpen"` fills at the **open of the execution bar** -- the
+signal row shifted by `signal_delay`. With `signal_delay=1` that is the honest
+intraday convention: the bar closes, the signal is computed, and the order
+reaches the market at the next bar's opening print. Sizing, equity and the
+duplicate-signal check keep reading the execution bar's close, exactly as under
+`AtClose`; only the fill price moves.
+
+**AtOpen keeps the fast kernel, and the GPU.** Sweeping it costs the same as
+sweeping `AtClose` (measured within 5% on a one-second store), and
+`device="cuda"` accepts it with no fallback. Results are identical on both
+devices, to the bit.
+
+Two combinations stay on the general loop, and the sweep names them: an
+AtOpen fill combined with **exit orders** (a fill that lands mid-bar can be
+stopped out by the rest of that same bar, which the fast kernel does not
+replay), and a **multi-asset** universe. `run()` is unaffected either way.
 
 ### Signal delay
 
@@ -748,6 +809,7 @@ Pine-style helpers. The first four take a **condition**, not a numeric series.
 | `streak(cond)` | Length of the current consecutive run of true |
 | `count_over(cond, w)` | Count of true bars in the trailing window |
 | `value_when(cond, source)` | `source` on the last bar where `cond` was true |
+| `expr.ffill()` (method) | Last non-NaN value of `expr`, carried forward; NaN until the first one |
 | `rising(source, n)` | 1.0 if strictly increasing on each of the last `n` steps |
 | `falling(source, n)` | 1.0 if strictly decreasing |
 | `pivot_high(source, left, right)` | Causal pivot high — **no lookahead** |
@@ -756,6 +818,11 @@ Pine-style helpers. The first four take a **condition**, not a numeric series.
 A pivot only appears on its **confirmation bar**, `right` bars after the pivot
 itself. That lag is what makes the signal tradable: a pivot detector that
 reports on the pivot bar has read the future.
+
+`ffill()` is a method on an expression, not a `condition -> series` helper, so it
+reads its receiver as a series. It is the readable spelling of a persistent armed
+state, and unlike `mbt.hold()` it composes with a regime filter -- see
+[`mbt.hold()` holds the POSITION, not the value](#mbthold-holds-the-position-not-the-value).
 
 ### Cross-sectional (multi-asset)
 

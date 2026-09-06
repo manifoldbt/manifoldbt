@@ -78,7 +78,7 @@ def _intraday_bars(rows=8_000, seed=7):
     )
 
 
-def _config(df):
+def _config(df, execution_price="AtClose", signal_delay=0, allow_short=False):
     last_ns = int(df["timestamp"].iloc[-1].value)
     return bt.BacktestConfig(
         universe=[1],
@@ -87,10 +87,10 @@ def _config(df):
         bar_interval=Interval.minutes(1),
         initial_capital=CAPITAL,
         execution=bt.ExecutionConfig(
-            signal_delay=0,
-            execution_price="AtClose",
+            signal_delay=signal_delay,
+            execution_price=execution_price,
             max_position_pct=1.0,
-            allow_short=False,
+            allow_short=allow_short,
             position_sizing_mode="FractionOfEquity",
         ),
         fees=bt.FeeConfig.zero(),
@@ -142,3 +142,106 @@ def test_lite_sweep_matches_run_on_intraday_bars(tmp_path):
             f"{name}: run()={expected!r} but run_sweep_lite()={got!r}. "
             "The lite path has drifted from the full simulation."
         )
+
+
+@pytest.mark.parametrize("signal_delay", [0, 1])
+@pytest.mark.parametrize("allow_short", [False, True])
+def test_lite_sweep_matches_run_at_open(tmp_path, signal_delay, allow_short):
+    """Same contract as above, for ``execution_price="AtOpen"``.
+
+    AtOpen used to be refused by the fast path, so the lite sweep quietly ran
+    the slow general loop for it: correct, ten times slower, and nothing said
+    so. The fast kernel now fills at the open of the EXECUTION bar -- the signal
+    row shifted by ``signal_delay`` -- and this pins that it still answers what
+    ``run()`` answers, on the same fifteen metrics.
+
+    The bars have ``open[i] == close[i-1]``, so AtOpen and AtClose are genuinely
+    different backtests: the last assertion checks exactly that, otherwise this
+    test would pass on an engine that silently ignored the setting.
+    """
+    df = _intraday_bars()
+    root = tmp_path / "store"
+    os.makedirs(root, exist_ok=True)
+    store = bt.import_dataframe(
+        df,
+        symbol="TEST",
+        symbol_id=1,
+        interval="1m",
+        data_root=os.path.join(root, "data"),
+        metadata_db=os.path.join(root, "meta.sqlite"),
+    )
+    config = _config(
+        df,
+        execution_price="AtOpen",
+        signal_delay=signal_delay,
+        allow_short=allow_short,
+    )
+
+    bas = lit(-1.0) if allow_short else lit(0.0)
+    sized = when(col("fast") > col("slow"), lit(1.0), bas)
+    fixed = (
+        bt.Strategy.create("fixed")
+        .signal("fast", sma(close_px, FAST))
+        .signal("slow", sma(close_px, SLOW))
+        .size(sized)
+    )
+    swept = (
+        bt.Strategy.create("swept")
+        .signal("fast", sma(close_px, param("fast")))
+        .signal("slow", sma(close_px, param("slow")))
+        .size(sized)
+    )
+
+    result = bt.run(fixed, config, store)
+    full = result.metrics
+    lite_result = bt.run_sweep_lite(
+        swept, {"fast": [FAST], "slow": [SLOW]}, config, store
+    )[0]
+    lite = lite_result.metrics
+
+    assert full["total_return"] != 0.0
+
+    # The simulation claim, first and unconditionally: the two paths must walk
+    # the same equity path and end on the same number.
+    last_equity = float(np.asarray(result.equity_curve)[-1])
+    assert abs(last_equity - lite_result.final_equity) <= 1e-12 * max(
+        1.0, abs(last_equity)
+    ), (
+        f"final equity: run()={last_equity!r} but "
+        f"run_sweep_lite()={lite_result.final_equity!r}"
+    )
+
+    # `run()` divides by the FIRST point of its equity curve; the lite path
+    # divides by the initial capital. Under AtOpen with signal_delay=0 the very
+    # first bar fills at its own open, so that first point already carries the
+    # bar's profit and loss and the two bases differ. That is a pre-existing
+    # choice-of-base defect -- the mirror of the one this file's docstring
+    # describes for the lite path -- and NOT a divergence of the simulation: the
+    # equity paths above are identical. Pinned by its exact relation rather than
+    # tolerated, so that fixing the base turns this branch red instead of
+    # leaving a silent tolerance behind.
+    first_equity = float(np.asarray(result.equity_curve)[0])
+    if first_equity != CAPITAL:
+        assert (1.0 + full["total_return"]) * first_equity == pytest.approx(
+            (1.0 + lite["total_return"]) * CAPITAL, rel=1e-12
+        ), "the two total_returns differ by more than their base"
+    else:
+        for name in MUST_MATCH:
+            expected, got = full[name], lite[name]
+            assert abs(expected - got) <= 1e-9 * max(1.0, abs(expected)), (
+                f"{name}: run()={expected!r} but run_sweep_lite()={got!r}. "
+                "The AtOpen fast path has drifted from the full simulation."
+            )
+
+    # AtOpen must not be the same backtest as AtClose, or everything above is
+    # vacuous: a kernel that ignored the setting would pass it.
+    at_close = bt.run_sweep_lite(
+        swept,
+        {"fast": [FAST], "slow": [SLOW]},
+        _config(df, "AtClose", signal_delay, allow_short),
+        store,
+    )[0].metrics
+    assert lite["total_return"] != at_close["total_return"], (
+        "AtOpen and AtClose returned the same number: the execution price is "
+        "being ignored."
+    )

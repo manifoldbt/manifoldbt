@@ -79,6 +79,8 @@ def test_etat_de_signal():
     assert ind.streak(rising).to_json() == {"Streak": cond}
     assert ind.count_over(rising, 10).to_json() == {"CountOver": [cond, 10]}
     assert ind.value_when(rising, ind.close).to_json() == {"ValueWhen": [cond, CLOSE]}
+    # ffill est une METHODE : son receveur est une serie, pas une condition.
+    assert ind.close.ffill().to_json() == {"Ffill": CLOSE}
     assert ind.rising(ind.close, 3).to_json() == {"Rising": [CLOSE, 3]}
     assert ind.falling(ind.close, 3).to_json() == {"Falling": [CLOSE, 3]}
 
@@ -161,6 +163,7 @@ CASES = {
     "streak": ind.streak(MONTE),
     "count_over": ind.count_over(MONTE, 10),
     "value_when": ind.value_when(MONTE, ind.close),
+    "ffill": ind.close.ffill(),
     "rising": ind.rising(ind.close, 3),
     "falling": ind.falling(ind.close, 3),
     "pivot_high": ind.pivot_high(ind.high, 3, 3),

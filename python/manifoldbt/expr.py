@@ -53,6 +53,8 @@ _UNARY_BOX = frozenset(
         "CsZScore", "CsDemean", "CsStd", "CsScale",
         # Etat de signal (l'argument est une CONDITION)
         "BarsSince", "Streak",
+        # Etat de signal dont l'argument est une SERIE
+        "Ffill",
         # Composants calendaires
         "Year", "WeekOfYear", "DayOfYear",
         "IsMonthStart", "IsMonthEnd", "IsQuarterEnd", "IsWeekend",
@@ -487,6 +489,25 @@ class Expr:
         """Value of ``source`` on the last bar where this condition was true."""
         return Expr("ValueWhen", self, _coerce(source))
 
+    def ffill(self) -> Expr:
+        """Last non-NaN value of *this* series, carried forward. NaN until the
+        first one.
+
+        Unlike the four helpers above, ``ffill`` reads self as a SERIES, not as
+        a condition. Paired with ``when(cond, value)`` -- whose false branch is
+        NaN by default -- it is the readable spelling of a persistent armed
+        state::
+
+            state = mbt.when(imb >= thr, 1.0,
+                    mbt.when(imb <= -thr, -1.0)).ffill()
+            pos   = mbt.when(regime_open, state, 0.0)   # composes with a filter
+
+        The state is a real series, so masking it does not destroy it: when the
+        filter reopens, ``pos`` picks the state back up on the same bar. That is
+        what ``hold()`` cannot do -- see :func:`hold`.
+        """
+        return Expr("Ffill", self)
+
     def rising(self, n: Period) -> Expr:
         """1.0 if self strictly increased on each of the last ``n`` steps."""
         return Expr("Rising", self, _resolve_period(n))
@@ -803,7 +824,50 @@ def lit(value: Any) -> Expr:
 
 
 def hold() -> Expr:
-    """Return NaN — tells the engine to hold the current position unchanged."""
+    """NaN. The engine reads it as: leave the POSITION where it is.
+
+    What it holds is the position the simulator currently carries, not the
+    value of the expression that contains it. The distinction only shows up
+    once something else can move the position:
+
+    * after a stop-loss or take-profit fired, ``hold()`` keeps the position
+      FLAT. It does not replay the last signal value and buy back in.
+    * under a regime filter, ``hold()`` holds whatever the filter last wrote::
+
+          state = mbt.when(imb >= thr, 1.0,
+                  mbt.when(imb <= -thr, -1.0, mbt.hold()))
+          pos   = mbt.when(regime_open, state, 0.0)   # <- reads as a trap
+
+      While the filter is closed the target is 0.0, so the position goes flat.
+      When it reopens on a bar where ``state`` falls through to ``hold()``, the
+      engine holds that flat position. Exposure only returns on the NEXT
+      threshold crossing, which can be far away: a filter open 55% of the time
+      has been measured to leave under 1% exposure. Nothing warns. Routing the
+      state through a named ``.signal()`` does not change it either -- the NaN
+      still means "hold the position" wherever it is read.
+
+    Both readings are legitimate; pick the one you meant.
+
+    Exit and re-enter only on a NEW signal -- keep ``hold()`` inside the when::
+
+        pos = mbt.when(regime_open,
+              mbt.when(imb >= thr, 1.0,
+              mbt.when(imb <= -thr, -1.0, mbt.hold())), 0.0)
+
+    Persistent state that you mask -- build the state as a real series with
+    :meth:`Expr.ffill`, then mask it::
+
+        state = mbt.when(imb >= thr, 1.0,
+                mbt.when(imb <= -thr, -1.0)).ffill()   # false branch is NaN
+        pos   = mbt.when(regime_open, state, 0.0)
+
+    Masking a ``ffill`` state does not destroy it, so the position comes back
+    on the bar the filter reopens. ``cond.value_when(value)`` writes the same
+    series with an explicit trigger.
+
+    With no filter and nothing else moving the position (no stop, no take
+    profit), the three spellings give the same trades.
+    """
     return Expr("Literal", float("nan"))
 
 
@@ -834,7 +898,10 @@ def when(condition: Expr, true_value: Any = 1.0, false_value: Any = float("nan")
     """Conditional expression (if/else).
 
     Omit true_value to default to 1.0 (full position, clamped by max_position_pct).
-    Omit false_value to hold current position.
+    Omit false_value and the false branch is NaN. At the TOP of the position
+    expression the engine reads that NaN as "hold the position"; anywhere else
+    it is just NaN, and an enclosing ``when`` can overwrite it. See :func:`hold`
+    and :meth:`Expr.ffill`.
     """
     # The condition goes through _coerce like the two branches: unchecked, a
     # multi-output indicator handed in whole reached the JSON as a tuple and

@@ -2146,7 +2146,8 @@ from manifoldbt.indicators import sma, ema, rsi   # 104 indicator functions
 sig  = bt.when(cond, then, otherwise)             # conditions combine with & | ~
 pos  = bt.when(z >= bt.lit(2.0), bt.lit(-1.0),
        bt.when(z <= bt.lit(-2.0), bt.lit(1.0),
-       bt.when(abs(z) <= bt.lit(0.5), bt.lit(0.0), bt.hold())))  # hold() = keep previous
+       bt.when(abs(z) <= bt.lit(0.5), bt.lit(0.0), bt.hold())))  # hold() = keep the POSITION
+                                                                 # under a filter, use .ffill() (see recipes)
 strat = (bt.Strategy.create("name")
          .signal("position", pos)     # signals are named series
          .size(pos))                  # target fraction of equity; +long / -short
@@ -2187,7 +2188,7 @@ bt.run_walk_forward(...)   # and run_stability, run_stochastic, run_portfolio
 
 Worked recipes -- yes, the DSL expresses these
 ----------------------------------------------
-Stateful thresholds (hysteresis). hold() keeps the previous position, so a band
+Stateful thresholds (hysteresis). hold() keeps the previous POSITION, so a band
 between entry and exit needs no Python loop:
 
     z = (bt.col("close") / bt.symbol_ref("ETHUSDT", "close")).zscore(200)
@@ -2197,6 +2198,19 @@ between entry and exit needs no Python loop:
           bt.hold())))                                     # else: keep position
     strat = bt.Strategy.create("pair").signal("pos", pos).size(bt.col("pos"))
     cfg = bt.BacktestConfig(universe=["BTCUSDT"], ...)     # plain list is fine
+
+Persistent state UNDER a regime filter -- use .ffill(), not hold(). hold() holds
+the position, so a filter that writes 0.0 while it is closed is what hold() holds
+when it reopens: exposure only returns on the next threshold crossing (measured:
+a filter open 55% of the time left 0.7% exposure, silently). .ffill() carries the
+last non-NaN value of the SERIES, so masking it does not destroy it:
+
+    state = bt.when(imb >= thr, bt.lit(1.0),
+            bt.when(imb <= -thr, bt.lit(-1.0))).ffill()   # omitted branch = NaN
+    pos   = bt.when(regime_open, state, bt.lit(0.0))      # back on the same bar
+
+    # want the other behaviour (exit, re-enter only on a NEW signal)? then keep
+    # hold() inside the when: bt.when(regime_open, <...hold()...>, bt.lit(0.0))
 
 Several legs against one anchor. Same expression, several traded symbols: each
 one gets its own state and its own position, equity is shared. The anchor is
