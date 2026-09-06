@@ -1,14 +1,14 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/manifoldbt/manifoldbt/master/assets/logo.png" width="110" alt="ManifoldBT logo">
+  <img src="https://raw.githubusercontent.com/manifoldbt/manifoldbt/master/assets/logo.png" width="110" alt="Manifold-BT logo">
 </p>
 
 <p align="center">
-  <strong>ManifoldBT</strong><br>
+  <strong>Manifold-BT</strong><br>
   Rust-powered backtesting engine for quantitative research
 </p>
 
 <p align="center">
-  <a href="https://discord.gg/bvU6Wjc72d"><img src="https://img.shields.io/badge/Discord-Join%20the%20community-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Join the ManifoldBT Discord" height="34"></a>
+  <a href="https://discord.gg/bvU6Wjc72d"><img src="https://img.shields.io/badge/Discord-Join%20the%20community-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Join the Manifold-BT Discord" height="34"></a>
 </p>
 
 <p align="center">
@@ -26,12 +26,12 @@
 
 ---
 
-ManifoldBT is a Python backtesting library with a Rust core. Strategies are written in a
+Manifold-BT is a Python backtesting library with a Rust core. Strategies are written in a
 fluent Python DSL, compiled to a vectorized Rust expression graph, then run through a
 sequential fill simulation with realistic fees, slippage, funding and look-ahead protection.
 **Vectorized speed with event-driven execution realism.**
 
-## Why ManifoldBT
+## Why Manifold-BT
 
 - **Fast**: 10M bars in 329 ms. 79x faster than vectorbt, and 311x once you also want drawdown and Sharpe. [Measured in public CI](#performance), every run linked.
 - **Expressive**: fluent DSL with 104 indicators and 38 candlestick patterns, conditional logic, cross-asset references
@@ -358,7 +358,7 @@ a workload they disagree on gets no published timing at all.
 ran on Linux x86_64, 4 vCPU (AMD EPYC 7763), Python 3.12, manifoldbt 0.18.0 /
 vectorbt 0.28.4 / raptorbt 0.9.0, 3 interleaved repetitions, medians reported.
 
-| Workload | Bars | ManifoldBT | vectorbt | raptorbt |
+| Workload | Bars | Manifold-BT | vectorbt | raptorbt |
 |---|---:|---:|---:|---:|
 | SMA crossover | 10M | **327 ms** | 26.12 s (x79) | 913 ms (x2.8) |
 | ...with drawdown, Sharpe, Sortino, volatility | 10M | **329 ms** | 102.38 s (**x311**) | 909 ms (x2.8) |
@@ -368,11 +368,11 @@ vectorbt 0.28.4 / raptorbt 0.9.0, 3 interleaved repetitions, medians reported.
 | Stop-loss and take-profit bracket | 10M | **934 ms** | 26.24 s (x28) | 916 ms (**x1.0**) |
 
 The second row is the one worth reading twice. Asking for a performance summary
-costs ManifoldBT nothing measurable, because it computes one during the run
+costs Manifold-BT nothing measurable, because it computes one during the run
 whether you read it or not, and costs vectorbt 102 seconds, because it defers
 the equity curve until a risk metric needs it and then has to build one.
 
-The last two rows are the ones where ManifoldBT does worst, and they are
+The last two rows are the ones where Manifold-BT does worst, and they are
 published for that reason. Broadcasting a column per asset is close to free for
 vectorbt, while walking five books is not free for anything. And on a
 stop-loss/take-profit bracket, raptorbt is level with us: the intra-bar check
@@ -381,14 +381,14 @@ engines, so there is no vectorization left to win with.
 
 ### Parameter sweeps
 
-| Bars | Combinations | ManifoldBT | vectorbt | raptorbt |
+| Bars | Combinations | Manifold-BT | vectorbt | raptorbt |
 |---:|---:|---:|---:|---:|
 | 20,000 | 5,000 | **446 ms**, 40 MB | 5.84 s, 2.5 GB | 7.08 s |
 | 200,000 | 10,000 | **9.96 s**, 79 MB | out of memory | 164.50 s |
 
 Past a certain grid the question stops being speed. vectorbt materialises the
 simulation per combination, 1.57 MB of it at 20,000 bars, so the second row
-would ask a machine for tens of gigabytes. ManifoldBT runs it in ten seconds
+would ask a machine for tens of gigabytes. Manifold-BT runs it in ten seconds
 inside 79 MB.
 
 Reproduce any of it yourself: fork the repository and press **Run workflow** on
@@ -401,7 +401,7 @@ The method, the parity gate and the known divergences are written up in
 ### Against an event-driven engine
 
 backtrader runs the same EMA(12/26) + RSI(14) strategy on 500K 1-minute bars in
-**46,944 ms**, against **13 ms** for ManifoldBT: a factor of **3,556**. Measured
+**46,944 ms**, against **13 ms** for Manifold-BT: a factor of **3,556**. Measured
 with `benchmarks/bench_vs_competitors.py`, median of 3 runs, on a developer
 machine and not the CI runner, so it is not comparable line-for-line with the
 table above.
@@ -413,7 +413,7 @@ are not doing the same thing.
 
 ### How it compares
 
-| | ManifoldBT | vectorbt | backtrader | Nautilus |
+| | Manifold-BT | vectorbt | backtrader | Nautilus |
 |---|---|---|---|---|
 | Engine | Rust (vectorized + sequential fills) | Numba/NumPy (vectorized) | Python (event-driven) | Rust/Python (event-driven) |
 | Execution realism¹ | High | Basic | High | High |
@@ -435,7 +435,8 @@ Full API reference, indicator list, configuration guide, and best practices:
 |---|---|---|
 | Single backtests (`mbt.run`) | Unlimited, full speed | Unlimited, full speed |
 | Parameter sweeps & batches | Up to 256 backtests per sweep | Unlimited |
-| Output resolution | Daily | 1m, 5m, 15m, 1h |
+| Simulation resolution (`bar_interval`) | 1 minute and coarser | Down to 1 second |
+| Output resolution | Daily | Down to 1 second |
 | Monte Carlo | 1K sims | Unlimited |
 | Walk-Forward | - | Anchored + Rolling |
 | Parameter Stability | - | Yes |

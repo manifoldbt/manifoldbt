@@ -190,6 +190,14 @@ class ExecutionConfig:
       conservative, and the run stays on the general loop). The result's
       fill_fragility counters say how many maker fills the choice affects.
     """
+    fill_resolution: Optional[str] = None
+    """What level orders (stop-loss, take-profit, trailing stop, limit and stop
+    entries) are resolved against inside a bar: "bar" (default) uses the bar's
+    high and low, "ticks" walks the individual trades of the bar in time order,
+    so the order the market actually printed decides which level came first.
+    Needs a stored tape for the symbol; a bar with no trade in its window falls
+    back to the bar rule, and the result's tape_resolution counters say how
+    often that happened. Merged into fill_model when set."""
     orders: Optional[OrderConfig] = None
     """Order management: limit entries, stop-loss, take-profit, trailing stops.
     When None (default), the engine uses the legacy market-order path."""
@@ -207,6 +215,11 @@ class ExecutionConfig:
         }
         if self.fill_model is not None:
             d["fill_model"] = self.fill_model
+        if self.fill_resolution is not None:
+            d["fill_model"] = {
+                **(self.fill_model or {}),
+                "fill_resolution": self.fill_resolution,
+            }
         if self.orders is not None:
             d["orders"] = self.orders.to_json_dict()
         return d
@@ -349,6 +362,9 @@ class BacktestConfig:
     initial_capital: float = 1000.0
     currency: str = "USD"
     bar_interval: Any = None
+    """Bar step the simulation runs on, e.g. ``Interval.hours(1)``.
+    ``None`` means one minute. Steps below one minute are a Pro feature;
+    Community simulates at one minute at the finest, whatever the store holds."""
     execution: ExecutionConfig = field(default_factory=ExecutionConfig)
     fees: FeeConfig = field(default_factory=FeeConfig)
     slippage: Any = None
@@ -362,8 +378,11 @@ class BacktestConfig:
     non-zero rate (e.g. 0.025) for an excess-return Sharpe."""
     output_resolution: Any = None
     """Downsample output timeseries (equity, positions).
-    None = auto (uses resample_to if set, else bar_interval; min 1h).
-    Use ``{"Hours": 1}``, ``{"Days": 1}``, etc. for explicit control."""
+    None = auto (uses resample_to if set, else bar_interval), so the output
+    keeps the step the simulation ran at.
+    Use ``{"Seconds": 1}``, ``{"Hours": 1}``, ``{"Days": 1}``, etc. for explicit
+    control. Pro returns any step down to one second; Community output is
+    coarsened to daily."""
     resample_to: Any = None
     """Resample raw bars to this interval before simulation.
     E.g. ``{"Minutes": 60}`` aggregates 1-min data into 60-min OHLCV bars.
@@ -444,7 +463,7 @@ class BacktestConfig:
                 "start": self.time_range_start,
                 "end": self.time_range_end,
             },
-            "bar_interval": self.bar_interval or {"Seconds": 1},
+            "bar_interval": self.bar_interval or {"Minutes": 1},
             "initial_capital": self.initial_capital,
             "currency": self.currency,
             "execution": self.execution.to_json_dict(),

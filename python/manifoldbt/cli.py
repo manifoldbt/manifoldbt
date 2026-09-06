@@ -13,7 +13,7 @@ import sys
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(prog="manifoldbt", description="ManifoldBT CLI")
+    parser = argparse.ArgumentParser(prog="manifoldbt", description="Manifold-BT CLI")
     sub = parser.add_subparsers(dest="command")
 
     # ── ingest ────────────────────────────────────────────────────────────

@@ -236,6 +236,7 @@ config = mbt.BacktestConfig(
 ### Bar intervals
 
 ```python
+Interval.seconds(1)    # 1-second (Pro)
 Interval.minutes(1)    # 1-min
 Interval.minutes(15)   # 15-min
 Interval.hours(1)      # 1-hour
@@ -243,6 +244,9 @@ Interval.hours(4)      # 4-hour
 Interval.hours(12)     # 12-hour
 Interval.days(1)       # daily
 ```
+
+Anything below one minute is a Pro step; Community simulates at one minute at
+the finest. `bar_interval` is one minute when left out.
 
 ### Accuracy mode
 

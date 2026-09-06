@@ -13,6 +13,14 @@ data.binance.vision, or one from :func:`generate_tape` for a reproducible
 example. Bar-level backtests are unaffected by this module; it is a separate
 layer, not a change to :func:`manifoldbt.run`.
 
+The bar engine has its own door to a tape, and it is not this module:
+``ExecutionConfig(fill_resolution="ticks")`` makes :func:`manifoldbt.run`
+resolve level orders (stop-loss, take-profit, trailing stop, limit and stop
+entries) against the trades stored for the symbol -- put there by
+:func:`manifoldbt.ingest_trades`, not by a CSV path -- instead of against each
+bar's high and low, and ``result.tape_resolution`` counts what the tape
+decided. Same tier, different entry point.
+
 Three ways to run a strategy on a tape:
 
   * :func:`run_orderflow` - the built-in aggressor-imbalance strategy,

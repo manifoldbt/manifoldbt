@@ -40,6 +40,7 @@ from manifoldbt._native import (
     BatchResultLite,
     DataStore,
     activate,
+    _flush_usage as _flush_usage_native,
     license_expiry as _license_expiry,
     license_info as _license_info,
     compile_strategy_json,
@@ -168,6 +169,13 @@ def _print_pro_summary() -> None:
 
 import atexit
 atexit.register(_print_pro_summary)
+
+# Fold this session's anonymous usage counters into their file on the way out.
+# Without it a script short enough never to reach the periodic flush (most
+# scripts) would count everything and persist nothing. Order does not matter:
+# this neither prints nor reads anything the hooks around it touch, and it is a
+# no-op under MANIFOLDBT_NO_TELEMETRY / DO_NOT_TRACK / CI.
+atexit.register(_flush_usage_native)
 
 
 def check_for_update() -> Optional[str]:
@@ -889,6 +897,116 @@ def ingest(
     return store
 
 
+def ingest_trades(
+    provider: str,
+    symbol: str,
+    symbol_id: int,
+    start: str,
+    end: str,
+    *,
+    data_root: str = "data",
+    metadata_db: str = "metadata/metadata.sqlite",
+    exchange: Optional[str] = None,
+    asset_class: str = "crypto_spot",
+    progress: bool = True,
+) -> DataStore:
+    """Ingest whole days of trades (a tape) from a venue's public archive.
+
+    The tick-level counterpart of :func:`ingest`, with the same shape: you name
+    a provider, a symbol and a range, the provider fetches, the store keeps one
+    Arrow file per UTC day under ``{provider}/ticks/{symbol}/``. Nothing is
+    fetched that you did not ask for.
+
+    Providers with a public trade archive: ``"bybit"`` (spot, one ``.csv.gz``
+    per day) and ``"binance"`` (spot aggTrades, one ``.zip`` per day). Both
+    keep a rolling window, so an old day raises a named error rather than
+    returning nothing. ``start`` and ``end`` are ``YYYY-MM-DD`` (an RFC 3339
+    instant is accepted; its date part is used), ``end`` inclusive.
+
+    Part of the tick layer: not unlocked by any licence sold today, a Pro one
+    included; the engine says so before touching the network.
+
+    Example::
+
+        store = bt.ingest_trades("bybit", "BTCUSDT", symbol_id=1,
+                                 start="2026-08-25", end="2026-08-25")
+    """
+    from manifoldbt._native import py_ingest_trades as _native
+
+    cb = None
+    if progress:
+        def cb(i, n, day):
+            if i < n:
+                print(f"  tape {symbol.upper()} {day} ({i + 1}/{n})", flush=True)
+
+    return _native(
+        provider, symbol, int(symbol_id), start, end, data_root, metadata_db,
+        exchange, asset_class, cb,
+    )
+
+
+def bars_from_trades(
+    store: DataStore,
+    symbol,
+    start: str,
+    end: str,
+    *,
+    interval: str = "1s",
+) -> dict:
+    """Rebuild bars from the tape stored for a symbol, and write them into
+    the store at ``interval``.
+
+    A venue's own bars carry one total volume. Bars rebuilt from the tape
+    carry what the tape carries: ``buy_volume`` and ``sell_volume`` split by
+    the aggressor side, ``vwap`` and ``trade_count``. They are ordinary bars
+    for everything downstream: ``run()`` reads them at ``interval`` or
+    resamples them coarser, and the DSL addresses the flow columns by name
+    (``col("buy_volume")``). Seconds with no trade produce no bar. One second
+    is the finest step the store holds.
+
+    Args:
+        store: The store holding the symbol's tape (see :func:`ingest_trades`).
+        symbol: The store ticker (e.g. ``"BTCUSDT"``) or symbol id.
+        start: First instant, ISO date or datetime (``"2026-08-25"``).
+        end: Last instant, exclusive (``"2026-08-26"`` for one full day).
+        interval: ``"1s"``, ``"1m"``, ``"5m"``, ``"1h"``, ... (default ``"1s"``).
+
+    Returns:
+        ``{"bars", "version", "interval_ns", "first_ts", "last_ts"}``.
+
+    Example::
+
+        store = bt.ingest_trades("bybit", "BTCUSDT", symbol_id=1,
+                                 start="2026-08-25", end="2026-08-25")
+        bt.bars_from_trades(store, "BTCUSDT", "2026-08-25", "2026-08-26")
+        config = bt.BacktestConfig(..., bar_interval=Interval.seconds(1))
+        result = bt.run(strategy, config, store)
+    """
+    from manifoldbt.helpers import time_range as _time_range
+
+    # No Python-side licence check: the native side answers, with the
+    # accurate refusal. Same policy as manifoldbt.ticks and attach_quotes.
+    if isinstance(symbol, int):
+        symbol_id = symbol
+    else:
+        symbol_id = store.resolve_symbol(str(symbol))
+    start_ns, end_ns = _time_range(start, end)
+    if end_ns <= start_ns:
+        raise ValueError(
+            f"end {end!r} must be after start {start!r} (end is exclusive: "
+            "one full day is start='2026-08-25', end='2026-08-26')"
+        )
+
+    from manifoldbt._native import py_bars_from_trades as _native
+
+    try:
+        return _native(
+            store.data_root(), store.metadata_db(), symbol_id, interval, start_ns, end_ns
+        )
+    except (ValueError, RuntimeError) as exc:
+        raise _classify_error(exc) from exc
+
+
 def attach_quotes(
     store: DataStore,
     symbol,
@@ -1023,7 +1141,8 @@ def import_csv(
         path: Path to the CSV file (standard / MT4 / MT5 format).
         symbol: Ticker name (e.g. ``"EURUSD"``, ``"BTCUSDT"``).
         symbol_id: Unique integer ID for this symbol in the store.
-        interval: Bar interval of the rows (``"1m"``, ``"5m"``, ``"1h"``, ``"1d"``, ...).
+        interval: Bar interval of the rows (``"1s"``, ``"1m"``, ``"5m"``, ``"1h"``,
+            ``"1d"``, ...). The store holds a tier per interval, down to one second.
         data_root: Store directory (default ``"data"``).
         metadata_db: Metadata SQLite path.
         exchange: Exchange label for metadata (default ``"CSV"``).
@@ -1159,7 +1278,8 @@ def import_dataframe(
         data: pandas/polars DataFrame or dict of columns.
         symbol: Ticker name (e.g. ``"EURUSD"``, ``"BTCUSDT"``).
         symbol_id: Unique integer ID for this symbol in the store.
-        interval: Bar interval of the rows (``"1m"``, ``"5m"``, ``"1h"``, ``"1d"``, ...).
+        interval: Bar interval of the rows (``"1s"``, ``"1m"``, ``"5m"``, ``"1h"``,
+            ``"1d"``, ...). The store holds a tier per interval, down to one second.
         data_root: Store directory (default ``"data"``).
         metadata_db: Metadata SQLite path.
         exchange: Exchange label for metadata (default ``"DATAFRAME"``).
@@ -2039,7 +2159,8 @@ start, end = bt.time_range("2022-01-01", "2025-01-01")   # UNIX NANOSECONDS -- n
 cfg = bt.BacktestConfig(
     universe=["BTCUSDT"],             # tickers, ids, or {"provider": [...]}
     time_range_start=start, time_range_end=end,
-    bar_interval=bt.Interval.hours(1),
+    bar_interval=bt.Interval.hours(1),   # one minute if left out; down to seconds(1)
+                                         # on Pro, minutes(1) at the finest on Community
     initial_capital=100_000.0,
     warmup_bars=50,
     execution=bt.ExecutionConfig(signal_delay=1,          # bars between signal and fill
@@ -2100,6 +2221,9 @@ Common errors
     reference as "provider:TICKER" with a dict universe.
 "cross-sectional op ... must be the whole signal"  -> give the cs op its own
     signal; thresholding one is not supported (see the recipe above).
+"bar_interval below one minute requires a Pro license" -> sub-minute simulation is
+    Pro; Community runs at one minute at the finest. A config that leaves
+    bar_interval out runs at one minute.
 """
 
 
@@ -2112,6 +2236,8 @@ __all__ = [
     "SweepResult",
     # Data ingestion
     "ingest",
+    "ingest_trades",
+    "bars_from_trades",
     "attach_quotes",
     "import_csv",
     "import_dataframe",

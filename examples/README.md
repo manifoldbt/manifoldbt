@@ -135,15 +135,18 @@ The self-contained and synthetic examples need none of this.
 | 24 | `24_option_spread.py` | a two-leg option structure | network |
 | 25 | `25_lookahead_trap.py` | the look-ahead no re-run can detect | synthetic ⚠ |
 | 26 | `26_fill_costs.py` | the same signal filled four ways, and what each costs | shared store |
-| 27 | `27_bars_vs_tape.py` | the exit a candle has to guess, put back to the trades | synthetic, **not runnable yet** |
+| 27 | `27_bars_vs_tape.py` | the same bracket resolved on the candle and on the trades inside it | network, **not runnable yet** |
 
 ⚠ marks the two files whose fixture determines the outcome, as described above.
 
-**27 does not run today, on any licence.** The tick layer it uses is not
-unlocked by anything sold today: the code ships ahead of its availability.
-The file is there to be read, and it will run unchanged when the layer
-opens. It is also the only example that wants pandas, for the
-join between its trade log and its bars.
+**27 does not run today, on any licence.** Reading a stored tape is not
+unlocked by anything sold today: the code ships ahead of its availability. The
+file is there to be read, and it will run unchanged when the layer opens -- on
+the gate it exits with the refusal message rather than a traceback. It is the
+only example that both fetches a trade tape and reads it back through `run()`:
+`fill_resolution="ticks"` resolves stop-loss, take-profit, trailing and entry
+levels against the individual trades of each bar instead of against its high
+and low, and `result.tape_resolution` counts what the tape decided.
 
 Two files here are not examples and carry no number:
 
