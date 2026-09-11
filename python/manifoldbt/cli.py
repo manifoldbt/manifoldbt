@@ -23,7 +23,7 @@ def main() -> None:
         required=True,
         help=(
             "binance | bybit | hyperliquid | dydx | bitstamp | deribit | yahoo "
-            "| databento | massive"
+            "| dukascopy | databento | massive"
         ),
     )
     ing.add_argument("--symbol", required=True, help="e.g. BTCUSDT, ESH5")

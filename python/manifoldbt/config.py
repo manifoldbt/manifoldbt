@@ -31,6 +31,49 @@ def entry_price(
     return {"Signal": signal}
 
 
+def exit_distance(
+    pct: Optional[float],
+    signal: Optional[Any],
+    where: str,
+) -> Union[float, str]:
+    """The distance an exit order measures from the entry fill: a constant
+    percentage, or the name of a signal holding one.
+
+    Pass exactly one. ``pct`` must be a finite positive number; ``signal`` the
+    NAME of a signal the strategy defines, so the distance can be two ATR wide
+    on a quiet day and twice that on a violent one.
+    """
+    accepted = (
+        f"{where} takes exactly one of pct= (a finite positive percentage, "
+        f"e.g. pct=2.0) or signal= (the name of a signal holding the distance "
+        f"in percent, e.g. signal=\"stop_dist\")"
+    )
+    if (pct is None) == (signal is None):
+        raise ValueError(f"{accepted}.")
+
+    if signal is not None:
+        # An expression handed over whole is the frequent slip: an exit order
+        # reads a NAME, like an entry order does, so the expression has to be
+        # named on the strategy first.
+        if not isinstance(signal, str):
+            got = type(signal).__name__
+            raise TypeError(
+                f"{where}(signal=...) takes the NAME of a signal, got {got}. "
+                f"Name it with .signal(...) first: "
+                f'.signal("stop_dist", <expression>).{where}(signal="stop_dist").'
+            )
+        if not signal.strip():
+            raise ValueError(f"{where}(signal=...) takes a non-empty signal name.")
+        return signal
+
+    if isinstance(pct, bool) or not isinstance(pct, (int, float)):
+        raise TypeError(f"{accepted}, got {type(pct).__name__}.")
+    value = float(pct)
+    if not (value > 0.0) or value in (float("inf"),) or value != value:
+        raise ValueError(f"{accepted}, got {pct!r}.")
+    return value
+
+
 _ORDER_SIDES = {"both": None, "long": "Long", "short": "Short"}
 
 
@@ -69,6 +112,9 @@ class OrderConfig:
       stop_loss:  {"stop_pct": 2.0}   — % from entry price
       take_profit: {"profit_pct": 5.0} — % from entry price
       trailing_stop: {"trail_pct": 3.0, "use_high": true}
+      Each distance is either a number (a constant percentage) or the name of
+      a signal holding one, e.g. {"stop_pct": "stop_dist"}: read on the bar
+      whose signal opened the trade and frozen for its life.
       Each of the three also takes "side": "Both" (default), "Long" or
       "Short"; an order armed on one side leaves the other bare.
 
@@ -87,14 +133,26 @@ class OrderConfig:
     ) -> "OrderConfig":
         """Convenience: create a bracket order (SL + TP)."""
         return cls(
-            stop_loss=exit_order({"stop_pct": stop_pct}, side, "bracket"),
-            take_profit=exit_order({"profit_pct": profit_pct}, side, "bracket"),
+            stop_loss=exit_order(
+                {"stop_pct": exit_distance(stop_pct, None, "bracket")}, side, "bracket"
+            ),
+            take_profit=exit_order(
+                {"profit_pct": exit_distance(profit_pct, None, "bracket")},
+                side,
+                "bracket",
+            ),
         )
 
     @classmethod
     def stop_loss_only(cls, stop_pct: float, side: str = "both") -> "OrderConfig":
         """Convenience: stop-loss only."""
-        return cls(stop_loss=exit_order({"stop_pct": stop_pct}, side, "stop_loss_only"))
+        return cls(
+            stop_loss=exit_order(
+                {"stop_pct": exit_distance(stop_pct, None, "stop_loss_only")},
+                side,
+                "stop_loss_only",
+            )
+        )
 
     @classmethod
     def trailing(
@@ -102,7 +160,13 @@ class OrderConfig:
     ) -> "OrderConfig":
         """Convenience: trailing stop only."""
         return cls(trailing_stop=exit_order(
-            {"trail_pct": trail_pct, "use_high": use_high}, side, "trailing"))
+            {
+                "trail_pct": exit_distance(trail_pct, None, "trailing"),
+                "use_high": use_high,
+            },
+            side,
+            "trailing",
+        ))
 
     @classmethod
     def limit_entry_at(

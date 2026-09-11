@@ -76,12 +76,21 @@ def min_val(a: Expr, b: Expr) -> Expr:
 
 
 def sma(source: Expr, period) -> Expr:
-    """Simple Moving Average. Period can be int or param()."""
+    """Simple Moving Average.
+
+    ``period`` is a bar count (int or ``param()``), or a duration
+    (``Interval.seconds(30)``) for a window in time -- see
+    ``Expr.rolling_mean``.
+    """
     return source.rolling_mean(period)
 
 
 def ema(source: Expr, span) -> Expr:
-    """Exponential Moving Average (span-based). Span can be int or param()."""
+    """Exponential Moving Average (span-based). Span can be int or param().
+
+    For a decay driven by elapsed time rather than by bars, use
+    ``source.ewm_mean(halflife=Interval.seconds(2))``.
+    """
     return source.ewm_mean(span)
 
 
@@ -646,8 +655,11 @@ def cmf(period: int = 20, *, h: Expr = None, l: Expr = None, c: Expr = None, v: 
 # ---------------------------------------------------------------------------
 
 
-def rolling_var(source: Expr, window: int) -> Expr:
-    """Rolling population variance (native Rust): divides by the window, not n-1."""
+def rolling_var(source: Expr, window) -> Expr:
+    """Rolling population variance (native Rust): divides by the row count, not n-1.
+
+    ``window`` is a bar count or a duration (``Interval.seconds(30)``).
+    """
     return source.rolling_var(window)
 
 
@@ -687,18 +699,27 @@ def rolling_argmin(source: Expr, window: int) -> Expr:
     return source.rolling_argmin(window)
 
 
-def rolling_corr(a: Expr, b: Expr, window: int) -> Expr:
-    """Rolling Pearson correlation of ``a`` and ``b`` (native Rust)."""
+def rolling_corr(a: Expr, b: Expr, window) -> Expr:
+    """Rolling Pearson correlation of ``a`` and ``b`` (native Rust).
+
+    ``window`` is a bar count or a duration (``Interval.seconds(30)``).
+    """
     return a.rolling_corr(b, window)
 
 
-def rolling_cov(a: Expr, b: Expr, window: int) -> Expr:
-    """Rolling sample covariance, ddof=1 (native Rust)."""
+def rolling_cov(a: Expr, b: Expr, window) -> Expr:
+    """Rolling sample covariance, ddof=1 (native Rust).
+
+    ``window`` is a bar count or a duration (``Interval.seconds(30)``).
+    """
     return a.rolling_cov(b, window)
 
 
-def rolling_beta(y: Expr, x: Expr, window: int) -> Expr:
-    """Rolling OLS beta of ``y`` on ``x`` (native Rust): ``cov(y, x) / var(x)``."""
+def rolling_beta(y: Expr, x: Expr, window) -> Expr:
+    """Rolling OLS beta of ``y`` on ``x`` (native Rust): ``cov(y, x) / var(x)``.
+
+    ``window`` is a bar count or a duration (``Interval.seconds(30)``).
+    """
     return y.rolling_beta(x, window)
 
 
@@ -715,13 +736,32 @@ def bars_since(condition: Expr) -> Expr:
     return condition.bars_since()
 
 
+def time_since(condition: Expr) -> Expr:
+    """Seconds since ``condition`` was last true (native Rust).
+
+    ``0.0`` on a row where it is true; NaN until it first is. The twin of
+    ``bars_since`` for a grid whose rows are not evenly spaced.
+    """
+    return condition.time_since()
+
+
 def streak(condition: Expr) -> Expr:
     """Length of the current consecutive run of true ending at this bar."""
     return condition.streak()
 
 
-def count_over(condition: Expr, window: int) -> Expr:
-    """Count of bars where ``condition`` is true in the trailing window."""
+def count_over(condition, window=None) -> Expr:
+    """Count of rows where ``condition`` is true in the trailing window.
+
+    ``window`` is a bar count or a duration (``Interval.seconds(30)``), in
+    which case the window is ``(t - 30s, t]``.
+
+    Called with a duration alone -- ``count_over(Interval.seconds(30))`` -- it
+    counts the ROWS in the window, which on a gappy grid is how many bars the
+    last thirty seconds actually printed.
+    """
+    if window is None:
+        window, condition = condition, lit(True)
     return condition.count_over(window)
 
 

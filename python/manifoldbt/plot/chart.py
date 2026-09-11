@@ -45,6 +45,57 @@ def _sma(close: np.ndarray, period: int) -> np.ndarray:
 # OHLC loading
 # ---------------------------------------------------------------------------
 
+
+# Stored resolutions, finest first: (seconds, provider-layout label, legacy dir).
+_STORED_RESOLUTIONS = (
+    (1, "1s", "bars_1s"),
+    (60, "1m", "bars_1m"),
+    (3_600, "1h", "bars_1h"),
+    (86_400, "1d", "bars_1d"),
+)
+
+
+def _symbol_row(store, symbol_id: int):
+    """``(ticker, exchange)`` of a symbol from the metadata DB, or ``(None, None)``."""
+    try:
+        import sqlite3
+
+        conn = sqlite3.connect(store.metadata_db())
+        try:
+            row = conn.execute(
+                "SELECT ticker, exchange FROM symbols WHERE id = ?", (symbol_id,)
+            ).fetchone()
+        finally:
+            conn.close()
+        return (row[0], row[1]) if row else (None, None)
+    except Exception:
+        return (None, None)
+
+
+def _find_bar_file(store, symbol_id: int, bar_interval_seconds: int) -> Optional[Path]:
+    """The Arrow file holding this symbol's bars, the way the engine finds it.
+
+    Coarsest stored resolution first, never coarser than the chart interval
+    (a 4 h chart reads the 1 h file, a 1 m chart the 1 m file); within a
+    resolution the provider layout wins over the legacy one.
+    """
+    data_root = Path(store.data_root())
+    root = data_root if data_root.name == "mega" else data_root / "mega"
+    ticker, exchange = _symbol_row(store, symbol_id)
+    provider = (exchange or "").lower()
+    for seconds, tf_label, legacy_subdir in reversed(_STORED_RESOLUTIONS):
+        if seconds > bar_interval_seconds:
+            continue
+        if ticker and provider:
+            path = root / provider / tf_label / f"{ticker}.arrow"
+            if path.exists():
+                return path
+        path = root / legacy_subdir / f"{symbol_id}.arrow"
+        if path.exists():
+            return path
+    return None
+
+
 def _load_bars(
     store,
     symbol_id: int,
@@ -52,7 +103,16 @@ def _load_bars(
     end_ns: int,
     bar_interval_seconds: int,
 ) -> Dict[str, np.ndarray]:
-    """Load OHLC bars from parquet and resample to target interval."""
+    """Load the stored bars of one symbol and resample them to the chart's interval.
+
+    The lookup mirrors the engine's own: the provider layout written by
+    ``bt.ingest`` / ``bt.import_dataframe`` / ``bt.import_csv``
+    (``{root}/{provider}/{tf}/{ticker}.arrow``, a ticker with a slash nesting
+    one level down), then the legacy ``{root}/bars_{tf}/{symbol_id}.arrow``,
+    at the coarsest stored resolution that still divides the chart interval,
+    and finally the historical Parquet partitions. Returns ``{}`` when no
+    bars cover the window.
+    """
     import pyarrow as pa
     import pyarrow.parquet as pq
     from datetime import datetime, timezone, timedelta
@@ -62,10 +122,8 @@ def _load_bars(
     start_dt = datetime.fromtimestamp(start_ns / 1e9, tz=timezone.utc)
     end_dt = datetime.fromtimestamp(end_ns / 1e9, tz=timezone.utc)
 
-    # Try Arrow IPC file first (new layout), then Parquet partitions (legacy)
-    arrow_dir = Path(store.data_root()) / "mega" if not str(data_root).endswith("mega") else data_root
-    ipc_path = arrow_dir / "bars_1m" / f"{symbol_id}.arrow"
-    if ipc_path.exists():
+    ipc_path = _find_bar_file(store, symbol_id, bar_interval_seconds)
+    if ipc_path is not None:
         table = pa.ipc.open_file(str(ipc_path)).read_all()
     else:
         tables = []

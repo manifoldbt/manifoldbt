@@ -59,7 +59,8 @@ def strategy(entry, name):
 ENTRIES = {
     # No entry order at all: a market fill at the execution bar's close.
     "market": None,
-    # Passive: rest 25 bps below the close, cancelled if unfilled after 6 bars.
+    # Passive: rest 25 bps below the close. Unfilled after 6 bars it expires and
+    # is placed again, at a fresh level, while the signal still asks for it.
     "limit -25bps": lambda s: s.limit_entry(offset_bps=25, time_in_force={"GTB": 6}),
     # Deeper: a better price when it fills, and it fills far less often.
     "limit -75bps": lambda s: s.limit_entry(offset_bps=75, time_in_force={"GTB": 6}),
