@@ -117,7 +117,7 @@ store = mbt.import_csv("EURUSD_1m.csv", symbol="EURUSD", symbol_id=1,
                        interval="1m", asset_class="forex")
 ```
 
-**Market data connectors**: Binance, Bybit, Hyperliquid, dYdX, Bitstamp, Yahoo Finance (free);
+**Market data connectors**: Binance, Bybit, Hyperliquid, dYdX, Bitstamp, Yahoo Finance, Dukascopy (free);
 Databento, Massive (Pro):
 
 ```python
@@ -189,6 +189,11 @@ band = mbt.choice("band", {
     "1h":  mbt.tf("1h").apply(sma(close, mbt.param("len"))),
     "2h":  mbt.tf("2h").apply(sma(close, mbt.param("len"))),
 })
+strategy = (mbt.Strategy.create("band_cross")
+            .signal("band", band)
+            .size(mbt.when(close > mbt.col("band"), 1.0, 0.0)))
+config.extra_timeframes = {"30m": Interval.minutes(30),   # every tf(...) a branch uses
+                           "1h": Interval.hours(1), "2h": Interval.hours(2)}
 
 sweep = mbt.run_sweep(strategy, {"band": ["30m", "1h", "2h"],
                                  "len": range(10, 210, 10)}, config, store)
@@ -440,7 +445,7 @@ Full API reference, indicator list, configuration guide, and best practices:
 | Monte Carlo | 1K sims | Unlimited |
 | Walk-Forward | - | Anchored + Rolling |
 | Parameter Stability | - | Yes |
-| Free connectors (Binance, Bybit, Hyperliquid, dYdX, Bitstamp, Yahoo) | Yes | Yes |
+| Free connectors (Binance, Bybit, Hyperliquid, dYdX, Bitstamp, Yahoo, Dukascopy) | Yes | Yes |
 | Databento & Massive connectors | - | Yes |
 | GPU acceleration (`device="cuda"`) | - | Yes |
 | Safety checks (lookahead, exposure) | - | Yes |

@@ -784,8 +784,8 @@ def ingest(
     """Ingest bars from a data provider into the Arrow IPC store.
 
     Providers (free): ``"binance"``, ``"bybit"``, ``"hyperliquid"``, ``"dydx"``,
-    ``"bitstamp"``, ``"deribit"``, ``"yahoo"`` (alias ``"yfinance"``).
-    Pro: ``"databento"``, ``"massive"``.
+    ``"bitstamp"``, ``"deribit"``, ``"yahoo"`` (alias ``"yfinance"``),
+    ``"dukascopy"``. Pro: ``"databento"``, ``"massive"``.
 
     Returns a :class:`DataStore` ready for :func:`run`.
 
@@ -823,6 +823,36 @@ def ingest(
     Yahoo caps its own history: 1m goes back 30 days, 1h about 2 years, daily
     to the listing date. Prices are dividend-adjusted like ``yfinance``'s
     ``auto_adjust=True``; pass ``dataset="raw"`` for unadjusted quotes.
+
+    Example (FX, metals, indices and CFDs with BOTH sides of the book, free and
+    without a key, from Dukascopy Bank)::
+
+        store = bt.ingest(
+            provider="dukascopy",
+            symbol="EUR/USD",        # or "XAU/USD", "USA500.IDX/USD", "AAPL.US/USD"
+            symbol_id=1,
+            start="2010-01-01T00:00:00Z",
+            end="2026-01-01T00:00:00Z",
+            interval="1h",
+            asset_class="forex",
+        )
+
+    Three intervals are native, ``"1m"``, ``"1h"`` and ``"1d"``; anything else
+    is refused, so ingest ``"1m"`` and resample. A request for bars downloads
+    bars and nothing else: the bid side, one file per bucket (``dataset="ask"``
+    for the other side). Pass ``dataset="both"`` to fetch the second side too
+    and get the ``bid``, ``ask`` and ``spread`` columns filled, which almost no
+    other connector does, at twice the number of requests.
+
+    What this data IS matters. Dukascopy is a Swiss bank publishing its own
+    book, not an exchange tape: ``USA500.IDX/USD`` is a contract for difference
+    the bank issues against the CME E-mini future, and ``AAPL.US/USD`` is a
+    stock CFD. Prices and spreads are real and tradable at that bank; volume is
+    the bank's own and is not market volume. Depth also varies sharply: the FX
+    majors and the two precious metals start on 2003-05-04, indices in 2012,
+    commodities in 2013, US stocks and crypto in 2017. Minute bars come one
+    file per day, so a long minute ingest is thousands of requests and the host
+    starts refusing after a burst; the connector paces itself and retries.
 
     Example (a Deribit option, including one that has already expired)::
 
@@ -1576,12 +1606,14 @@ def run_sweep_lite(
     Metric resolution:
         The lite path computes risk metrics from one equity point per UTC day
         (this is what makes it fast), whereas :func:`run` uses the full-resolution
-        curve. ``final_equity``, ``total_return``, ``sharpe``, ``sortino``,
-        ``volatility`` and ``max_drawdown`` are unaffected -- they match ``run``
-        exactly. Three annualisation-sensitive metrics differ slightly because
-        they are derived from the daily series: ``cagr`` (it starts from the
-        first daily equity rather than initial capital), ``calmar`` and
-        ``ulcer_index``. The gap is small (< ~0.4% relative on a multi-year daily
+        curve. ``final_equity``, ``total_return``, ``sharpe``, ``sortino`` and
+        ``volatility`` are unaffected -- they match ``run`` exactly.
+        ``max_drawdown`` matches to the last bit on a run without exit orders
+        and within one ulp (about 1e-16 relative) once a stop, a target or a
+        trailing stop fires. Three annualisation-sensitive metrics differ
+        slightly because they are derived from the daily series: ``cagr`` (it
+        starts from the first daily equity rather than initial capital),
+        ``calmar`` and ``ulcer_index``. The gap is small (< ~0.4% relative on a multi-year daily
         backtest) and is the same for every sweep regardless of orders. Sort and
         rank on it freely; for an exact single-figure P&L, re-run the winning
         combo through :func:`run`.

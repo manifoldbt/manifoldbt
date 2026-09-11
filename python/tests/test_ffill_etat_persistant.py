@@ -35,9 +35,15 @@ def _bars(seed: int = 7) -> pd.DataFrame:
 
 _DF = _bars()
 _END_NS = int(_DF["timestamp"].iloc[-1].value) + 86_400_000_000_000
-# Le filtre est l'heure de la barre : ouvert exactement une barre sur deux, sans
-# dependre des donnees. C'est le taux auquel l'exposition de `ffill` est comparee.
-TAUX_OUVERTURE = 0.5
+# Le filtre est le JOUR de la semaine (ouvert du lundi au mercredi), pas l'heure.
+# La raison est le palier Community : sa sortie est journaliere, `res.positions`
+# y porte une ligne par jour, la derniere barre. Un filtre `hour() < 12` y est
+# toujours ferme au moment de ce cliche, et l'exposition mesuree vaut 0 quoi que
+# fasse la strategie : c'est ce que la CI publique, sans licence, a vu. Un filtre
+# constant sur la journee rend le meme cliche que les positions horaires. Le
+# taux est lu dans les donnees plutot que pose a 3/7 : l'echantillon ne fait pas
+# un nombre entier de semaines.
+TAUX_OUVERTURE = float(np.mean(_DF["timestamp"].dt.dayofweek < 3))
 
 
 @pytest.fixture(scope="module")
@@ -49,8 +55,21 @@ def store(tmp_path_factory):
     )
 
 
-def _config() -> bt.BacktestConfig:
+@pytest.fixture(params=[None, Interval.days(1)], ids=["sortie_horaire", "sortie_journaliere"])
+def sortie(request):
+    """La resolution de sortie, les deux que le produit sert.
+
+    Pro rend les positions a la barre ; Community les ramene au jour, une ligne
+    par jour, la derniere barre. En Pro on force ici la sortie journaliere pour
+    rejouer ce que voit Community ; en Community la demande horaire est
+    plafonnee au jour de toute facon, les deux cas y sont donc identiques.
+    """
+    return request.param
+
+
+def _config(sortie=None) -> bt.BacktestConfig:
     return bt.BacktestConfig(
+        output_resolution=sortie,
         universe=[1], time_range_start=0, time_range_end=_END_NS,
         bar_interval=Interval.hours(1), initial_capital=10_000.0,
         execution=bt.ExecutionConfig(
@@ -64,16 +83,16 @@ def _config() -> bt.BacktestConfig:
 
 _Z = col("close").zscore(FENETRE)
 _HAUT, _BAS = _Z >= lit(SEUIL), _Z <= lit(-SEUIL)
-_FILTRE = ind.hour() < lit(12.0)
+_FILTRE = ind.day_of_week() < lit(3.0)
 
 # La branche fausse omise vaut NaN, donc ffill retient le dernier etat arme.
 _ETAT_FFILL = when(_HAUT, lit(1.0), when(_BAS, lit(-1.0))).ffill()
 _ETAT_HOLD = when(_HAUT, lit(1.0), when(_BAS, lit(-1.0), hold()))
 
 
-def _positions(store, taille, nom: str) -> np.ndarray:
+def _positions(store, taille, nom: str, sortie=None) -> np.ndarray:
     strat = bt.Strategy.create(nom).signal("d", col("close")).size(taille)
-    res = bt.run(strat, _config(), store)
+    res = bt.run(strat, _config(sortie), store)
     return res.positions.column("position").to_numpy()
 
 
@@ -81,32 +100,34 @@ def _exposition(positions: np.ndarray) -> float:
     return float(np.mean(positions != 0.0))
 
 
-def test_sans_filtre_ffill_reproduit_hold_barre_par_barre(store):
+def test_sans_filtre_ffill_reproduit_hold_barre_par_barre(store, sortie):
     """Sans filtre, les deux ecritures sont la meme strategie.
 
     C'est ce qui autorise a presenter `ffill()` comme la version qui compose :
     si les deux divergeaient deja sans filtre, ce serait un autre operateur.
     """
-    par_ffill = _positions(store, _ETAT_FFILL, "ffill_nu")
-    par_hold = _positions(store, _ETAT_HOLD, "hold_nu")
+    par_ffill = _positions(store, _ETAT_FFILL, "ffill_nu", sortie)
+    par_hold = _positions(store, _ETAT_HOLD, "hold_nu", sortie)
     np.testing.assert_array_equal(par_ffill, par_hold)
     # Et la strategie trade vraiment, sinon l'egalite ne prouverait rien.
     assert _exposition(par_ffill) > 0.5
 
 
-def test_sous_filtre_ffill_tient_l_exposition(store):
+def test_sous_filtre_ffill_tient_l_exposition(store, sortie):
     """L'exposition suit le taux d'ouverture du filtre, aux barres non armees pres."""
-    nu = _exposition(_positions(store, _ETAT_FFILL, "ffill_nu2"))
+    nu = _exposition(_positions(store, _ETAT_FFILL, "ffill_nu2", sortie))
     sous_filtre = _exposition(
-        _positions(store, when(_FILTRE, _ETAT_FFILL, lit(0.0)), "ffill_filtre")
+        _positions(store, when(_FILTRE, _ETAT_FFILL, lit(0.0)), "ffill_filtre", sortie)
     )
-    # Le filtre est ouvert une barre sur deux et l'etat est arme `nu` du temps ;
-    # les deux sont independants ici (l'heure ne dit rien du z-score).
+    # Le filtre est ouvert TAUX_OUVERTURE du temps et l'etat est arme `nu` du
+    # temps ; les deux sont independants ici (le jour de la semaine ne dit rien
+    # du z-score d'une marche aleatoire). Mesure : 0,360 contre 0,369 attendu
+    # en positions horaires, et la meme valeur en cliches de fin de journee.
     attendu = TAUX_OUVERTURE * nu
     assert abs(sous_filtre - attendu) < 0.03, (sous_filtre, attendu)
 
 
-def test_sous_filtre_hold_s_effondre(store):
+def test_sous_filtre_hold_s_effondre(store, sortie):
     """Le comportement de `hold()` sous filtre, epingle tel qu'il est.
 
     A ne PAS "corriger" : c'est la lecture "ne rentrer que sur un nouveau
@@ -114,15 +135,18 @@ def test_sous_filtre_hold_s_effondre(store):
     de `hold()`, il le fasse en connaissance de cause.
     """
     par_ffill = _exposition(
-        _positions(store, when(_FILTRE, _ETAT_FFILL, lit(0.0)), "ffill_filtre2")
+        _positions(store, when(_FILTRE, _ETAT_FFILL, lit(0.0)), "ffill_filtre2", sortie)
     )
     par_hold = _exposition(
-        _positions(store, when(_FILTRE, _ETAT_HOLD, lit(0.0)), "hold_filtre")
+        _positions(store, when(_FILTRE, _ETAT_HOLD, lit(0.0)), "hold_filtre", sortie)
     )
-    assert par_ffill > 0.35, par_ffill
-    # Mesure sur ces donnees : ~42.6% contre ~4.6%. Le seuil est large exprès :
-    # ce qui est epingle est l'ordre de grandeur de l'ecart, pas un chiffre.
-    assert par_hold < par_ffill / 4.0, (par_hold, par_ffill)
+    assert par_ffill > 0.30, par_ffill
+    # Mesure sur ces donnees : ~36 % contre ~7 % en positions horaires (Pro), et
+    # ~36 % contre ~8 % en cliches de fin de journee (Community). Le seuil est
+    # large expres : ce qui est epingle est l'ordre de grandeur de l'ecart, pas
+    # un chiffre. Avec le filtre horaire d'origine l'ecart etait plus fort
+    # encore (43 % contre 5 %), mais invisible en sortie journaliere.
+    assert par_hold < par_ffill / 3.0, (par_hold, par_ffill)
 
 
 def test_passer_par_un_signal_nomme_ne_change_rien_a_hold(store):

@@ -166,38 +166,91 @@ class Strategy:
         self._json_cache = None
         return self
 
-    def stop_loss(self, pct: float, side: str = "both") -> "Strategy":
+    def stop_loss(
+        self,
+        pct: Optional[float] = None,
+        side: str = "both",
+        *,
+        signal: Optional[str] = None,
+    ) -> "Strategy":
         """Convenience: attach a stop-loss order (returns self for chaining).
+
+        Pass exactly one of ``pct`` (one distance for the whole run) or
+        ``signal`` (the name of a signal holding the distance, in percent, so
+        it can widen with volatility). A ``signal`` distance is read on the bar
+        whose signal opened the trade and frozen for the life of that trade::
+
+            stop_dist = mbt.lit(2.0) * atr(14) / close * mbt.lit(100.0)
+            strategy.signal("stop_dist", stop_dist).stop_loss(signal="stop_dist")
 
         Args:
             pct: Distance from entry as percentage (e.g. ``2.0`` = 2%).
             side: ``"both"`` (default), ``"long"`` or ``"short"``: which
                 positions the stop arms on. A stop on the shorts only leaves
                 the longs without one.
+            signal: Name of a signal holding the distance in percent.
         """
-        return self._exit_order("stop_loss", {"stop_pct": pct}, side)
+        from .config import exit_distance
 
-    def take_profit(self, pct: float, side: str = "both") -> "Strategy":
+        return self._exit_order(
+            "stop_loss",
+            {"stop_pct": exit_distance(pct, signal, "stop_loss")},
+            side,
+        )
+
+    def take_profit(
+        self,
+        pct: Optional[float] = None,
+        side: str = "both",
+        *,
+        signal: Optional[str] = None,
+    ) -> "Strategy":
         """Convenience: attach a take-profit order (returns self for chaining).
+
+        Pass exactly one of ``pct`` or ``signal``; see :meth:`stop_loss` for
+        what a signal distance means.
 
         Args:
             pct: Distance from entry as percentage (e.g. ``5.0`` = 5%).
             side: ``"both"`` (default), ``"long"`` or ``"short"``.
+            signal: Name of a signal holding the distance in percent.
         """
-        return self._exit_order("take_profit", {"profit_pct": pct}, side)
+        from .config import exit_distance
+
+        return self._exit_order(
+            "take_profit",
+            {"profit_pct": exit_distance(pct, signal, "take_profit")},
+            side,
+        )
 
     def trailing_stop(
-        self, pct: float, use_high: bool = True, side: str = "both"
+        self,
+        pct: Optional[float] = None,
+        use_high: bool = True,
+        side: str = "both",
+        *,
+        signal: Optional[str] = None,
     ) -> "Strategy":
         """Convenience: attach a trailing stop (returns self for chaining).
+
+        Pass exactly one of ``pct`` or ``signal``. A signal distance is frozen
+        at the entry like the other two; the ratchet that follows is unchanged.
 
         Args:
             pct: Trail distance as percentage (e.g. ``3.0`` = 3%).
             use_high: Track bar high/low (True) or close (False).
             side: ``"both"`` (default), ``"long"`` or ``"short"``.
+            signal: Name of a signal holding the trail distance in percent.
         """
+        from .config import exit_distance
+
         return self._exit_order(
-            "trailing_stop", {"trail_pct": pct, "use_high": use_high}, side
+            "trailing_stop",
+            {
+                "trail_pct": exit_distance(pct, signal, "trailing_stop"),
+                "use_high": use_high,
+            },
+            side,
         )
 
     def _entry(
@@ -244,11 +297,17 @@ class Strategy:
         A passive fill pays maker fees, takes no slippage, and lands on the
         level exactly. It can also never fill: check ``result.warnings``.
 
+        An order that expires unfilled is posted again on the next bar, at that
+        bar's level, for as long as the target holds and still differs from the
+        position held, so a time-limited order is how a strategy requotes.
+
         Args:
             offset_bps: Distance from the signal close in bps (positive = more passive).
             price: A fixed price level.
             signal: Name of a signal to read the level from.
-            time_in_force: ``"GTC"`` (default), ``{"GTB": 5}``, or ``"IOC"``.
+            time_in_force: ``"GTC"`` (default, rests until filled or until the
+                target moves), ``{"GTB": 5}`` (expires after 5 bars, then is
+                posted again while the target holds), or ``"IOC"`` (one bar).
             size_at_fill_price: Size off the order's level instead of the close.
         """
         return self._entry(

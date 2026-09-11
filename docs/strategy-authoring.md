@@ -106,6 +106,90 @@ ret = close.pct_change(1)           # 1-bar return
 
 ---
 
+### Windows in time
+
+A window is normally a **bar count**: `close.rolling_mean(30)` averages the last
+thirty rows. On a grid with holes that is not what it looks like. On an irregular
+grid (thin sessions, halted hours, sub-minute bars that print only when
+something traded), thirty bars can span thirty seconds on a busy minute and
+four minutes on a quiet one -- the same expression measures a different thing
+depending on the flow.
+
+Pass an `Interval` instead of an integer and the window is read on the
+timestamps:
+
+```python
+from manifoldbt.helpers import Interval
+
+mid = close.rolling_mean(Interval.seconds(30))    # 30 SECONDS, not 30 bars
+vol = close.rolling_std(Interval.minutes(5))
+lo, hi = close.rolling_min(Interval.seconds(10)), close.rolling_max(Interval.seconds(10))
+z = close.zscore(Interval.seconds(30))
+```
+
+**Semantics.** The window is `(t - d, t]`: closed on the right, open on the
+left, the same convention as `pandas.rolling("30s")`. A row exactly `d` old is
+already out. While the series holds less than `d` of history -- that is, while
+`t - t_first < d` -- the answer would come from a truncated window, so the output
+is NaN, exactly as a bar-count window is NaN over its first `window - 1` rows.
+Past that point the values equal `pandas.rolling("30s")` row for row.
+
+A NaN anywhere in the window yields NaN for `rolling_mean`, `rolling_sum`,
+`rolling_std`, `zscore` and the pair statistics, while `rolling_min` and
+`rolling_max` simply ignore the NaN rows. That is the same rule as the
+bar-count versions, so switching a window from bars to seconds changes the
+window and nothing else. Timestamps must be non-decreasing; they are on every
+grid the engine builds.
+
+**Where a duration is accepted.**
+
+| Operator | Bar count | Duration |
+|----------|-----------|----------|
+| `rolling_mean`, `rolling_sum`, `rolling_std`, `rolling_min`, `rolling_max` | yes | yes |
+| `zscore`, `rolling_var` | yes | yes |
+| `rolling_corr`, `rolling_cov`, `rolling_beta` | yes | yes |
+| `count_over` | yes | yes |
+| `ewm_mean` | `span=` | `halflife=` |
+| everything else (`rsi`, `atr`, `rolling_median`, `lag`, pivots, ...) | yes | **refused by name** |
+
+An operator with no time-based implementation refuses a duration and says so,
+rather than reading it as a bar count.
+
+**`ewm_mean(halflife=...)`.** `ewm_mean(span=20)` counts bars and is the plain
+recurrence. `ewm_mean(halflife=Interval.seconds(2))` decays with the time
+elapsed between two rows: a row `dt` old weighs `0.5 ** (dt / halflife)`. It
+matches `pandas.ewm(halflife="2s", times=...).mean()`, the weighted-average
+form, which is the only one pandas offers on an irregular axis. Having no
+window it has no warmup either -- the value exists from the first row, like the
+span form.
+
+**Two operators that only exist in time.**
+
+```python
+from manifoldbt import indicators as ind
+
+quiet_for = ind.time_since(volume > 1000)        # SECONDS since it was last true
+printed   = ind.count_over(Interval.seconds(30)) # bars the last 30 s actually printed
+```
+
+`time_since(cond)` is the twin of `bars_since(cond)`: seconds since the last row
+where the condition was true, `0.0` on a true row, NaN until it first is.
+`count_over(Interval.seconds(30))` -- a duration with no condition -- counts the
+**rows** in the window, which is how a strategy reads how gappy its own grid is.
+`count_over(cond, Interval.seconds(30))` still counts the true ones.
+
+**Durations are literal.** `param()` sweeps a bar count, not a duration:
+`rolling_mean(param("w"))` works, a swept duration does not exist yet. A sweep
+axis in seconds is a later step.
+
+**Not on GPU.** A duration window evicts on a bound that moves with the
+timestamps, where every GPU kernel here indexes by a constant row offset. A
+sweep whose expressions carry one is refused by name (`gpu-sweep-unsupported`)
+and has to run with `device="cpu"`; it is not silently downgraded, because that
+would return numbers computed over a different window from the CPU's.
+
+---
+
 ## Signals & Sizing
 
 ### Strategy builder
@@ -131,7 +215,7 @@ signal = mbt.when(fast > slow, 0.25,
          mbt.when(fast < slow, -0.25, 0.0))
 
 # Hold current position (omit 3rd arg or use NaN)
-signal = mbt.when(rsi < 30, 1.0)  # buy oversold, hold otherwise
+signal = mbt.when(rsi(close, 14) < 30, 1.0)  # buy oversold, hold otherwise
 ```
 
 ### `mbt.hold()` holds the POSITION, not the value
@@ -329,14 +413,15 @@ and the touch bar itself proves the level traded (it sits between open and
 high), yet a close fill would be systematically on the wrong side of it.
 
 ```python
-from manifoldbt.indicators import close, high, low, open
-band_up, band_dn = sma * 1.012, sma * 0.992
+from manifoldbt.indicators import close, high, low, open, sma
+sma_20 = sma(close, 20)
+band_up, band_dn = sma_20 * 1.012, sma_20 * 0.992
 exec_level = mbt.when(high >= band_up,
                       mbt.when(open >= band_up, open, band_up),   # gapped through
              mbt.when(low <= band_dn,
                       mbt.when(open <= band_dn, open, band_dn),
              close))
-strat = strat.signal("exec_level", exec_level)
+strategy = strategy.signal("exec_level", exec_level)
 config.execution.execution_price = mbt.ExecutionPrice.custom("exec_level")
 ```
 
@@ -455,6 +540,75 @@ the default `FractionOfEquity` sizing each leg compounds on its own. Set
 `position_sizing_mode="FractionOfInitialCapital"` when the portfolio must
 equal the sum of its legs run separately.
 
+### What each order accepts
+
+| order | `pct` | `offset_bps` | `price` | `signal` | options |
+|---|---|---|---|---|---|
+| `limit_entry`, `stop_entry`, `market_if_touched` | no | yes | yes | yes | `time_in_force`, `size_at_fill_price` |
+| `stop_limit_entry` | no | no | `stop`, `limit` | `stop_signal`, `limit_signal` | same |
+| `stop_loss`, `take_profit` | yes | no | no | yes | `side` |
+| `trailing_stop` | yes | no | no | yes | `use_high`, `side` |
+
+### A distance that changes with the market
+
+`pct=2.0` is one number for the whole run. `signal="name"` reads the distance
+from a series the strategy computes, so a stop can be two ATR wide on a quiet
+day and twice that on a violent one. The series holds a **percentage of the
+price**, the same unit `pct` uses, and it is exclusive of `pct`.
+
+```python
+from manifoldbt.indicators import atr, close
+
+# 2 ATR, expressed as a percentage of the price
+stop_dist = mbt.lit(2.0) * atr(14) / close * mbt.lit(100.0)
+
+strategy = (
+    mbt.Strategy.create("atr_stop")
+    .signal("stop_dist", stop_dist)      # named, so the order can reference it
+    .size(...)
+    .stop_loss(signal="stop_dist")
+)
+```
+
+Three rules make that a well-defined order rather than a moving target:
+
+**The distance is read on the signal bar.** The bar whose signal decided the
+entry, the same row `limit_entry(signal=...)` reads its level at, so there is
+no look-ahead: the distance is known before the fill happens.
+
+**It is frozen for the life of the trade.** The level is computed once, from
+the price the entry actually filled at (slippage included, exactly as `pct`
+does it), and the trade keeps it until it closes. A trailing stop freezes its
+trail *distance* the same way and then ratchets normally on the bar high (or
+the close, with `use_high=False`). A distance that kept moving during the trade
+would be a different order, not this one.
+
+**A distance the series cannot give arms nothing, loudly.** If the series holds
+NaN, zero or a negative number on the signal bar, no bracket is armed on that
+trade at all, `result.brackets_not_armed` counts it, and `result.warnings`
+names the order. A position you believe is protected and is not is the worst
+failure this family has, so the engine refuses to invent a level.
+
+```python
+result = mbt.run(strategy, config, store)
+print(result.brackets_not_armed)   # 0 when every trade got its bracket
+```
+
+A warm-up is the usual cause: `atr(14)` is NaN for its first 13 bars. Set
+`warmup_bars` on the config, or gate the sizing on the indicator being ready.
+
+A `param()` inside the series makes the distance sweepable like any other
+expression, with nothing else to declare.
+
+### Cost of a signal distance
+
+A `signal=` distance is read per trade, which the fast kernels do not do: a
+strategy that uses one runs on the general loop, and a sweep over it stays on
+the CPU. `run_sweep` is always on the CPU and says nothing; asking for the GPU
+with `run_sweep_lite(device="cuda")` warns with the reason ("an exit order takes
+its distance from a signal") and runs on the CPU. A constant `pct` keeps the
+fast path and the GPU.
+
 ---
 
 ## Entry Orders
@@ -504,11 +658,20 @@ strategy = (
 `"GTC"` (default, rests until filled or the signal changes), `{"GTB": n}`
 (cancel after n bars), `"IOC"` (fill on the arrival bar or cancel).
 
+**An entry order that expires unfilled is posted again on the next bar, at that
+bar's level, for as long as the target holds and still differs from the position
+you hold.** A target is a desired position, not a one-off event, so expiry is how
+you requote: `{"GTB": 1}` on a target that never moves places a fresh order every
+bar, each at the level that bar computes. Nothing changes for an order that
+filled, nor for one cancelled because the target itself moved.
+
 ### Three things to watch
 
 **A resting order keeps the level it was created with.** `signal=` is read once,
 on the bar the order is placed, and held until the order fills, expires or is
-cancelled. It does **not** follow the series afterwards. That is the intended
+cancelled. It does **not** follow the series afterwards. A time-limited order
+does move, but in steps: it holds its level until it expires, and the order that
+replaces it reads the series again (see [Time in force](#time-in-force)). That is the intended
 behaviour of a resting order, and it is the trap for a band strategy: if the
 band moves every bar, the order waits at a price the band has left, and a bar
 that gaps past the stale level still fills there. Watch the out-of-range fill
@@ -525,7 +688,7 @@ trigger produces a flat equity curve with no drawdown, which reads as a clean
 backtest. The engine counts unfilled entries and reports them:
 
 ```python
-result = mbt.run_backtest(strategy, config)
+result = mbt.run(strategy, config, store)
 for w in result.warnings:
     print(w)   # "N entry order(s) expired unfilled and M were still resting ..."
 ```
@@ -799,6 +962,10 @@ config = mbt.BacktestConfig(
 | `rolling_cov(a, b, w)` | Rolling sample covariance (ddof=1) |
 | `rolling_beta(y, x, w)` | Rolling OLS beta of `y` on `x` |
 
+`zscore`, `rolling_var`, `rolling_corr`, `rolling_cov` and `rolling_beta` also
+take a duration (`Interval.seconds(30)`) instead of `w` -- see
+[Windows in time](#windows-in-time).
+
 ### Signal state
 
 Pine-style helpers. The first four take a **condition**, not a numeric series.
@@ -807,7 +974,8 @@ Pine-style helpers. The first four take a **condition**, not a numeric series.
 |----------|-------------|
 | `bars_since(cond)` | Bars since `cond` was last true; NaN until it first is |
 | `streak(cond)` | Length of the current consecutive run of true |
-| `count_over(cond, w)` | Count of true bars in the trailing window |
+| `count_over(cond, w)` | Count of true rows in the trailing window |
+| `time_since(cond)` | **Seconds** since `cond` was last true; NaN until it first is |
 | `value_when(cond, source)` | `source` on the last bar where `cond` was true |
 | `expr.ffill()` (method) | Last non-NaN value of `expr`, carried forward; NaN until the first one |
 | `rising(source, n)` | 1.0 if strictly increasing on each of the last `n` steps |

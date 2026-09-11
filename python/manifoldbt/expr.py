@@ -5,12 +5,12 @@ Builds an expression tree that serializes to JSON matching the Rust
 """
 from __future__ import annotations
 
-from typing import Any, Optional, Union
+from typing import Any, Dict, Optional, Union
 
 from manifoldbt._serde import scalar_value_to_json
 
 Numeric = Union[int, float, "Expr"]
-Period = Union[int, "Expr"]
+Period = Union[int, "Expr", Dict[str, int]]
 Span = Union[float, int, "Expr"]
 
 
@@ -18,13 +18,52 @@ Span = Union[float, int, "Expr"]
 # Populated by _resolve_period/_resolve_span, read by Strategy.to_json_dict().
 _param_registry: dict = {}
 
+# Nanoseconds per unit of an ``Interval`` (see manifoldbt.helpers.Interval).
+_NANOS_PER_UNIT = {
+    "Seconds": 1_000_000_000,
+    "Minutes": 60_000_000_000,
+    "Hours": 3_600_000_000_000,
+    "Days": 86_400_000_000_000,
+}
 
-def _resolve_period(value: Period) -> Any:
+
+def _interval_to_nanos(value: Any) -> Optional[int]:
+    """Nanoseconds behind an ``Interval`` dict, or None if it is not one."""
+    if not isinstance(value, dict) or len(value) != 1:
+        return None
+    unit, count = next(iter(value.items()))
+    per = _NANOS_PER_UNIT.get(unit)
+    if per is None:
+        return None
+    return int(count) * per
+
+
+def _resolve_period(value: Period, allow_duration: bool = False) -> Any:
     """Convert a period argument for DynPeriod serialization.
 
     - int → int (serializes as JSON number → DynPeriod::Fixed)
     - param("name") Expr → "name" (serializes as JSON string → DynPeriod::Param)
+    - Interval.seconds(30) → {"duration_ns": ...} → DynPeriod::Duration,
+      accepted only by the operators that implement a window in time.
     """
+    nanos = _interval_to_nanos(value)
+    if nanos is not None:
+        if not allow_duration:
+            raise TypeError(
+                "this operator counts BARS, not time: pass an integer. "
+                "Windows in time are available on rolling_mean, rolling_sum, "
+                "rolling_std, rolling_min, rolling_max, zscore, rolling_var, "
+                "rolling_corr, rolling_cov, rolling_beta, count_over, and on "
+                "ewm_mean(halflife=...)"
+            )
+        if nanos <= 0:
+            raise ValueError("a window in time must be a positive duration")
+        return {"duration_ns": nanos}
+    if isinstance(value, dict):
+        raise TypeError(
+            f"unknown window {value!r}: use an integer, param(...), or "
+            "Interval.seconds/minutes/hours/days(n)"
+        )
     if isinstance(value, Expr) and value._variant == "Parameter":
         if value._param_meta is not None:
             _param_registry[value._args[0]] = value._param_meta
@@ -52,7 +91,7 @@ _UNARY_BOX = frozenset(
         # Coupe transversale (multi-actif)
         "CsZScore", "CsDemean", "CsStd", "CsScale",
         # Etat de signal (l'argument est une CONDITION)
-        "BarsSince", "Streak",
+        "BarsSince", "TimeSince", "Streak",
         # Etat de signal dont l'argument est une SERIE
         "Ffill",
         # Composants calendaires
@@ -75,6 +114,8 @@ _EXPR_SCALAR = frozenset(
         "RollingMin",
         "RollingMax",
         "EwmMean",
+        # Box<Expr> + DurationNs, serialise en {"duration_ns": n}
+        "EwmMeanHalflife",
         "Diff",
         "PctChange",
         "ZScore",
@@ -328,25 +369,122 @@ class Expr:
         return Expr("PctChange", self, _resolve_period(n))
 
     def rolling_mean(self, window: Period) -> Expr:
-        return Expr("RollingMean", self, _resolve_period(window))
+        """Rolling mean over ``window``.
+
+        A window is a BAR COUNT (``20``) or a DURATION
+        (``Interval.seconds(30)``). A duration reads the window
+        ``(t - d, t]`` on the bar timestamps, so a gappy grid -- one-second
+        bars on an irregular grid, where an empty period prints no bar
+        -- gets a real thirty seconds instead of thirty bars. NaN until the
+        series holds a full ``d`` of history, then equal to
+        ``pandas.rolling("30s")``. Durations are literal: ``param()`` does not
+        sweep one yet.
+        """
+        return Expr("RollingMean", self, _resolve_period(window, allow_duration=True))
 
     def rolling_std(self, window: Period) -> Expr:
-        return Expr("RollingStd", self, _resolve_period(window))
+        """Rolling population standard deviation over ``window``.
+
+        A window is a BAR COUNT (``20``) or a DURATION
+        (``Interval.seconds(30)``). A duration reads the window
+        ``(t - d, t]`` on the bar timestamps, so a gappy grid -- one-second
+        bars on an irregular grid, where an empty period prints no bar
+        -- gets a real thirty seconds instead of thirty bars. NaN until the
+        series holds a full ``d`` of history, then equal to
+        ``pandas.rolling("30s")``. Durations are literal: ``param()`` does not
+        sweep one yet.
+        """
+        return Expr("RollingStd", self, _resolve_period(window, allow_duration=True))
 
     def rolling_sum(self, window: Period) -> Expr:
-        return Expr("RollingSum", self, _resolve_period(window))
+        """Rolling sum over ``window``.
+
+        A window is a BAR COUNT (``20``) or a DURATION
+        (``Interval.seconds(30)``). A duration reads the window
+        ``(t - d, t]`` on the bar timestamps, so a gappy grid -- one-second
+        bars on an irregular grid, where an empty period prints no bar
+        -- gets a real thirty seconds instead of thirty bars. NaN until the
+        series holds a full ``d`` of history, then equal to
+        ``pandas.rolling("30s")``. Durations are literal: ``param()`` does not
+        sweep one yet.
+        """
+        return Expr("RollingSum", self, _resolve_period(window, allow_duration=True))
 
     def rolling_min(self, window: Period) -> Expr:
-        return Expr("RollingMin", self, _resolve_period(window))
+        """Rolling minimum over ``window``.
+
+        A window is a BAR COUNT (``20``) or a DURATION
+        (``Interval.seconds(30)``). A duration reads the window
+        ``(t - d, t]`` on the bar timestamps, so a gappy grid -- one-second
+        bars on an irregular grid, where an empty period prints no bar
+        -- gets a real thirty seconds instead of thirty bars. NaN until the
+        series holds a full ``d`` of history, then equal to
+        ``pandas.rolling("30s")``. Durations are literal: ``param()`` does not
+        sweep one yet.
+        """
+        return Expr("RollingMin", self, _resolve_period(window, allow_duration=True))
 
     def rolling_max(self, window: Period) -> Expr:
-        return Expr("RollingMax", self, _resolve_period(window))
+        """Rolling maximum over ``window``.
 
-    def ewm_mean(self, span: Span) -> Expr:
+        A window is a BAR COUNT (``20``) or a DURATION
+        (``Interval.seconds(30)``). A duration reads the window
+        ``(t - d, t]`` on the bar timestamps, so a gappy grid -- one-second
+        bars on an irregular grid, where an empty period prints no bar
+        -- gets a real thirty seconds instead of thirty bars. NaN until the
+        series holds a full ``d`` of history, then equal to
+        ``pandas.rolling("30s")``. Durations are literal: ``param()`` does not
+        sweep one yet.
+        """
+        return Expr("RollingMax", self, _resolve_period(window, allow_duration=True))
+
+    def ewm_mean(self, span: Optional[Span] = None, halflife: Any = None) -> Expr:
+        """Exponential moving mean.
+
+        Two forms, one per axis:
+
+        - ``ewm_mean(span=20)`` counts BARS, and is the plain recurrence
+          (``pandas.ewm(span=20, adjust=False)``);
+        - ``ewm_mean(halflife=Interval.seconds(2))`` decays with the TIME
+          elapsed between two rows: a row ``dt`` old weighs
+          ``0.5 ** (dt / halflife)``. It equals
+          ``pandas.ewm(halflife="2s", times=...).mean()``, the weighted-average
+          form, which is the only one pandas offers on an irregular axis.
+
+        The halflife form has no window, hence no warmup: the value exists from
+        the first row, like the span form. A positional ``Interval`` is read as
+        a halflife.
+        """
+        if halflife is None and _interval_to_nanos(span) is not None:
+            span, halflife = None, span
+        if (span is None) == (halflife is None):
+            raise TypeError(
+                "ewm_mean takes exactly one of span= (bars) or halflife= (a duration)"
+            )
+        if halflife is not None:
+            nanos = _interval_to_nanos(halflife)
+            if nanos is None:
+                raise TypeError(
+                    "ewm_mean(halflife=...) takes an Interval, e.g. Interval.seconds(2)"
+                )
+            if nanos <= 0:
+                raise ValueError("an ewm halflife must be a positive duration")
+            return Expr("EwmMeanHalflife", self, {"duration_ns": nanos})
         return Expr("EwmMean", self, _resolve_span(span))
 
     def zscore(self, window: Period) -> Expr:
-        return Expr("ZScore", self, _resolve_period(window))
+        """Rolling z-score over ``window`` (population standard deviation).
+
+        A window is a BAR COUNT (``20``) or a DURATION
+        (``Interval.seconds(30)``). A duration reads the window
+        ``(t - d, t]`` on the bar timestamps, so a gappy grid -- one-second
+        bars on an irregular grid, where an empty period prints no bar
+        -- gets a real thirty seconds instead of thirty bars. NaN until the
+        series holds a full ``d`` of history, then equal to
+        ``pandas.rolling("30s")``. Durations are literal: ``param()`` does not
+        sweep one yet.
+        """
+        return Expr("ZScore", self, _resolve_period(window, allow_duration=True))
 
     def rsi(self, period: Period = 14) -> Expr:
         """Native Rust RSI (Wilder's smoothing, single-pass O(n))."""
@@ -395,8 +533,18 @@ class Expr:
         return Expr("RollingMedian", self, _resolve_period(window))
 
     def rolling_var(self, window: Period) -> Expr:
-        """Rolling population variance (divides by the window, not n-1)."""
-        return Expr("RollingVar", self, _resolve_period(window))
+        """Rolling population variance (divides by the row count, not n-1).
+
+        A window is a BAR COUNT (``20``) or a DURATION
+        (``Interval.seconds(30)``). A duration reads the window
+        ``(t - d, t]`` on the bar timestamps, so a gappy grid -- one-second
+        bars on an irregular grid, where an empty period prints no bar
+        -- gets a real thirty seconds instead of thirty bars. NaN until the
+        series holds a full ``d`` of history, then equal to
+        ``pandas.rolling("30s")``. Durations are literal: ``param()`` does not
+        sweep one yet.
+        """
+        return Expr("RollingVar", self, _resolve_period(window, allow_duration=True))
 
     def rolling_skew(self, window: Period) -> Expr:
         """Rolling sample skewness (adjusted Fisher-Pearson, like pandas)."""
@@ -423,16 +571,49 @@ class Expr:
         return Expr("RollingQuantile", self, _resolve_period(window), _resolve_span(q))
 
     def rolling_corr(self, other: "Expr", window: Period) -> Expr:
-        """Rolling Pearson correlation with another series."""
-        return Expr("RollingCorr", self, _coerce(other), _resolve_period(window))
+        """Rolling Pearson correlation with another series.
+
+        A window is a BAR COUNT (``20``) or a DURATION
+        (``Interval.seconds(30)``). A duration reads the window
+        ``(t - d, t]`` on the bar timestamps, so a gappy grid -- one-second
+        bars on an irregular grid, where an empty period prints no bar
+        -- gets a real thirty seconds instead of thirty bars. NaN until the
+        series holds a full ``d`` of history, then equal to
+        ``pandas.rolling("30s")``. Durations are literal: ``param()`` does not
+        sweep one yet.
+        """
+        return Expr("RollingCorr", self, _coerce(other),
+                    _resolve_period(window, allow_duration=True))
 
     def rolling_cov(self, other: "Expr", window: Period) -> Expr:
-        """Rolling sample covariance (ddof=1) with another series."""
-        return Expr("RollingCov", self, _coerce(other), _resolve_period(window))
+        """Rolling sample covariance (ddof=1) with another series.
+
+        A window is a BAR COUNT (``20``) or a DURATION
+        (``Interval.seconds(30)``). A duration reads the window
+        ``(t - d, t]`` on the bar timestamps, so a gappy grid -- one-second
+        bars on an irregular grid, where an empty period prints no bar
+        -- gets a real thirty seconds instead of thirty bars. NaN until the
+        series holds a full ``d`` of history, then equal to
+        ``pandas.rolling("30s")``. Durations are literal: ``param()`` does not
+        sweep one yet.
+        """
+        return Expr("RollingCov", self, _coerce(other),
+                    _resolve_period(window, allow_duration=True))
 
     def rolling_beta(self, other: "Expr", window: Period) -> Expr:
-        """Rolling OLS beta of self on ``other``: ``cov(self, other) / var(other)``."""
-        return Expr("RollingBeta", self, _coerce(other), _resolve_period(window))
+        """Rolling OLS beta of self on ``other``: ``cov(self, other) / var(other)``.
+
+        A window is a BAR COUNT (``20``) or a DURATION
+        (``Interval.seconds(30)``). A duration reads the window
+        ``(t - d, t]`` on the bar timestamps, so a gappy grid -- one-second
+        bars on an irregular grid, where an empty period prints no bar
+        -- gets a real thirty seconds instead of thirty bars. NaN until the
+        series holds a full ``d`` of history, then equal to
+        ``pandas.rolling("30s")``. Durations are literal: ``param()`` does not
+        sweep one yet.
+        """
+        return Expr("RollingBeta", self, _coerce(other),
+                    _resolve_period(window, allow_duration=True))
 
     def macd_line(self, fast: int = 12, slow: int = 26) -> Expr:
         """MACD line (fast EMA - slow EMA)."""
@@ -477,13 +658,36 @@ class Expr:
         """Bars since this condition was last true. NaN until it first is."""
         return Expr("BarsSince", self)
 
+    def time_since(self) -> Expr:
+        """Seconds since this condition was last true (0.0 on a true row).
+
+        NaN until it first is. The twin of ``bars_since`` for a grid whose rows
+        are not evenly spaced: on an irregular grid, ten bars
+        ago can be ten seconds ago or two minutes ago.
+        """
+        return Expr("TimeSince", self)
+
     def streak(self) -> Expr:
         """Length of the current consecutive run of true ending at this bar."""
         return Expr("Streak", self)
 
     def count_over(self, window: Period) -> Expr:
-        """Count of bars where this condition is true in the trailing window."""
-        return Expr("CountOver", self, _resolve_period(window))
+        """Count of rows where this condition is true in the trailing window.
+
+        A window is a BAR COUNT (``20``) or a DURATION
+        (``Interval.seconds(30)``). A duration reads the window
+        ``(t - d, t]`` on the bar timestamps, so a gappy grid -- one-second
+        bars on an irregular grid, where an empty period prints no bar
+        -- gets a real thirty seconds instead of thirty bars. NaN until the
+        series holds a full ``d`` of history, then equal to
+        ``pandas.rolling("30s")``. Durations are literal: ``param()`` does not
+        sweep one yet.
+
+        With an always-true condition and a duration it counts the ROWS
+        themselves, which is how a strategy measures how gappy its own grid
+        is: the number of bars printed over the last thirty seconds.
+        """
+        return Expr("CountOver", self, _resolve_period(window, allow_duration=True))
 
     def value_when(self, source: "Expr") -> Expr:
         """Value of ``source`` on the last bar where this condition was true."""
