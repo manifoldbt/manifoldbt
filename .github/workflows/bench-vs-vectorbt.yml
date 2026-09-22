@@ -328,6 +328,43 @@ jobs:
           path: artifacts
           merge-multiple: true
 
+      # `publish.py` reads GITHUB_RUN_STARTED_AT, which Actions does not define:
+      # it provides GITHUB_RUN_ID, GITHUB_RUN_NUMBER and GITHUB_RUN_ATTEMPT, and
+      # no start time. So the field was empty in all seven results published up to
+      # 1c8eeae, and `synced_at` is not a stand-in for it -- that one is stamped
+      # when this job runs rather than when the run was queued, a gap that has
+      # run from 16.5 to 29.7 minutes across the published set.
+      #
+      # Resolved here rather than in `publish.py` so the script stays a pure
+      # merge step with no network and keeps working locally.
+      #
+      # The exit status is the only trustworthy signal and the value is
+      # shape-checked before it is used, because `gh api` prints an HTTP error
+      # body to STDOUT and `--jq` does not filter it. Writing the substitution
+      # straight into $GITHUB_ENV would therefore publish `{"message":"Not
+      # Found",...}` as a timestamp on any 404, and a 401 body is multi-line,
+      # which fails the env-file append and takes the whole publish job down
+      # with it. Both are worse than the empty field this replaces, so a lookup
+      # that does not return exactly one ISO instant leaves the field alone and
+      # `publish.py` falls back exactly as it does today.
+      #
+      # Note this is the run's *latest* start: it resets on a re-run, where
+      # `created_at` does not.
+      - name: Resolve the run's start time
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if started_at="$(gh api \
+                "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+                --jq .run_started_at)" \
+             && [[ "$started_at" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]]
+          then
+            echo "GITHUB_RUN_STARTED_AT=$started_at" >> "$GITHUB_ENV"
+          else
+            echo "could not resolve the run's start time; publishing without it"
+          fi
+
       - name: Merge the run into one published result
         shell: bash
         run: |
