@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Union
 
@@ -418,6 +419,198 @@ class FeeConfig:
         return cls()
 
 
+
+def account_sessions(start, end, tz: str = "UTC", hour: int = 0) -> List[int]:
+    """The UTC instants each evaluation session begins at, one per day.
+
+    A prop firm's day is not UTC midnight: an FX firm resets at 00:00 CE(S)T
+    and a futures evaluation follows the exchange session, which opens at 17:00
+    in Chicago. The engine carries no time-zone database on purpose, so the
+    boundary travels as the list itself, built here with ``zoneinfo`` from the
+    standard library.
+
+    A list is also the only thing that can say what a (zone, hour) pair cannot:
+    a holiday or an early close is simply a start that is not there, and the
+    session then runs to the next one.
+
+        rules = AccountRules(
+            phases=[AccountPhase(profit_target=0.10, max_daily_loss=0.05,
+                                 max_total_loss=0.10, min_trading_days=4)],
+            sessions=bt.account_sessions("2024-01-01", "2025-01-01",
+                                         tz="Europe/Prague"),
+        )
+
+    ``start`` and ``end`` accept nanoseconds, a ``datetime``, or an ISO date.
+    A local hour that does not exist on a spring-forward day resolves to the
+    instant the clock reaches, which is what an exchange does too.
+    """
+    from datetime import date as _date, datetime as _dt, time as _time, timedelta, timezone
+    from zoneinfo import ZoneInfo
+
+    def _as_utc(v):
+        if isinstance(v, _dt):
+            return v if v.tzinfo else v.replace(tzinfo=timezone.utc)
+        if isinstance(v, _date):
+            return _dt.combine(v, _time(), tzinfo=timezone.utc)
+        if isinstance(v, str):
+            d = _dt.fromisoformat(v)
+            return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
+        return _dt.fromtimestamp(int(v) / 1e9, tz=timezone.utc)
+
+    if not 0 <= int(hour) <= 23:
+        raise ValueError(f"the session hour must be 0..23, got {hour}")
+    zone = ZoneInfo(tz)
+    shift = timedelta(hours=int(hour))
+    first = (_as_utc(start).astimezone(zone) - shift).date()
+    last = (_as_utc(end).astimezone(zone) - shift).date()
+    out: List[int] = []
+    day = first
+    while day <= last:
+        local = _dt.combine(day, _time(hour=int(hour)), tzinfo=zone)
+        out.append(int(local.astimezone(timezone.utc).timestamp() * 1_000_000_000))
+        day += timedelta(days=1)
+    return out
+
+
+@dataclass
+class AccountPhase:
+    """One phase's limits, as fractions of the capital the PHASE starts with."""
+
+    max_total_loss: float = 0.10
+    """The floor that closes the account."""
+    name: str = "Evaluation"
+    """What the firm calls it: "Challenge", "Verification", "Evaluation"."""
+    profit_target: Optional[float] = None
+    """``None`` == no target: the phase only has to survive."""
+    max_daily_loss: Optional[float] = None
+    """``None`` == the firm sets no daily limit, which a whole family does."""
+    drawdown_type: str = "Static"
+    """``"Static"``, ``"TrailingEod"`` (the floor follows the CLOSE) or
+    ``"TrailingEquity"`` (it follows the peak equity mark by mark inside the
+    session, so a spike handed back can close an account on a day that ends in
+    profit)."""
+    trailing_lock_at: Optional[float] = None
+    """Level at which a trailing floor freezes for good. ``0.0`` == it stops at
+    the balance the phase started with, which is what futures evaluations do."""
+    min_trading_days: int = 0
+    """A trading day is a session in which a position was OPENED, measured on
+    the FILLS: a reversal opens the new side and counts. Holding does not count,
+    and neither does closing, so a position opened once and held for ten
+    sessions is ONE trading day and no `min_trading_days` above 1 can ever be
+    met by it."""
+    max_calendar_days: Optional[int] = None
+    """``None`` == unlimited. Counted in SESSIONS OF THE LIST, not in wall-clock
+    days: a calendar of trading days and a limit of 10 buys ten TRADING days,
+    which on a five-day week is two calendar weeks."""
+
+    def to_json_dict(self) -> dict:
+        # Les non-finis se refusent ICI, la ou l'utilisateur les a tapes. Plus
+        # loin, `json.dumps` ecrit les jetons nus `NaN` et `Infinity`, que le
+        # desserialiseur Rust rejette par un "invalid json payload: expected
+        # value at line 1 column 813" qui ne nomme aucun champ, et les gardes
+        # `is_finite` du moteur deviennent inatteignables.
+        for champ in ("max_total_loss", "profit_target", "max_daily_loss",
+                      "trailing_lock_at"):
+            v = getattr(self, champ)
+            if v is not None and not math.isfinite(float(v)):
+                raise ValueError(
+                    f"AccountPhase({self.name!r}).{champ} must be a finite "
+                    f"number, got {v!r}."
+                )
+        return {
+            "name": self.name,
+            "profit_target": self.profit_target,
+            "max_daily_loss": self.max_daily_loss,
+            "max_total_loss": self.max_total_loss,
+            "drawdown_type": self.drawdown_type,
+            "trailing_lock_at": self.trailing_lock_at,
+            "min_trading_days": int(self.min_trading_days),
+            "max_calendar_days": self.max_calendar_days,
+        }
+
+
+@dataclass
+class AccountRules:
+    """A prop-firm program, enforced DURING the run.
+
+    The account is judged mark by mark and CLOSED the moment it breaches: it
+    liquidates, stops trading, and its equity stays flat to the end of the data.
+    That is what the firm does, and it is why the rule lives in the engine
+    rather than in a verdict applied to a finished curve, which would read a
+    recovery the account never traded.
+
+    A program is a SEQUENCE of phases, and the firm hands out a fresh account
+    between them: a Verification does not start already past its own target
+    because the Challenge ended at +10%. Each phase therefore measures its
+    limits from the equity that phase started at.
+
+        import manifoldbt as bt
+        cfg.account_rules = bt.AccountRules(
+            phases=[
+                bt.AccountPhase(name="Challenge", profit_target=0.10,
+                                max_daily_loss=0.05, max_total_loss=0.10,
+                                min_trading_days=4),
+                bt.AccountPhase(name="Verification", profit_target=0.05,
+                                max_daily_loss=0.05, max_total_loss=0.10,
+                                min_trading_days=4),
+            ],
+            sessions=bt.account_sessions(start, end, tz="Europe/Prague"),
+            consistency=0.50,
+        )
+        res = bt.run(strategy, cfg, store)
+        res.account   # None while it lives, else how it ended
+
+    ``res.account`` reports ``equity`` and ``floor`` **on the phase's own
+    balance**, which restarts at the initial capital for every phase, while
+    ``res.equity_df()`` keeps compounding the run. On a two-phase program the
+    two numbers are deliberately different: a verdict at 105,205 in the
+    Verification can sit on a curve worth 116,569.
+
+    Two more things worth knowing before reading a result:
+
+      * a program that PASSES also stops trading, exactly like one that
+        breaches. The equity curve is flat from the verdict on, so
+        ``res.metrics`` is computed over a mostly frozen curve and can read as
+        a success on an account the firm closed. Read ``res.account`` first.
+      * ``RAN_OUT_OF_TIME`` only ever appears when a phase sets
+        ``max_calendar_days``. Without one, an account that never reaches its
+        target simply stays open and ``res.account`` is ``None``, which means
+        "still alive", not "failed".
+    """
+
+    phases: List[Any] = field(default_factory=list)
+    """At least one. Two for the mainstream 2-Step."""
+    sessions: List[int] = field(default_factory=list)
+    """UTC instants each session starts at: see :func:`account_sessions`."""
+    consistency: Optional[float] = None
+    """Largest share of the winning sessions' profit one session may hold, e.g.
+    ``0.50``. It does NOT close the account: it blocks the payout, and the
+    verdict reports it as ``consistency_ok``. ``None`` == no cap."""
+
+    def to_json_dict(self) -> dict:
+        if not self.phases:
+            raise ValueError(
+                "account rules need at least one phase: "
+                "AccountRules(phases=[AccountPhase(...)], sessions=...)"
+            )
+        if self.consistency is not None and not math.isfinite(float(self.consistency)):
+            raise ValueError(
+                f"AccountRules.consistency must be a finite share in (0, 1], "
+                f"got {self.consistency!r}."
+            )
+        return {
+            "phases": [
+                p.to_json_dict() if hasattr(p, "to_json_dict") else p
+                for p in self.phases
+            ],
+            "day_boundary": {"starts": [int(t) for t in self.sessions]},
+            "consistency": (
+                None if self.consistency is None
+                else {"max_best_day_share": float(self.consistency)}
+            ),
+        }
+
+
 @dataclass
 class BacktestConfig:
     universe: List[int] = field(default_factory=lambda: [1])
@@ -506,6 +699,18 @@ class BacktestConfig:
     sells an option. ``"deribit"`` applies the venue's published per-contract
     formula, refuses a short that does not fit initial margin, and force-closes
     the book when maintenance margin passes equity."""
+    account_rules: Any = None
+    """Prop-firm limits enforced *during* the run (see :class:`AccountRules`).
+    ``None`` == no limits.
+
+    A breached account is CLOSED: it liquidates, stops trading, and its equity
+    is flat from there on. That is the whole point of the option, and it is why
+    ``metrics`` afterwards describes a curve the account never traded. Read
+    ``result.account`` first; the run says so in ``result.warnings``.
+
+    The full run and the lite sweep walk the same rule, mark by mark, so a pass
+    rate over a parameter grid means something. The fast kernels and the GPU
+    sweep refuse the configuration by name instead of ignoring it."""
     option_contracts: Dict = field(default_factory=dict)
     """Contract terms per option symbol id. Filled automatically from the data
     store at run time; set it by hand only to override what was ingested.
@@ -564,6 +769,11 @@ class BacktestConfig:
             }
         if self.option_margin_model and self.option_margin_model != "none":
             d["option_margin_model"] = self.option_margin_model
+        if self.account_rules is not None:
+            rules = self.account_rules
+            d["account_rules"] = (
+                rules.to_json_dict() if hasattr(rules, "to_json_dict") else rules
+            )
         # Deprecated fields (backward compat)
         if self.provider:
             d["provider"] = self.provider

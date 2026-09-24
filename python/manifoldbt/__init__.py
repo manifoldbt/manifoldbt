@@ -43,6 +43,7 @@ from manifoldbt._native import (
     _flush_usage as _flush_usage_native,
     license_expiry as _license_expiry,
     license_info as _license_info,
+    _grant_couvre,
     compile_strategy_json,
     run as _run_native,
     run_batch as _run_batch_native,
@@ -66,11 +67,14 @@ from manifoldbt._native import (
 from manifoldbt._serde import scalar_value_to_json
 from manifoldbt.crossasset import prepare_cross_asset as _prepare_cross_asset
 from manifoldbt.config import (
+    AccountPhase,
+    AccountRules,
     BacktestConfig,
     ExecutionConfig,
     FeeConfig,
     OrderConfig,
     VenueFees,
+    account_sessions,
     entry_price,
     resolve_universe,
 )
@@ -221,15 +225,25 @@ def _require_pro(feature: str) -> None:
     )
 
 
-def _require_pro_for_gpu(device, feature: str) -> None:
-    """Gate GPU acceleration (``device="cuda"``/``"gpu"``) behind Pro.
+def _require_grant_for_gpu(device, feature: str) -> None:
+    """Gate GPU acceleration (``device="cuda"``/``"gpu"``) behind its tier.
 
     Reported here so that every GPU entry point raises the same clean
-    ``LicenseError`` as the other Pro features, instead of each surfacing its own
-    error type from deeper in the run. No-op for CPU or for Pro users.
+    ``LicenseError``, instead of each surfacing its own error type from deeper in
+    the run. No-op for CPU, and no-op for a licence that carries it.
+
+    GPU acceleration is carried by the Researcher tier since 0.27.0. Note that
+    ``license_info()`` reports ``"Pro"`` for a Researcher licence, because
+    Researcher includes everything Pro has: the tier string is not the way to
+    tell whether a given feature is covered.
     """
     if isinstance(device, str) and device.lower() in ("cuda", "gpu"):
-        _require_pro(feature)
+        if _grant_couvre("gpu_sweep"):
+            return
+        raise LicenseError(
+            f"'{feature}' is a Researcher feature; a Pro licence does not unlock "
+            f"it. What Researcher includes: www.manifoldbt.com/researcher"
+        )
 
 
 # Community fan-out budget: sweeps and batches may run up to this many backtests
@@ -953,8 +967,8 @@ def ingest_trades(
     returning nothing. ``start`` and ``end`` are ``YYYY-MM-DD`` (an RFC 3339
     instant is accepted; its date part is used), ``end`` inclusive.
 
-    Part of the tick layer: not unlocked by any licence sold today, a Pro one
-    included; the engine says so before touching the network.
+    Part of the tick layer: a Researcher licence unlocks it, a Pro one does not;
+    the engine says so before touching the network.
 
     Example::
 
@@ -1628,7 +1642,7 @@ def run_sweep_lite(
     """
     _require_pro_over_combos(_grid_combos(param_grid), "Parameter sweep")
     _validate_swept_params(strategy, param_grid.keys(), "Parameter sweep")
-    _require_pro_for_gpu(device, "GPU sweep")
+    _require_grant_for_gpu(device, "GPU acceleration")
     try:
         config = _cap_output_resolution(config)
         store = _resolve_store(config, store)
@@ -1915,7 +1929,7 @@ def run_stochastic(
         ... )
         >>> result = mbt.run_stochastic(model, s0=100, n_paths=5000)
     """
-    _require_pro_for_gpu(device, "GPU stochastic simulation")
+    _require_grant_for_gpu(device, "GPU stochastic simulation")
     config: Dict[str, Any] = {
         "s0": s0,
         "n_paths": n_paths,
@@ -2274,6 +2288,9 @@ Common errors
 
 
 __all__ = [
+    "AccountPhase",
+    "AccountRules",
+    "account_sessions",
     # Core types
     "BacktestResult",
     "BatchResultLite",

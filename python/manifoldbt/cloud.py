@@ -10,7 +10,7 @@ serialization a local run uses, so a job that runs on a worker is the run you
 would have got here, through the same code path. Nothing about the strategy
 changes because it moved.
 
-Authentication is an API key from the team portal, read from `MANIFOLDBT_API_KEY`
+Authentication is an API key from the Firm portal, read from `MANIFOLDBT_API_KEY`
 or passed to `configure()`. The key is never logged, and never travels anywhere
 but the Authorization header.
 
@@ -102,7 +102,7 @@ def _key() -> str:
     if not key:
         raise CloudError(
             "no API key. Pass it with mbt.cloud.configure(api_key=...) or set "
-            "MANIFOLDBT_API_KEY. Keys are created in the team portal, under Keys."
+            "MANIFOLDBT_API_KEY. Keys are created in the Firm portal, under Keys."
         )
     return key
 
