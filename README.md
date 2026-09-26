@@ -26,9 +26,10 @@
 
 ---
 
-Manifold-BT is a Python backtesting library with a Rust core. Strategies are written in a
-fluent Python DSL, compiled to a vectorized Rust expression graph, then run through a
-sequential fill simulation with realistic fees, slippage, funding and look-ahead protection.
+Manifold-BT is a Python backtesting library with a Rust core. You declare a strategy in a
+fluent Python DSL and hand it to the engine once: the whole backtest then runs in Rust,
+signals, fills, fees, slippage, funding and equity included, with look-ahead protection.
+Python stays out of the hot loop.
 **Vectorized speed with event-driven execution realism.**
 
 ## Why Manifold-BT
