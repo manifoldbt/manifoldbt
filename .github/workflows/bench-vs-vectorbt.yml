@@ -242,11 +242,9 @@ jobs:
           fi
           pip install -r benchmarks/vs_vectorbt/requirements-lock.txt
 
-      # A sweep benchmark without a licence does not fail, it produces a wrong
-      # number: every unlicensed fan-out call waits a fixed interval before any
-      # work starts, so the stopwatch would time the wait. This step exits
-      # non-zero rather than let that happen, and the harness refuses again on
-      # its own if the tier is not what it expects.
+      # Sweep timings are published from a licensed run only. This step exits
+      # non-zero without a licence, and the harness refuses again on its own if
+      # the tier is not what it expects.
       - name: Activate the benchmark licence
         env:
           MANIFOLDBT_CI_LICENSE: ${{ secrets.MANIFOLDBT_CI_LICENSE }}

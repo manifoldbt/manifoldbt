@@ -334,10 +334,9 @@ On the raptorbt side specifically:
 
 ## Parameter sweeps
 
-Sweeps run in their own CI job, because they need a licence: an unlicensed
-fan-out call waits out a fixed interval before doing any work, so a stopwatch
-would be timing the wait. The harness refuses to produce a number in that state
-rather than producing a wrong one.
+Sweeps run in their own CI job, because they need a licence: sweep timings are
+published from a licensed run only, and the harness refuses to produce a number
+without one.
 
 Three points, sized from what the runner actually did rather than guessed.
 Measured there: 87.5 us per combination for manifoldbt at 20,000 bars, 1.16 ms

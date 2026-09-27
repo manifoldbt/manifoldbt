@@ -1,12 +1,7 @@
 """Activate a licence from the environment, then assert the tier out loud.
 
-Used by the sweep workflow. A sweep benchmark run without a licence does not
-fail, it produces a wrong number: every unlicensed fan-out call waits out a
-fixed interval before doing any work, so the stopwatch measures the wait. On a
-100-cell grid that read 5.00 s against vectorbt's 0.17 s, which would publish
-"vectorbt is 29x faster" from a run where the engine barely ran.
-
-So this exits non-zero rather than let the benchmark continue unlicensed.
+Used by the sweep workflow. Sweep timings are published from a licensed run
+only, so this exits non-zero rather than let the benchmark continue without one.
 
 The key is written to disk by `activate`, so every child process the harness
 spawns afterwards picks it up without seeing the secret itself.
@@ -45,8 +40,8 @@ def main() -> int:
         print(f"activation failed: {type(exc).__name__}")
         return 1
 
-    _used, _limit, is_pro = mbt._native._combo_budget()
-    if not is_pro:
+    tier, _ = mbt.license_info()
+    if tier != "Pro":
         print("activation did not yield a licensed tier: refusing to continue.")
         return 1
     print("licensed tier active")
