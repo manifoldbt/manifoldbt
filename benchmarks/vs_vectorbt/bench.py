@@ -600,9 +600,8 @@ def main() -> int:
     parser.add_argument("--sweep", type=parse_point, nargs="*", default=[],
                         metavar="BARS:COMBOS",
                         help="parameter-grid points, e.g. 20000:5000. Needs a "
-                             "licence: an unlicensed fan-out call waits out a "
-                             "fixed interval, so the stopwatch would be timing "
-                             "the wait rather than the engine")
+                             "licence: sweep timings are published from a "
+                             "licensed run only")
     parser.add_argument("--sweep-reps", type=int, default=3,
                         help="repetitions per sweep point; fewer than --reps "
                              "because a large grid costs seconds, not milliseconds")

@@ -5,13 +5,11 @@ broadcasts the whole grid into one vectorised simulation. So it is the workload
 where a speed claim needs the tightest gate, and where engines are the easiest
 to compare *wrongly*.
 
-Its own process, for three reasons:
+Its own process, for two reasons:
 
 * memory. The peak of a large grid is the number that decides what a machine can
   run at all, and it cannot be read once another engine has already grown the
   allocator in the same process.
-* tier. The engine's fan-out allowance is counted per process, so two points
-  sharing one would interfere.
 * isolation. A 100k-combination grid that runs out of memory takes its process
   down with it; one point dying should not cost the whole benchmark.
 
@@ -106,18 +104,19 @@ def grid(combos: int) -> tuple[list[int], list[int]]:
     return fast_vals, slow_vals
 
 
-def tier() -> dict:
-    """What the engine thinks it is allowed to do, right now.
+# The Community limit on a single sweep, as published on the pricing page.
+COMMUNITY_SWEEP_LIMIT = 256
 
-    Read before and after the sweep. The downgrade that follows a refused
-    licence ping lands from a background thread, so a run can legitimately start
-    Pro and finish Community: a number measured across that boundary is not a
-    measurement of anything.
+
+def tier() -> dict:
+    """The licence tier the engine reports, read before and after the sweep.
+
+    A number measured across a tier change is not a measurement of anything.
     """
     import manifoldbt as mbt
 
-    used, limit, is_pro = mbt._native._combo_budget()
-    return {"pro": bool(is_pro), "budget_used": int(used), "budget_limit": int(limit)}
+    name, _ = mbt.license_info()
+    return {"pro": name == "Pro"}
 
 
 def run_mbt(df, fast_vals, slow_vals, workdir, metrics=False):
@@ -507,13 +506,9 @@ def _main(args) -> int:
         }))
         return 0
 
-    # An unlicensed sweep CANNOT be timed, and this is not a matter of degree.
-    # Every accepted fan-out call waits out a fixed interval before any work
-    # starts, so the stopwatch measures the pause, not the engine: a 100-cell
-    # grid on 20k bars measured 5.00 s against vectorbt's 0.17 s here, which
-    # would publish "vectorbt is 29x faster" from a run where the engine did
-    # almost nothing. Timing is therefore refused outright without a licence,
-    # rather than gated on grid size.
+    # Sweep timings are published from a licensed run only, the configuration
+    # this benchmark describes. Timing is therefore refused outright without a
+    # licence, rather than gated on grid size.
     #
     # Checking tier_before against tier_after is not enough on its own: a run
     # that starts AND finishes unlicensed shows no change at all, and would sail
@@ -524,24 +519,22 @@ def _main(args) -> int:
             "combos": actual,
             "status": "skipped",
             "reason": (
-                "sweep timing requires a licence: unlicensed fan-out calls wait "
-                "out a fixed interval, so the measurement would be of that wait. "
+                "sweep timing requires a licence. "
                 "Re-run with --parity-only to check agreement without timing."
             ),
             "tier_before": tier_before,
         }))
         return 2
 
-    # Parity-only still has to fit the unlicensed allowance, which is spent
-    # across the whole process: one warmup call per engine and nothing more.
-    if args.parity_only and not tier_before["pro"] and actual > tier_before["budget_limit"]:
+    # Parity-only still has to fit the Community limit on a sweep.
+    if args.parity_only and not tier_before["pro"] and actual > COMMUNITY_SWEEP_LIMIT:
         print(json.dumps({
             "bars": args.bars,
             "combos": actual,
             "status": "skipped",
             "reason": (
-                f"{actual} combinations exceeds the unlicensed allowance of "
-                f"{tier_before['budget_limit']} for a single call"
+                f"{actual} combinations exceeds the Community limit of "
+                f"{COMMUNITY_SWEEP_LIMIT} per sweep"
             ),
             "tier_before": tier_before,
         }))
@@ -650,9 +643,8 @@ def _main(args) -> int:
     result["memory_baseline_mb"] = round(base_mb, 1)
     result["tier_after"] = tier_after
 
-    # A sweep measured across a tier change is not a measurement. The downgrade
-    # arrives from a background thread after a refused licence ping, so this can
-    # only be checked after the fact.
+    # A sweep measured across a tier change is not a measurement, and a change
+    # can only be seen after the fact.
     if tier_before["pro"] != tier_after["pro"]:
         result["timings"] = None
         result["note"] = (
