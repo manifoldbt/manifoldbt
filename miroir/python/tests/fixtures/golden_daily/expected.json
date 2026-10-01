@@ -1,0 +1,173 @@
+{
+  "equity_curve": [
+    10000.0,
+    10000.0,
+    10000.0,
+    10000.0,
+    10000.0,
+    10000.0,
+    10000.0,
+    10000.0,
+    10000.0,
+    10000.0,
+    10000.0,
+    10000.0,
+    10000.0,
+    10000.0,
+    10000.0,
+    10000.0,
+    10000.0,
+    10000.0,
+    10000.0,
+    10000.0,
+    10000.0,
+    10000.0,
+    10000.0,
+    10000.0,
+    10000.0,
+    10000.0,
+    10000.0,
+    10000.0,
+    10000.0,
+    10000.0,
+    10210.574868993772,
+    10210.574868993772,
+    10210.574868993772,
+    10165.247738646705,
+    10088.689300801781,
+    10183.062959338444,
+    10093.861142806654,
+    10061.704438829662,
+    10322.187486084464,
+    10211.718847663069
+  ],
+  "manifest": {
+    "config": {
+      "bar_interval": {
+        "Days": 1
+      },
+      "currency": "USD",
+      "data_version": "golden_daily_v1",
+      "execution": {
+        "allow_fractional": true,
+        "allow_short": false,
+        "execution_price": "AtClose",
+        "max_position_pct": 1.0,
+        "position_sizing_mode": "FractionOfEquity",
+        "pyramiding": false,
+        "signal_delay": 1,
+        "skip_gap_bars": false
+      },
+      "fees": {
+        "borrow_rate_annual_bps": 0.0,
+        "funding_rate_column": null,
+        "maker_fee_bps": 0.0,
+        "min_fee": 0.0,
+        "taker_fee_bps": 0.0
+      },
+      "initial_capital": 10000.0,
+      "output_resolution": {
+        "Days": 1
+      },
+      "precise": false,
+      "risk_free_rate": 0.02,
+      "rng_seed": 7,
+      "slippage": {
+        "FixedBps": {
+          "bps": 0.0
+        }
+      },
+      "time_range": {
+        "end": 1707523200000000000,
+        "start": 1704067200000000000
+      },
+      "universe": [
+        1
+      ],
+      "warmup_bars": 0
+    },
+    "data_version": "golden_daily_v1",
+    "strategy_name": "golden_daily"
+  },
+  "metrics": {
+    "alpha": 0.2407803131442768,
+    "avg_daily_return": 0.0005420544922039305,
+    "best_day": 0.025888560813768002,
+    "beta": 0.2599458875251718,
+    "cagr": 0.2167860497257943,
+    "calmar": 14.868702863547359,
+    "kurtosis": 8.602525338884888,
+    "max_drawdown": -0.01458002434477823,
+    "max_drawdown_duration_days": 6.0,
+    "omega_ratio": 1.626321866346559,
+    "pct_positive_days": 0.075,
+    "sharpe": 1.5183502357867356,
+    "skewness": 2.5510759140797585,
+    "sortino": 3.0151408511360915,
+    "tail_ratio": 2.7959631506466054,
+    "total_return": 0.021171884766306936,
+    "tstat_alpha": 0.7814212124767362,
+    "tstat_sharpe": 0.49614560938698393,
+    "ulcer_index": 0.003911318004970256,
+    "volatility": 0.1172228903993697,
+    "worst_day": -0.010702056959372208
+  },
+  "trade_count": 3,
+  "trades": {
+    "execution_timestamp": [
+      "2024-01-30T00:00:00+00:00",
+      "2024-01-31T00:00:00+00:00",
+      "2024-02-02T00:00:00+00:00"
+    ],
+    "exit_reason": [
+      0,
+      0,
+      0
+    ],
+    "fees": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "fill_price": [
+      96.341411,
+      98.370119,
+      99.171165
+    ],
+    "intended_price": [
+      96.341411,
+      98.370119,
+      99.171165
+    ],
+    "is_gap_bar": [
+      false,
+      false,
+      false
+    ],
+    "quantity": [
+      103.79752482553947,
+      103.79752482553947,
+      102.95910982787962
+    ],
+    "side": [
+      1,
+      2,
+      1
+    ],
+    "signal_timestamp": [
+      "2024-01-29T00:00:00+00:00",
+      "2024-01-30T00:00:00+00:00",
+      "2024-02-01T00:00:00+00:00"
+    ],
+    "slippage": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "symbol_id": [
+      1,
+      1,
+      1
+    ]
+  }
+}

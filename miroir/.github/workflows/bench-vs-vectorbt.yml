@@ -1,0 +1,354 @@
+# The benchmark runs here, in the open, on standard GitHub-hosted runners.
+#
+# Nothing in this workflow has access to the engine source: it installs the
+# published wheel from PyPI, exactly like any user would. That is what makes the
+# result independent rather than self-reported, and it is why anyone can fork
+# this repository and press "Run workflow" to reproduce the numbers on their own
+# runner. Same for the engines it is compared against: they come from PyPI at
+# pinned versions, and the run prints the versions it resolved.
+
+name: Benchmark vs vectorbt and raptorbt
+
+on:
+  workflow_dispatch:
+    inputs:
+      manifoldbt_version:
+        description: "manifoldbt version to install from PyPI (blank = latest)"
+        required: false
+        default: ""
+      reps:
+        description: "Interleaved repetitions per point"
+        required: false
+        # 3, not 7. The budget went into a longer series and two more
+        # workloads instead: at 10M bars one vectorbt call costs 99 s, so seven
+        # of them would put the job past its timeout. Three is the floor at
+        # which a median is a median rather than the mean of two, though an
+        # interquartile range still wants four samples to mean anything, so the
+        # noise flag stays coarse. A point that looks surprising is worth
+        # re-running at a higher `reps` before it is quoted anywhere.
+        default: "3"
+  release:
+    types: [published]
+  schedule:
+    # Weekly, to catch a slowdown introduced by a dependency rather than by us.
+    - cron: "17 5 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bench-vs-vectorbt-${{ github.ref }}
+  # A manual run is never superseded, so it is never cancelled. Cancelling in
+  # flight is the right default for a CI triggered by pushes, where a newer
+  # commit makes an older run pointless; here it threw away ten minutes of
+  # measurement because somebody pressed the button twice, three times in one
+  # afternoon, and left a trail of cancelled runs in a list whose whole job is
+  # to be readable by someone checking the numbers.
+  #
+  # A release or the weekly cron still supersedes: there, an older run really is
+  # measuring a version nobody is asking about any more.
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+
+jobs:
+  bench:
+    # Named for what the job measures, not for the runner it landed on. The
+    # runner is already on the row; what a reader needs from the job list is
+    # which half of the benchmark it is.
+    name: backtests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    # A published release is not always a released version. The preview tags
+    # 0.18.0rc1 and rc2 went to the public repository without ever reaching
+    # PyPI, so `pip install manifoldbt==0.18.0rc2` failed and this workflow went
+    # red four times in two days for a reason that had nothing to do with any
+    # engine. Pre-releases are skipped; a manual dispatch can still benchmark
+    # one by naming the version, if it ever exists on PyPI.
+    if: github.event_name != 'release' || github.event.release.prerelease == false
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux only, on purpose. The other two runners were carried for a
+          # reason that does not survive examination: they were the only place
+          # anything installed the published wheel on Windows or macOS, which
+          # made this benchmark a smoke test by accident. That check is worth
+          # having and worth 40 seconds next to the build in release.yml, not 13
+          # minutes inside a performance measurement, and nobody reads a
+          # benchmark to find out whether a package imports.
+          #
+          # What is lost is a per-platform timing, which was never quoted: the
+          # numbers that get published are the Linux ones. Adding a platform
+          # back is one entry here.
+          - os: ubuntu-latest
+            bars: "100000 1000000 10000000"
+
+    env:
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          # 3.12, not 3.13, and it is raptorbt that pins it: it is built against
+          # pyo3 0.20.3, whose maximum supported CPython is 3.12. No release up
+          # to 0.9.0 publishes a cp313 wheel and a source build refuses outright
+          # ("the configured Python interpreter version (3.13) is newer than
+          # PyO3's maximum supported version (3.12)"). Comparing engines means
+          # running them in one environment, and the environment has to be one
+          # they all support. Runs before 2026-08-20 used 3.13 with two engines,
+          # so their absolute timings are not directly comparable with these.
+          python-version: "3.12"
+
+      - name: Install engines from PyPI
+        shell: bash
+        run: |
+          set -e
+          VERSION="${{ inputs.manifoldbt_version }}"
+          # A release run benchmarks the version that was just published.
+          if [ -z "$VERSION" ] && [ "${{ github.event_name }}" = "release" ]; then
+            VERSION="$(echo '${{ github.event.release.tag_name }}' | sed 's/^v//')"
+          fi
+          python -m pip install --upgrade pip
+          # PyPI accepte le televersement bien avant que son index le serve.
+          # Mesure sur la publication de 0.18.0: le televersement s'est termine
+          # a 01:48:18 et ce job a demande la version a 01:48:50, trente-deux
+          # secondes plus tard, pour se faire repondre "from versions: ...,
+          # 0.17.3". Ce n'est PAS un hasard de timing: ce workflow est declenche
+          # par `release: published`, et cette release est creee juste apres le
+          # televersement. La course est donc GARANTIE a chaque publication, et
+          # elle n'avait jamais pu se voir puisque ce chemin n'avait jamais
+          # tourne sur une vraie release.
+          #
+          # On attend donc que l'index serve la version, au lieu d'echouer sur
+          # une propagation. `--no-cache-dir` parce que pip met en cache la
+          # reponse de l'index, y compris celle qui ne connait pas encore la
+          # version. Dix minutes de patience au maximum, contre soixante de
+          # budget pour le job.
+          if [ -n "$VERSION" ]; then
+            installe=0
+            for essai in $(seq 1 20); do
+              if pip install --no-cache-dir "manifoldbt==${VERSION}"; then
+                installe=1
+                break
+              fi
+              echo "tentative ${essai}/20: ${VERSION} pas encore sur l'index, nouvelle tentative dans 30 s"
+              sleep 30
+            done
+            if [ "$installe" -ne 1 ]; then
+              echo "::error::manifoldbt==${VERSION} toujours introuvable sur PyPI apres dix minutes"
+              exit 1
+            fi
+          else
+            pip install manifoldbt
+          fi
+          pip install -r benchmarks/vs_vectorbt/requirements-lock.txt
+
+      - name: Record the resolved environment
+        shell: bash
+        run: pip freeze | grep -iE '^(manifoldbt|vectorbt|raptorbt|numpy|numba|pandas|psutil|plotly)=' || true
+
+      - name: Run the benchmark
+        shell: bash
+        working-directory: benchmarks/vs_vectorbt
+        run: |
+          python bench.py \
+            --bars ${{ matrix.bars }} \
+            --reps "${{ inputs.reps || '7' }}" \
+            --cold-start-reps 3 \
+            --memory-bars 2000000 \
+            --out "results-${{ matrix.os }}.json"
+
+      - name: Render the report
+        # Runs even when the benchmark exits non-zero: a parity failure is the
+        # most interesting thing that can happen here, and it must be readable
+        # in the job summary rather than buried in a red step. But only if there
+        # is something to render: when the install step failed, this used to die
+        # on a missing file and put a FileNotFoundError on top of the real
+        # error, which is how a run reports the wrong cause twice.
+        if: always()
+        shell: bash
+        working-directory: benchmarks/vs_vectorbt
+        run: |
+          if [ -f "results-${{ matrix.os }}.json" ]; then
+            python report.py "results-${{ matrix.os }}.json"
+          else
+            echo "no result file: the benchmark did not get far enough to write one"
+          fi
+
+      - name: Upload the raw result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-${{ matrix.os }}
+          path: benchmarks/vs_vectorbt/results-*.json
+          if-no-files-found: warn
+
+  # ------------------------------------------------------------------------ #
+  # Parameter sweeps, which need a licence and therefore a job of their own
+  # ------------------------------------------------------------------------ #
+  sweeps:
+    name: sweeps (ubuntu-latest)
+    runs-on: ubuntu-latest
+    if: github.event_name != 'release' || github.event.release.prerelease == false
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install engines from PyPI
+        shell: bash
+        run: |
+          set -e
+          VERSION="${{ inputs.manifoldbt_version }}"
+          if [ -z "$VERSION" ] && [ "${{ github.event_name }}" = "release" ]; then
+            VERSION="$(echo '${{ github.event.release.tag_name }}' | sed 's/^v//')"
+          fi
+          python -m pip install --upgrade pip
+          # PyPI accepte le televersement bien avant que son index le serve.
+          # Mesure sur la publication de 0.18.0: le televersement s'est termine
+          # a 01:48:18 et ce job a demande la version a 01:48:50, trente-deux
+          # secondes plus tard, pour se faire repondre "from versions: ...,
+          # 0.17.3". Ce n'est PAS un hasard de timing: ce workflow est declenche
+          # par `release: published`, et cette release est creee juste apres le
+          # televersement. La course est donc GARANTIE a chaque publication, et
+          # elle n'avait jamais pu se voir puisque ce chemin n'avait jamais
+          # tourne sur une vraie release.
+          #
+          # On attend donc que l'index serve la version, au lieu d'echouer sur
+          # une propagation. `--no-cache-dir` parce que pip met en cache la
+          # reponse de l'index, y compris celle qui ne connait pas encore la
+          # version. Dix minutes de patience au maximum, contre soixante de
+          # budget pour le job.
+          if [ -n "$VERSION" ]; then
+            installe=0
+            for essai in $(seq 1 20); do
+              if pip install --no-cache-dir "manifoldbt==${VERSION}"; then
+                installe=1
+                break
+              fi
+              echo "tentative ${essai}/20: ${VERSION} pas encore sur l'index, nouvelle tentative dans 30 s"
+              sleep 30
+            done
+            if [ "$installe" -ne 1 ]; then
+              echo "::error::manifoldbt==${VERSION} toujours introuvable sur PyPI apres dix minutes"
+              exit 1
+            fi
+          else
+            pip install manifoldbt
+          fi
+          pip install -r benchmarks/vs_vectorbt/requirements-lock.txt
+
+      # Sweep timings are published from a licensed run only. This step exits
+      # non-zero without a licence, and the harness refuses again on its own if
+      # the tier is not what it expects.
+      - name: Activate the benchmark licence
+        env:
+          MANIFOLDBT_CI_LICENSE: ${{ secrets.MANIFOLDBT_CI_LICENSE }}
+        shell: bash
+        working-directory: benchmarks/vs_vectorbt
+        run: python ci_activate.py
+
+      - name: Run the sweeps
+        shell: bash
+        working-directory: benchmarks/vs_vectorbt
+        # Three points, sized from what this runner actually did rather than
+        # guessed. Measured here: 87.5 us per combination for manifoldbt at
+        # 20,000 bars, 1.16 ms for vectorbt, 1.34 ms for raptorbt, and 15.0 ms
+        # for raptorbt at 200,000 bars.
+        #
+        # The first point is the only one vectorbt can hold: at 20,000 bars it
+        # materialises 1.57 MB per combination, so 5,000 of them already cost it
+        # 2.5 GB and 20,000 would need 31 GB. The other two are out of its
+        # scope, and they are where a sweep stops being a speed comparison and
+        # becomes a capability one.
+        #
+        # raptorbt sets the budget, not manifoldbt: with no fan-out API its
+        # sweep is a Python loop, so it costs a full backtest per cell. That is
+        # why the large point goes deep in combinations on short series rather
+        # than the reverse -- 20,000 combinations on 20,000 bars costs it 27 s a
+        # call, where 5,000 combinations on a million bars would cost it 25 min.
+        run: |
+          python bench.py             --workloads sma_cross             --bars 100000             --reps 1             --cold-start-reps 0             --sweep 20000:5000 20000:20000:oos 200000:10000:oos             --sweep-reps "${{ inputs.reps || '2' }}"             --out "results-sweeps.json"
+
+      - name: Render the report
+        if: always()
+        shell: bash
+        working-directory: benchmarks/vs_vectorbt
+        run: |
+          if [ -f results-sweeps.json ]; then
+            python report.py results-sweeps.json
+          else
+            echo "no result file: the grids did not get far enough to write one"
+          fi
+
+      - name: Upload the raw result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-sweeps
+          path: benchmarks/vs_vectorbt/results-sweeps.json
+          if-no-files-found: warn
+
+  # ------------------------------------------------------------------------ #
+  # Publish, so the numbers live somewhere that is not an artifact
+  # ------------------------------------------------------------------------ #
+  publish:
+    name: publish results
+    runs-on: ubuntu-latest
+    # Only a run where both halves came back green gets published. A partial
+    # result is worse than a stale one: the website renders whatever this file
+    # says, and a missing sweep table reads as a choice rather than a crash.
+    needs: [bench, sweeps]
+    # A dispatch that pins an old version is a question somebody asked, not the
+    # current state of the engine, so it measures and reports without becoming
+    # the published number.
+    if: github.event_name != 'workflow_dispatch' || inputs.manifoldbt_version == ''
+    permissions:
+      contents: write
+    steps:
+      # The default branch explicitly: a release run is checked out at a tag,
+      # and there is nothing to push a commit onto there.
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: bench-*
+          path: artifacts
+          merge-multiple: true
+
+      - name: Merge the run into one published result
+        shell: bash
+        run: |
+          python benchmarks/vs_vectorbt/publish.py artifacts \
+            --out benchmarks/vs_vectorbt/results/latest.json
+
+      # Committed, not uploaded: an artifact needs a token to download and
+      # expires after ninety days, so anything outside GitHub that wants these
+      # numbers needs them at a plain URL. This is that URL.
+      - name: Commit it, if it moved
+        shell: bash
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add benchmarks/vs_vectorbt/results/latest.json
+          if git diff --cached --quiet; then
+            echo "identical to the published result: nothing to commit"
+            exit 0
+          fi
+          # [skip ci] because a results file is not a code change, and running
+          # the test suite over it would only add a red herring to the log.
+          git commit -m "bench: publish results from run ${GITHUB_RUN_ID} [skip ci]"
+          # Another run may have landed while this one was measuring.
+          git pull --rebase origin master
+          git push origin HEAD:master

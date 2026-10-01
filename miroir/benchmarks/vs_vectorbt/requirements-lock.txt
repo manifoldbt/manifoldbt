@@ -1,0 +1,29 @@
+# Pinned on purpose: a benchmark whose dependency set moves under it is not a
+# benchmark. These are the exact versions the harness was validated against, and
+# they are recorded again inside every results JSON so a reader can tell whether
+# two runs are comparable.
+#
+# manifoldbt itself is NOT pinned here: the workflow installs the version under
+# test (`pip install manifoldbt==X`), so the same lock file serves every release.
+#
+# raptorbt has no dependency of its own, so pinning it moves nothing else in the
+# set. It does pin the *interpreter*, though: it is built against pyo3 0.20.3,
+# whose maximum supported CPython is 3.12, so there is no cp313 wheel in any
+# release up to 0.9.0 and a source build refuses outright ("the configured
+# Python interpreter version (3.13) is newer than PyO3's maximum supported
+# version (3.12)"). That is why the workflow runs 3.12: comparing engines means
+# running them in one environment, and the environment has to be one they all
+# support.
+vectorbt==0.28.4
+# plotly is vectorbt's transitive dependency, and it was the hole in this
+# lock: unpinned, pip resolved plotly 7.0.0 the day it landed on PyPI, and
+# vectorbt 0.28.4's own template references the mapbox traces that 7.0
+# removed -- `import vectorbt` died before a single bar was benchmarked.
+# Exactly the failure mode the header above describes. 6.9.0 is the last
+# 6.x line and the one this harness is validated against.
+plotly==6.9.0
+raptorbt==0.9.0
+numpy==2.4.3
+numba==0.64.0
+pandas==2.3.3
+psutil==7.2.2

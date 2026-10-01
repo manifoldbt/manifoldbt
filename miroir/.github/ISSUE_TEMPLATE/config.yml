@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or help using ManifoldBT
+    url: https://discord.gg/bvU6Wjc72d
+    about: Ask on Discord. Faster than an issue, and other users can answer.
+  - name: Documentation
+    url: https://www.manifoldbt.com/docs/documentation.html
+    about: API reference, indicator list, configuration guide.
+  - name: Report a security vulnerability
+    url: https://github.com/manifoldbt/manifoldbt/security/advisories/new
+    about: Private disclosure. Please do not open a public issue.

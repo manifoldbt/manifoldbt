@@ -1,0 +1,1235 @@
+"""Charts for research analysis results (sweep, walk-forward, stability) - plotly."""
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Union
+
+import numpy as np
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+
+from manifoldbt.plot._theme import (
+    ACCENT,
+    BORDER,
+    CS_CORRELATION,
+    CS_SEQUENTIAL,
+    DARK_GRAY,
+    GRAY,
+    MONO_FAMILY,
+    ORANGE,
+    WHITE,
+    theme_context,
+)
+from manifoldbt._convert import daily_returns_array, equity_with_dates
+from manifoldbt.plot._utils import finalize, new_figure
+
+
+def _rgba(hex_color: str, alpha: float) -> str:
+    h = hex_color.lstrip("#")
+    return f"rgba({int(h[0:2], 16)},{int(h[2:4], 16)},{int(h[4:6], 16)},{alpha})"
+
+
+def _extract_val(v):
+    """Extract numeric values from ScalarValue dicts like {'Float64': 1.23}."""
+    if isinstance(v, dict):
+        for val in v.values():
+            return val
+    return v
+
+
+def _grid_window_size(nx: int, ny: int, plot: int = 720, cbar: int = 160,
+                      top: int = 70) -> tuple:
+    """Window size matching the grid aspect (square grid -> square-ish window)."""
+    if nx >= ny:
+        pw, ph = plot, plot * ny / max(nx, 1)
+    else:
+        pw, ph = plot * nx / max(ny, 1), plot
+    return (int(pw + cbar), int(ph + top))
+
+
+def _moving_average_1d(a: np.ndarray, radius: int, axis: int) -> np.ndarray:
+    """Edge-replicated moving average of window 2*radius+1 along axis (numpy)."""
+    if radius < 1:
+        return a
+    pad = [(radius, radius) if ax == axis else (0, 0) for ax in range(a.ndim)]
+    padded = np.pad(a, pad, mode="edge")
+    cumsum = np.cumsum(padded, axis=axis)
+    zero = np.zeros_like(np.take(cumsum, [0], axis=axis))
+    cumsum = np.concatenate([zero, cumsum], axis=axis)
+    n = a.shape[axis]
+    width = 2 * radius + 1
+    upper = np.take(cumsum, np.arange(width, width + n), axis=axis)
+    lower = np.take(cumsum, np.arange(0, n), axis=axis)
+    return (upper - lower) / width
+
+
+def _box_blur_2d(a: np.ndarray, sigma_y: float, sigma_x: float, passes: int = 3) -> np.ndarray:
+    """Separable box blur that approximates a Gaussian (central-limit theorem),
+    pure numpy. A scipy-free fallback for _plateau_best."""
+    out = a.astype(float)
+    ry, rx = max(1, int(round(sigma_y))), max(1, int(round(sigma_x)))
+    for _ in range(passes):
+        out = _moving_average_1d(out, ry, axis=0)
+        out = _moving_average_1d(out, rx, axis=1)
+    return out
+
+
+def _argmax_ignoring_nan(a: np.ndarray):
+    """Index of the highest cell, a NaN ranked below every number; ``None``
+    when every cell is NaN.
+
+    ``np.argmax`` returns the FIRST NaN when there is one: a metric a run did
+    not report (a Sharpe under two days of data) would be marked as the best.
+    Among equal maxima the first wins, as ``np.argmax`` has it.
+    """
+    a = np.asarray(a, dtype=np.float64)
+    known = ~np.isnan(a)
+    if not known.any():
+        return None
+    vals = np.where(known, a, -np.inf)
+    flat = np.flatnonzero((vals == vals.max()) & known)[0]
+    return np.unravel_index(flat, a.shape)
+
+
+def _plateau_best(grid: np.ndarray):
+    """Plateau-optimal cell: a blur finds the center of the best stable region,
+    not a lucky spike (overfit-resistant). sigma = ~5% of each axis. Uses
+    scipy's Gaussian filter when installed, else a pure-numpy box blur so the
+    plotting extra needs no scipy. ``None`` when every cell is NaN: there is
+    no best to mark."""
+    if np.isnan(grid).all():
+        return None
+    filled = np.nan_to_num(grid, nan=np.nanmin(grid))
+    sigma_y = max(1.0, grid.shape[0] * 0.05)
+    sigma_x = max(1.0, grid.shape[1] * 0.05)
+    try:
+        from scipy.ndimage import gaussian_filter
+        smoothed = gaussian_filter(filled, sigma=(sigma_y, sigma_x))
+    except ImportError:
+        smoothed = _box_blur_2d(filled, sigma_y, sigma_x)
+    return _argmax_ignoring_nan(smoothed)
+
+
+def _stats_annotation(fig, text: str) -> None:
+    """Monospace stats box in the top-right corner."""
+    fig.add_annotation(
+        x=0.98, y=0.95, xref="paper", yref="paper",
+        xanchor="right", yanchor="top", align="left",
+        text=text.replace("\n", "<br>"), showarrow=False,
+        font=dict(family=MONO_FAMILY, size=11, color=GRAY),
+        bgcolor="rgba(17,17,22,0.9)", bordercolor=BORDER, borderwidth=1,
+        borderpad=6,
+    )
+
+
+# ── 2D Parameter Sweep Heatmap ──────────────────────────────────────────────
+
+
+def heatmap_2d(
+    sweep_result: Dict[str, Any],
+    *,
+    ax=None,
+    annotate: bool = True,
+    fmt: str = ".3f",
+    highlight_best: bool = True,
+    zones: "bool | List[float] | None" = None,
+    drift: int = 2,
+    title: Optional[str] = None,
+    figsize: Tuple[float, float] = (10, 8),
+    show: "bool | str | None" = None,
+    save: Optional[Union[str, Path]] = None,
+) -> go.Figure:
+    """2D parameter sweep heatmap from ``run_sweep_2d()`` result.
+
+    Expected keys: metric_grid, x_values, y_values, x_param, y_param, metric.
+
+    Args:
+        zones: Colour cells by discrete robustness zone instead of by the
+            metric. A zone is what the area still guarantees when the
+            parameters drift by ``drift`` cells, so a lucky spike is shown in
+            a low zone despite scoring well on its own cell. ``True`` picks
+            the bands (conventional 0/0.5/1.0/1.5 for risk-adjusted ratios,
+            an even split of the observed range otherwise); pass a list of
+            thresholds to set them yourself. The metric value stays on hover
+            and in the cell labels. Same option as ``surface_3d``.
+        drift: Neighbourhood radius in grid cells for the worst case. Cells,
+            not parameter units: with an x step of 1 and a y step of 5,
+            ``drift=2`` means +/-2 on x but +/-10 on y.
+    """
+    with theme_context():
+        grid = np.array(sweep_result["metric_grid"], dtype=np.float64)
+        x_vals = [_extract_val(v) for v in sweep_result["x_values"]]
+        y_vals = [_extract_val(v) for v in sweep_result["y_values"]]
+        x_param = sweep_result.get("x_param", "x")
+        y_param = sweep_result.get("y_param", "y")
+        metric = sweep_result.get("metric", "metric")
+        nx, ny = len(x_vals), len(y_vals)
+
+        text = None
+        if annotate and nx * ny <= 100:
+            text = np.vectorize(lambda v: "" if np.isnan(v) else f"{v:{fmt}}")(grid)
+
+        fig = new_figure(figsize)
+        if zones:
+            worst = _worst_case(grid, drift)
+            band, scale, labels, edges, n_bands = _zone_bands(worst, zones, metric)
+            # z carries the band so colour is discrete; the metric and what it
+            # holds ride along in customdata so the cell still reports both.
+            fig.add_trace(go.Heatmap(
+                z=band, x=x_vals, y=y_vals,
+                colorscale=scale, zmin=-0.5, zmax=n_bands - 0.5,
+                customdata=np.dstack((grid, worst)),
+                text=text, texttemplate="%{text}" if text is not None else None,
+                textfont=dict(size=9),
+                hovertemplate=(
+                    f"{x_param} %{{x}}<br>{y_param} %{{y}}<br>"
+                    f"{metric} %{{customdata[0]:{fmt}}}<br>"
+                    f"held %{{customdata[1]:{fmt}}}<extra></extra>"
+                ),
+                colorbar=dict(
+                    title=dict(text=f"{metric}<br>held under drift", side="right"),
+                    outlinewidth=0, thickness=12,
+                    tickmode="array", tickvals=list(range(n_bands)),
+                    ticktext=labels),
+                hoverongaps=False,
+            ))
+        else:
+            fig.add_trace(go.Heatmap(
+                z=grid, x=x_vals, y=y_vals,
+                colorscale=CS_SEQUENTIAL,
+                text=text, texttemplate="%{text}" if text is not None else None,
+                textfont=dict(size=9),
+                hovertemplate=(
+                    f"{x_param} %{{x}}<br>{y_param} %{{y}}<br>"
+                    f"{metric} %{{z:{fmt}}}<extra></extra>"
+                ),
+                colorbar=dict(outlinewidth=0, thickness=12),
+                hoverongaps=False,
+            ))
+
+        best_label = None
+        if highlight_best:
+            if zones:
+                # Match the colouring: best = what holds up, not the spike.
+                best_idx = _argmax_ignoring_nan(worst)
+            else:
+                best_idx = _plateau_best(grid)
+        # Every cell NaN (a metric no combination reported): nothing to mark.
+        if highlight_best and best_idx is not None:
+            best_val = grid[best_idx]
+            best_x = x_vals[best_idx[1]]
+            best_y = y_vals[best_idx[0]]
+
+            # Cell outline around the plateau-best combo
+            dx = (x_vals[1] - x_vals[0]) / 2 if nx > 1 else 0.5
+            dy = (y_vals[1] - y_vals[0]) / 2 if ny > 1 else 0.5
+            fig.add_shape(
+                type="rect",
+                x0=best_x - dx, x1=best_x + dx, y0=best_y - dy, y1=best_y + dy,
+                line=dict(color="white", width=2.5),
+            )
+            kind = "most robust" if zones else "plateau centre"
+            best_label = (f"{kind}: {best_val:{fmt}} "
+                          f"({x_param}={best_x:.0f}, {y_param}={best_y:.0f})")
+            if zones:
+                best_label += (f", holds {worst[best_idx]:{fmt}} "
+                               f"under +/-{drift} cells")
+
+        combos = nx * ny
+        main_title = title or f"{metric} · Parameter Sweep ({combos:,} combos)"
+        if best_label:
+            main_title = f"{main_title}<br><span style='font-size:11px;color:{GRAY}'>{best_label}</span>"
+        fig.update_layout(title_text=main_title, hovermode="closest")
+        fig.update_xaxes(title_text=x_param, showspikes=False, constrain="domain")
+        fig.update_yaxes(title_text=y_param, showspikes=False)
+
+        # Square cells: lock the y/x pixel ratio to the data spacing so the grid
+        # keeps its true aspect (a 100x100 sweep is a square), even on resize.
+        if nx > 1 and ny > 1:
+            dx = (float(x_vals[-1]) - float(x_vals[0])) / (nx - 1)
+            dy = (float(y_vals[-1]) - float(y_vals[0])) / (ny - 1)
+            if dx > 0 and dy > 0:
+                fig.update_yaxes(scaleanchor="x", scaleratio=dx / dy,
+                                 constrain="domain")
+        return finalize(fig, show=show, save=save,
+                        window_size=_grid_window_size(nx, ny))
+
+
+# ── 3D Surface Plot ─────────────────────────────────────────────────────────
+
+
+def _worst_case(grid: np.ndarray, radius: int) -> np.ndarray:
+    """Lowest value reachable within +/-``radius`` cells of each cell.
+
+    This is what a combo still returns if the parameters drift, as opposed
+    to what its own cell scored. Lucky spikes collapse to their surroundings;
+    plateaus keep their value. Edges are replicated so the border is not
+    flattered by having fewer neighbours.
+    """
+    if radius < 1 or np.isnan(grid).all():
+        return grid
+    filled = np.nan_to_num(grid, nan=np.nanmin(grid))
+    padded = np.pad(filled, radius, mode="edge")
+    n, m = filled.shape
+    stack = np.stack([padded[i:i + n, j:j + m]
+                      for i in range(2 * radius + 1)
+                      for j in range(2 * radius + 1)])
+    return stack.min(axis=0)
+
+
+# Metrics where 0 separates losing from winning, so 0 is worth keeping as a
+# band edge even when the data would not have put one there.
+_RATIO_METRICS = ("sharpe", "sortino", "calmar", "tstat_alpha", "information")
+_ZONE_COLORS = ["#3f1d1d", "#7c3a1d", "#8a7a1e", "#2f6b3a", ACCENT]
+
+
+def _nice_step(span: float, n_bands: int) -> float:
+    """A 1/2/2.5/5 x 10^k step covering ``span`` in about ``n_bands`` steps.
+
+    Rounded steps keep the legend readable: "0.8 - 1.2" rather than
+    "0.7834 - 1.2017".
+    """
+    if not np.isfinite(span) or span <= 0:
+        return 1.0
+    raw = span / n_bands
+    mag = 10.0 ** np.floor(np.log10(raw))
+    for m in (1.0, 2.0, 2.5, 5.0):
+        if raw <= m * mag:
+            return m * mag
+    return 10.0 * mag
+
+
+def _auto_edges(worst: np.ndarray, metric: str, n_bands: int = 5):
+    """Band edges fitted to the data, snapped to round numbers.
+
+    Fixed conventional thresholds (0/0.5/1.0/1.5 for a Sharpe) collapse to a
+    single flat band whenever the sweep happens to live inside one of them,
+    which is common: a grid whose guaranteed Sharpe runs 1.5-2.0 came out
+    entirely one colour.
+
+    Edges sit at -1.5 to +1.5 standard deviations around the sweep's mean, so
+    the zones say how exceptional a region is *within this sweep*. That is a
+    relative statement, not a quality certificate: a sweep where every combo
+    loses money still has a top zone, it is just the least bad. Read the
+    colourbar, which prints the real thresholds, and pass explicit
+    ``zones=[...]`` whenever the bands must mean something absolute.
+    """
+    finite = worst[np.isfinite(worst)]
+    if finite.size == 0:
+        return [0.0]
+    lo, hi = float(finite.min()), float(finite.max())
+    if hi <= lo:                       # a flat grid has nothing to band
+        return [lo]
+
+    # Quantiles, not an even split of the range. Taking a minimum over the
+    # drift window skews the distribution hard toward its low tail, so even
+    # edges dumped 93% of the cells into one band and the map came out flat.
+    # Quantiles balance the bands by construction; the snap keeps the numbers
+    # readable and the colourbar prints them.
+    # Bands in standard deviations around the mean of the sweep.
+    #
+    # Quantiles were the other candidate and they are worse here: they force
+    # ~20% of cells into every band, so a grid that is genuinely uniform
+    # after erosion still comes out looking structured. Sigma bands scale
+    # with the actual dispersion, so a flat sweep reads flat and a sweep with
+    # a real standout region shows it. They also carry a meaning a reader can
+    # use: "+1 sigma" is how exceptional the region is for THIS sweep.
+    mu, sd = float(np.mean(finite)), float(np.std(finite))
+    if sd <= 0:
+        return [lo]
+    sigmas = np.linspace(-1.5, 1.5, n_bands - 1)   # 5 bands -> -1.5..+1.5
+    raw_edges = mu + sigmas * sd
+    step = _nice_step(float(raw_edges[-1] - raw_edges[0]),
+                      max(len(raw_edges) - 1, 1))
+    edges = sorted({round(float(np.round(e / step) * step), 10)
+                    for e in raw_edges})
+    edges = [e for e in edges if lo < e < hi]
+    if len(edges) < len(raw_edges):
+        # Rounding merged edges (a very tight spread): keep them unsnapped.
+        edges = sorted({float(f"{e:.4g}") for e in raw_edges if lo < e < hi})
+
+    # 0 is a real boundary for a ratio: above it you make money, below you
+    # lose it. Keep it even if the rounding would have skipped it.
+    if any(k in metric.lower() for k in _RATIO_METRICS) and lo < 0.0 < hi:
+        edges = sorted(set(edges + [0.0]))
+        if len(edges) > n_bands - 1:   # drop the edge nearest 0, not 0 itself
+            nonzero = [e for e in edges if e != 0.0]
+            drop = min(nonzero, key=lambda e: abs(e))
+            edges.remove(drop)
+    return edges or [(lo + hi) / 2.0]
+
+
+def _zone_bands(worst: np.ndarray, zones, metric: str):
+    """Resolve ``zones`` into thresholds, then bucket ``worst`` into bands."""
+    if zones is True:
+        edges = _auto_edges(worst, metric)
+    else:
+        edges = sorted(float(z) for z in zones)
+
+    band = np.digitize(worst, edges).astype(float)
+    n_bands = len(edges) + 1
+    labels = [f"< {edges[0]:g}"]
+    labels += [f"{edges[i]:g} - {edges[i + 1]:g}" for i in range(len(edges) - 1)]
+    labels.append(f">= {edges[-1]:g}")
+
+    colors = _ZONE_COLORS
+    if n_bands != len(colors):  # stretch or trim the ramp to the band count
+        idx = np.linspace(0, len(colors) - 1, n_bands).round().astype(int)
+        colors = [colors[i] for i in idx]
+
+    scale = []
+    for i, c in enumerate(colors):   # duplicated stops = hard borders
+        scale.append([i / n_bands, c])
+        scale.append([(i + 1) / n_bands, c])
+    return band, scale, labels, edges, n_bands
+
+
+def surface_3d(
+    sweep_result: Dict[str, Any],
+    *,
+    highlight_best: bool = True,
+    zones: "bool | List[float] | None" = None,
+    drift: int = 2,
+    title: Optional[str] = None,
+    figsize: Tuple[float, float] = (12, 8),
+    elev: float = 30,
+    azim: float = -45,
+    show: "bool | str | None" = None,
+    save: Optional[Union[str, Path]] = None,
+) -> go.Figure:
+    """3D surface plot from a 2D parameter sweep result.
+
+    Same input format as ``heatmap_2d``. ``elev``/``azim`` are kept for
+    backward compatibility and mapped to the plotly camera.
+
+    Args:
+        zones: Colour the surface by discrete robustness zones instead of by
+            height. Height still shows the metric; colour shows what each
+            area still guarantees when the parameters drift by ``drift``
+            cells, so a lucky spike lands in a low zone despite standing
+            tall. ``True`` picks the bands (conventional 0/0.5/1.0/1.5 for
+            risk-adjusted ratios, an even split of the observed range
+            otherwise); pass a list of thresholds to set them yourself,
+            which is what you want whenever the bands carry meaning.
+        drift: Neighbourhood radius in grid cells used for the worst case.
+            Note this is cells, not parameter units: with an x step of 1 and
+            a y step of 5, ``drift=2`` means +/-2 on x but +/-10 on y.
+    """
+    with theme_context():
+        grid = np.array(sweep_result["metric_grid"], dtype=np.float64)
+        x_vals = np.array([_extract_val(v) for v in sweep_result["x_values"]], dtype=np.float64)
+        y_vals = np.array([_extract_val(v) for v in sweep_result["y_values"]], dtype=np.float64)
+        x_param = sweep_result.get("x_param", "x")
+        y_param = sweep_result.get("y_param", "y")
+        metric = sweep_result.get("metric", "metric")
+
+        fig = new_figure(figsize)
+        lighting = dict(ambient=0.75, diffuse=0.5, roughness=0.9, specular=0.1)
+
+        if zones:
+            worst = _worst_case(grid, drift)
+            band, scale, labels, edges, n_bands = _zone_bands(worst, zones, metric)
+            fig.add_trace(go.Surface(
+                x=x_vals, y=y_vals, z=grid,
+                surfacecolor=band, colorscale=scale,
+                cmin=-0.5, cmax=n_bands - 0.5, opacity=0.98,
+                colorbar=dict(
+                    title=dict(text=f"{metric}<br>held under drift", side="right"),
+                    outlinewidth=0, thickness=13, len=0.62,
+                    tickmode="array", tickvals=list(range(n_bands)),
+                    ticktext=labels),
+                lighting=lighting,
+                contours=dict(z=dict(show=True, color="rgba(255,255,255,0.13)",
+                                     width=1)),
+                customdata=worst,
+                hovertemplate=(
+                    f"{x_param} %{{x:.2f}}<br>{y_param} %{{y:.2f}}<br>"
+                    f"{metric} %{{z:.3f}}<br>held %{{customdata:.3f}}"
+                    f"<extra></extra>"
+                ),
+            ))
+        else:
+            fig.add_trace(go.Surface(
+                x=x_vals, y=y_vals, z=grid,
+                colorscale=CS_SEQUENTIAL, opacity=0.98,
+                colorbar=dict(title=dict(text=metric, side="right"),
+                              outlinewidth=0, thickness=13, len=0.6),
+                lighting=lighting,
+                contours=dict(z=dict(show=True, usecolormap=True, project_z=True,
+                                     width=1)),
+                hovertemplate=(
+                    f"{x_param} %{{x:.2f}}<br>{y_param} %{{y:.2f}}<br>"
+                    f"{metric} %{{z:.3f}}<extra></extra>"
+                ),
+            ))
+
+        best_label = None
+        if highlight_best:
+            if zones:
+                # With zones on, "best" means the combo that holds up best
+                # under drift, not the tallest cell. Reporting the spike here
+                # would contradict the colouring right next to it.
+                best_idx = _argmax_ignoring_nan(worst)
+                held = worst[best_idx] if best_idx is not None else None
+            else:
+                best_idx = _plateau_best(grid)
+                held = None
+        # Every cell NaN (a metric no combination reported): nothing to mark.
+        if highlight_best and best_idx is not None:
+            best_val = grid[best_idx]
+            bx = x_vals[best_idx[1]]
+            by = y_vals[best_idx[0]]
+
+            # A dot sitting exactly at best_val is half-buried in the surface
+            # it marks, and a stem dropped to the floor runs underneath that
+            # surface, hidden by it. So the marker is a pin standing ABOVE
+            # the peak: the stalk clears the geometry and stays readable from
+            # any camera angle and over any colour.
+            span = float(np.nanmax(grid) - np.nanmin(grid)) or 1.0
+            tip = best_val + span * 0.10
+            fig.add_trace(go.Scatter3d(
+                x=[bx, bx], y=[by, by], z=[best_val, tip], mode="lines",
+                line=dict(color=WHITE, width=5),
+                name="best", showlegend=False, hoverinfo="skip",
+            ))
+            # Name the criterion. Calling this "best <metric>" was a lie
+            # whenever zones were on: it is not the highest cell, it is the
+            # one that survives drift, and the highest cell is elsewhere and
+            # visibly taller.
+            if zones:
+                pin_text = (f"most robust<br>{metric} {best_val:.3f}"
+                            f"<br>holds {worst[best_idx]:.3f} "
+                            f"under +/-{drift} cells")
+            else:
+                pin_text = f"plateau centre<br>{metric} {best_val:.3f}"
+            fig.add_trace(go.Scatter3d(
+                x=[bx], y=[by], z=[tip], mode="markers",
+                marker=dict(color=WHITE, size=9, symbol="diamond",
+                            line=dict(color="black", width=3)),
+                name="best", showlegend=False,
+                hovertemplate=pin_text + "<extra></extra>",
+            ))
+            kind = "most robust" if zones else "plateau centre"
+            best_label = (f"{kind}: {best_val:.3f} "
+                          f"({x_param}={bx:.0f}, {y_param}={by:.0f})")
+            if held is not None:
+                best_label += f", holds {held:.3f} under +/-{drift} cells"
+
+        # Map matplotlib elev/azim to a plotly camera eye position
+        r = 1.9
+        elev_rad = np.deg2rad(elev)
+        azim_rad = np.deg2rad(azim)
+        eye = dict(
+            x=r * np.cos(elev_rad) * np.cos(azim_rad),
+            y=r * np.cos(elev_rad) * np.sin(azim_rad),
+            z=r * np.sin(elev_rad),
+        )
+
+        combos = len(x_vals) * len(y_vals)
+        main_title = title or f"{metric} · Surface ({combos:,} combos)"
+        if best_label:
+            main_title = f"{main_title}<br><span style='font-size:11px;color:{GRAY}'>{best_label}</span>"
+
+        fig.update_layout(
+            title_text=main_title,
+            scene=dict(
+                xaxis_title=x_param, yaxis_title=y_param, zaxis_title=metric,
+                aspectmode="manual",
+                aspectratio=dict(x=1.25, y=1.25, z=0.85),
+                camera=dict(eye=eye),
+            ),
+            margin=dict(l=0, r=0, t=60, b=0),
+        )
+        return finalize(fig, show=show, save=save)
+
+
+# ── Walk-Forward Analysis ────────────────────────────────────────────────────
+
+
+def walk_forward(
+    wf_result: Dict[str, Any],
+    *,
+    mode: str = "auto",
+    full_result=None,
+    ax=None,
+    is_color: str = ACCENT,
+    oos_color: str = ORANGE,
+    title: Optional[str] = None,
+    figsize: Tuple[float, float] = (10, 5),
+    show: "bool | str | None" = None,
+    save: Optional[Union[str, Path]] = None,
+) -> go.Figure:
+    """Walk-forward analysis chart.
+
+    Args:
+        mode: ``"auto"`` (equity curves if available, bars otherwise),
+              ``"equity"`` (force equity curves), ``"bars"`` (force bar chart),
+              ``"stitched"`` (stitched OOS vs full backtest).
+        full_result: BacktestResult from ``bt.run()`` on the full period
+              (no WFO). Used by ``"stitched"`` mode as the baseline.
+              If not provided, stitched mode only shows the OOS curve.
+    """
+    folds = wf_result["folds"]
+    has_equity = any(len(f.get("is_equity", [])) > 0 for f in folds)
+
+    if mode == "auto":
+        mode = "equity" if has_equity else "bars"
+
+    if mode == "equity":
+        return _walk_forward_equity(wf_result, folds, is_color=is_color,
+                                    oos_color=oos_color, title=title, figsize=figsize,
+                                    show=show, save=save)
+    elif mode == "stitched":
+        return _walk_forward_stitched(wf_result, folds, full_result=full_result,
+                                      is_color=is_color,
+                                      oos_color=oos_color, title=title, figsize=figsize,
+                                      show=show, save=save)
+    else:
+        return _walk_forward_bars(wf_result, folds, is_color=is_color,
+                                  oos_color=oos_color, title=title, figsize=figsize,
+                                  show=show, save=save)
+
+
+def _fold_metric(fold, key, optimize_metric):
+    val = fold.get(key)
+    if isinstance(val, dict):
+        return val.get(optimize_metric, val.get("sharpe", 0))
+    return val if val is not None else 0
+
+
+def _walk_forward_equity(wf_result, folds, *, is_color, oos_color, title, figsize, show, save):
+    """Equity curve per fold: IS (blue) + OOS (orange) side by side."""
+    optimize_metric = wf_result.get("optimize_metric", "sharpe")
+    n = len(folds)
+
+    with theme_context():
+        fig = make_subplots(
+            rows=1, cols=n, horizontal_spacing=0.02,
+            subplot_titles=[
+                f"Fold {f.get('fold_index', f.get('fold', i)) + 1}"
+                for i, f in enumerate(folds)
+            ],
+        )
+
+        for i, fold in enumerate(folds):
+            col = i + 1
+            is_eq = fold.get("is_equity", [])
+            oos_eq = fold.get("oos_equity", [])
+
+            if is_eq:
+                fig.add_trace(go.Scatter(
+                    y=is_eq, mode="lines",
+                    line=dict(color=is_color, width=1.2), opacity=0.8,
+                    showlegend=False, hoverinfo="skip",
+                ), row=1, col=col)
+
+            if oos_eq:
+                fig.add_trace(go.Scatter(
+                    x=list(range(len(is_eq), len(is_eq) + len(oos_eq))), y=oos_eq,
+                    mode="lines", line=dict(color=oos_color, width=1.2), opacity=0.8,
+                    showlegend=False, hoverinfo="skip",
+                ), row=1, col=col)
+
+            if is_eq and oos_eq:
+                fig.add_vline(x=len(is_eq), line_color=DARK_GRAY, line_width=0.8,
+                              line_dash="dash", row=1, col=col)
+
+            is_m = (_fold_metric(fold, "is_metrics", optimize_metric)
+                    or _fold_metric(fold, "is_metric", optimize_metric))
+            oos_m = (_fold_metric(fold, "oos_metrics", optimize_metric)
+                     or _fold_metric(fold, "oos_metric", optimize_metric))
+            fig.add_annotation(
+                x=0.04, y=0.96, xref=f"x{col if col > 1 else ''} domain",
+                yref=f"y{col if col > 1 else ''} domain",
+                xanchor="left", yanchor="top", showarrow=False, align="left",
+                text=(f"<span style='color:{is_color}'>IS: {is_m:.2f}</span><br>"
+                      f"<span style='color:{oos_color}'>OOS: {oos_m:.2f}</span>"),
+                font=dict(family=MONO_FAMILY, size=10),
+            )
+            if i > 0:
+                fig.update_yaxes(showticklabels=False, row=1, col=col)
+
+        fig.update_layout(
+            title_text=title or f"Walk-Forward Analysis ({optimize_metric})",
+            width=int(figsize[0] * 80), height=int(figsize[1] * 80),
+        )
+        return finalize(fig, show=show, save=save)
+
+
+def _walk_forward_bars(wf_result, folds, *, is_color, oos_color, title, figsize, show, save):
+    """Grouped bar chart: IS vs OOS metric per fold."""
+    optimize_metric = wf_result.get("optimize_metric", "sharpe")
+
+    with theme_context():
+        fig = new_figure(figsize)
+
+        is_vals = [(_fold_metric(f, "is_metrics", optimize_metric)
+                    or _fold_metric(f, "is_metric", optimize_metric)) for f in folds]
+        oos_vals = [(_fold_metric(f, "oos_metrics", optimize_metric)
+                     or _fold_metric(f, "oos_metric", optimize_metric)) for f in folds]
+        labels = [f"Fold {f.get('fold_index', f.get('fold', i)) + 1}"
+                  for i, f in enumerate(folds)]
+
+        fig.add_trace(go.Bar(
+            x=labels, y=is_vals, name="In-Sample",
+            marker_color=is_color, opacity=0.65, marker_line_width=0,
+            text=[f"{v:.2f}" if v != 0 else "" for v in is_vals],
+            textposition="outside", textfont=dict(size=10, color=is_color),
+        ))
+        fig.add_trace(go.Bar(
+            x=labels, y=oos_vals, name="Out-of-Sample",
+            marker_color=oos_color, opacity=0.65, marker_line_width=0,
+            text=[f"{v:.2f}" if v != 0 else "" for v in oos_vals],
+            textposition="outside", textfont=dict(size=10, color=oos_color),
+        ))
+        fig.add_hline(y=0, line_color=DARK_GRAY, line_width=0.5, line_dash="dash")
+        fig.update_layout(
+            title_text=title or f"Walk-Forward Analysis ({optimize_metric})",
+            barmode="group", hovermode="closest",
+            legend=dict(x=0.99, y=0.99, xanchor="right"),
+        )
+        fig.update_yaxes(title_text=optimize_metric.capitalize())
+        fig.update_xaxes(showspikes=False, type="category")
+        return finalize(fig, show=show, save=save)
+
+
+def _walk_forward_stitched(wf_result, folds, *, full_result=None, is_color, oos_color, title, figsize, show, save):
+    """Stitched OOS equity vs full backtest.
+
+    - Orange: OOS segments from each fold. When the test windows tile the
+      calendar end to end (anchored, pardo), segments are chained into ONE
+      curve: each one is rescaled to start at the previous segment's final
+      value, which is exactly return composition -- the account of someone
+      trading each fold's re-optimized winner in sequence. That chained curve
+      is the true out-of-sample performance of the WFO *policy*.
+    - When the test windows overlap (custom, step < length) or leave gaps
+      between them (blocked), two calendars cannot be traded at once and no
+      single account curve exists. Segments are then drawn separately, on
+      their own dates, and never chained: a single curve here would be a lie.
+    - Blue: full backtest with default params, restricted to the dates the
+      OOS windows actually cover. Comparing against the full period would
+      overlay months of compounding the OOS curve never had.
+    """
+    with theme_context():
+        fig = new_figure(figsize)
+
+        # Segment geometry decides everything: chain only when the test
+        # windows tile the calendar without overlap or gap. The ranges come
+        # from one derivation in Rust, so exact equality is the right test.
+        ranges = [f.get("test_range") or {} for f in folds]
+        starts = [r.get("start") for r in ranges]
+        ends = [r.get("end") for r in ranges]
+        contiguous = (
+            all(v is not None for v in starts + ends)
+            and all(starts[i + 1] == ends[i] for i in range(len(folds) - 1))
+            and not wf_result.get("folds_overlap", False)
+        )
+
+        def _seg(fold):
+            eq = np.asarray(fold.get("oos_equity", []), dtype=float)
+            ts = np.asarray(fold.get("oos_timestamps", []), dtype="int64")
+            if len(ts) == len(eq) and len(ts) > 0:
+                return eq, ts.view("datetime64[ns]")
+            return eq, None
+
+        segments = [_seg(f) for f in folds]
+        segments = [(eq, d) for eq, d in segments if len(eq) > 0]
+        if not segments:
+            fig.update_layout(title_text="No OOS equity data available")
+            return finalize(fig, show=show, save=save)
+        has_dates = all(d is not None for _, d in segments)
+
+        if contiguous:
+            # Chain: rescaling each segment to the previous final value IS
+            # return composition, valid because the windows are consecutive.
+            morceaux_eq, morceaux_dates = [], []
+            current_val = None
+            for eq, d in segments:
+                if current_val is None:
+                    scaled = eq
+                else:
+                    scaled = eq * (current_val / eq[0]) if eq[0] != 0 else eq
+                morceaux_eq.append(scaled)
+                if has_dates:
+                    morceaux_dates.append(d)
+                current_val = scaled[-1]
+
+            stitched = np.concatenate(morceaux_eq)
+            # Rester en numpy : `datetime64[ns].tolist()` rend des ENTIERS
+            # nanosecondes, pas des dates, et l'axe redeviendrait numerique.
+            x = (np.concatenate(morceaux_dates) if has_dates
+                 else np.arange(len(stitched)))
+            fins = np.cumsum([len(e) for e in morceaux_eq]) - 1
+            boundaries = [x[i] for i in fins]
+
+            _overlay_full_backtest(fig, full_result, x, stitched,
+                                   has_dates=has_dates, color=is_color)
+            fig.add_trace(go.Scatter(
+                x=x, y=stitched, mode="lines",
+                name="Walk-forward (stitched OOS)",
+                line=dict(color=oos_color, width=1.0), opacity=0.85,
+            ))
+            for b in boundaries[:-1]:
+                fig.add_vline(x=b, line_color=DARK_GRAY, line_width=0.5,
+                              line_dash="dash", opacity=0.3)
+            titre = title or "Walk-Forward: Stitched OOS vs Full Backtest"
+        else:
+            # Overlapping or gapped test windows: no single tradable account
+            # exists, draw each fold on its own dates instead of pretending.
+            raison = ("overlapping test windows"
+                      if wf_result.get("folds_overlap", False)
+                      else "gaps between test windows")
+            for i, (eq, d) in enumerate(segments):
+                x = d if d is not None else np.arange(len(eq))
+                fig.add_trace(go.Scatter(
+                    x=x, y=eq, mode="lines",
+                    name=f"Fold {i + 1} OOS",
+                    line=dict(width=1.0), opacity=0.8,
+                ))
+            fig.add_annotation(
+                x=0.5, y=1.06, xref="paper", yref="paper", showarrow=False,
+                text=f"segments not chained: {raison}",
+                font=dict(size=10, color=DARK_GRAY),
+            )
+            titre = title or "Walk-Forward: OOS Segments (not tradable as one curve)"
+
+        fig.update_layout(
+            title_text=titre,
+            legend=dict(x=0.01, y=0.99),
+        )
+        fig.update_xaxes(title_text="Date" if has_dates else "Bars")
+        fig.update_yaxes(title_text="Equity")
+        return finalize(fig, show=show, save=save)
+
+
+def _overlay_full_backtest(fig, full_result, x, stitched, *, has_dates, color):
+    """Full-backtest baseline, restricted to the dates the OOS curve covers.
+
+    The previous version resampled the FULL period onto the OOS length with
+    ``np.linspace``: it overlaid a year of compounding on a few months of
+    out-of-sample and the baseline crushed the OOS curve for purely
+    mechanical reasons. Date alignment is the only honest comparison, so
+    without dates on both sides nothing is drawn.
+    """
+    if full_result is None:
+        return
+    if not has_dates:
+        import warnings
+        warnings.warn(
+            "walk_forward stitched: full_result ignored (the walk-forward "
+            "result carries no oos_timestamps; re-run it to get dated folds)",
+            stacklevel=3)
+        return
+    try:
+        full_dates, full_eq = equity_with_dates(full_result)
+    except Exception:
+        import warnings
+        warnings.warn(
+            "walk_forward stitched: full_result ignored (no positions table "
+            "to date its equity curve)", stacklevel=3)
+        return
+    if len(full_eq) == 0:
+        return
+    mask = (full_dates >= x[0]) & (full_dates <= x[-1])
+    if not mask.any():
+        return
+    fen_dates, fen_eq = full_dates[mask], full_eq[mask].astype(float)
+    # Meme point de depart que la courbe OOS : on compare des trajectoires,
+    # pas des niveaux absolus.
+    if fen_eq[0] != 0:
+        fen_eq = fen_eq * (stitched[0] / fen_eq[0])
+    fig.add_trace(go.Scatter(
+        x=fen_dates, y=fen_eq, mode="lines",
+        name="Full backtest (default params, same window)",
+        line=dict(color=color, width=0.8), opacity=0.4,
+    ))
+
+
+# ── Parameter Stability ─────────────────────────────────────────────────────
+
+
+def stability(
+    stability_result: Dict[str, Any],
+    *,
+    ax=None,
+    line_color: str = ACCENT,
+    band_color: str = ACCENT,
+    band_alpha: float = 0.15,
+    title: Optional[str] = None,
+    figsize: Tuple[float, float] = (10, 5),
+    show: "bool | str | None" = None,
+    save: Optional[Union[str, Path]] = None,
+) -> go.Figure:
+    """Parameter stability chart with mean +/- std shaded bands.
+
+    Expected keys: values, metric_values, mean_metric, std_metric,
+                   param_name, metric, stability_score.
+    """
+    with theme_context():
+        fig = new_figure(figsize)
+
+        param_vals = np.array(stability_result["values"], dtype=np.float64)
+        metric_vals = np.array(stability_result["metric_values"], dtype=np.float64)
+        mean = stability_result["mean_metric"]
+        std = stability_result["std_metric"]
+        param_name = stability_result.get("param_name", "parameter")
+        metric_name = stability_result.get("metric", "metric")
+        score = stability_result.get("stability_score", None)
+
+        # ±1σ band
+        fig.add_trace(go.Scatter(
+            x=param_vals, y=np.full(len(param_vals), mean - std), mode="lines",
+            line=dict(width=0), hoverinfo="skip", showlegend=False,
+        ))
+        fig.add_trace(go.Scatter(
+            x=param_vals, y=np.full(len(param_vals), mean + std), mode="lines",
+            line=dict(width=0), fill="tonexty",
+            fillcolor=_rgba(band_color, band_alpha),
+            name=f"±1σ: {std:.3f}", hoverinfo="skip",
+        ))
+        fig.add_hline(y=mean, line_color=band_color, line_width=1.0,
+                      line_dash="dash")
+        fig.add_trace(go.Scatter(
+            x=[None], y=[None], mode="lines", name=f"Mean: {mean:.3f}",
+            line=dict(color=band_color, width=1.0, dash="dash"),
+        ))
+        fig.add_trace(go.Scatter(
+            x=param_vals, y=metric_vals, mode="lines+markers",
+            line=dict(color=line_color, width=1.8),
+            marker=dict(size=6, color=line_color),
+            name=metric_name, showlegend=False,
+            hovertemplate=f"{param_name} %{{x}}: %{{y:.3f}}<extra></extra>",
+        ))
+
+        t = title or f"{metric_name} Stability"
+        if score is not None:
+            t += f"  (score: {score:.2f})"
+        fig.update_layout(title_text=t,
+                          legend=dict(x=0.99, y=0.99, xanchor="right"))
+        fig.update_xaxes(title_text=param_name)
+        fig.update_yaxes(title_text=metric_name)
+        return finalize(fig, show=show, save=save)
+
+
+# ── Correlation Matrix ───────────────────────────────────────────────────────
+
+
+def correlation_matrix(
+    symbols: List[str],
+    matrix: List[List[float]],
+    *,
+    ax=None,
+    annotate: bool = True,
+    title: str = "Correlation Matrix",
+    figsize: Tuple[float, float] = (8, 7),
+    show: "bool | str | None" = None,
+    save: Optional[Union[str, Path]] = None,
+) -> go.Figure:
+    """Symbol correlation matrix heatmap."""
+    with theme_context():
+        mat = np.array(matrix, dtype=np.float64)
+
+        fig = new_figure(figsize, title)
+        fig.add_trace(go.Heatmap(
+            z=mat, x=symbols, y=symbols,
+            colorscale=CS_CORRELATION, zmin=-1, zmax=1,
+            text=np.round(mat, 2) if annotate else None,
+            texttemplate="%{text:.2f}" if annotate else None,
+            textfont=dict(size=10),
+            hovertemplate="%{y} / %{x}: %{z:.2f}<extra></extra>",
+            colorbar=dict(outlinewidth=0, thickness=12),
+        ))
+        fig.update_yaxes(autorange="reversed", showspikes=False,
+                         scaleanchor="x", scaleratio=1, constrain="domain")
+        fig.update_xaxes(tickangle=45, showspikes=False, constrain="domain")
+        fig.update_layout(hovermode="closest")
+        n = len(symbols)
+        return finalize(fig, show=show, save=save,
+                        window_size=_grid_window_size(n, n))
+
+
+# ── Fan chart internals (Monte Carlo + stochastic) ──────────────────────────
+
+
+def _batched_paths_trace(x, paths: np.ndarray, n_sample_paths: int, color: str):
+    """All faded sample paths as ONE trace (None-separated) for performance."""
+    k = min(n_sample_paths, paths.shape[0])
+    if k <= 0:
+        return None
+    n = paths.shape[1]
+    xs = np.empty((k, n + 1), dtype=np.float64)
+    ys = np.empty((k, n + 1), dtype=np.float64)
+    xs[:, :n] = np.asarray(x, dtype=np.float64)
+    ys[:, :n] = paths[:k]
+    xs[:, n] = np.nan
+    ys[:, n] = np.nan
+    return go.Scatter(
+        x=xs.ravel(), y=ys.ravel(), mode="lines",
+        line=dict(color=color, width=0.3), opacity=0.06,
+        hoverinfo="skip", showlegend=False, connectgaps=False,
+    )
+
+
+def _fan_bands(fig, x, pct_lines, percentiles, band_color):
+    """Fill between symmetric percentile bands."""
+    for lo, hi in [(0, -1), (1, -2)]:
+        if lo < len(percentiles) and abs(hi) <= len(percentiles):
+            fig.add_trace(go.Scatter(
+                x=x, y=pct_lines[percentiles[lo]], mode="lines",
+                line=dict(width=0), hoverinfo="skip", showlegend=False,
+            ))
+            fig.add_trace(go.Scatter(
+                x=x, y=pct_lines[percentiles[hi]], mode="lines",
+                line=dict(width=0), fill="tonexty",
+                fillcolor=_rgba(band_color, 0.08),
+                hoverinfo="skip", showlegend=False,
+            ))
+
+
+# ── Monte Carlo Fan ──────────────────────────────────────────────────────────
+
+
+def monte_carlo(
+    result,
+    *,
+    n_simulations: int = 1000,
+    method: str = "bootstrap",
+    percentiles: Optional[List[int]] = None,
+    n_sample_paths: int = 50,
+    ax=None,
+    median_color: str = ACCENT,
+    band_color: str = ACCENT,
+    title: Optional[str] = None,
+    figsize: Tuple[float, float] = (12, 5),
+    seed: Optional[int] = None,
+    show: "bool | str | None" = None,
+    save: Optional[Union[str, Path]] = None,
+) -> go.Figure:
+    """Monte Carlo fan chart with percentile bands, sample paths, and risk stats.
+
+    Args:
+        result: BacktestResult from ``bt.run()``.
+        n_simulations: Number of simulated paths.
+        method: ``"bootstrap"`` (sample with replacement, default) for tail risk
+            estimation, or ``"permutation"`` (shuffle without replacement) for
+            path-dependency testing.
+        percentiles: Percentile levels for bands. Default ``[5, 25, 50, 75, 95]``.
+        n_sample_paths: Number of individual paths to draw (faded). 0 to disable.
+        seed: Random seed for reproducibility.
+    """
+    # Cap to 1000 sims for Community
+    try:
+        from manifoldbt import _license_info, _warn_pro
+        tier, _ = _license_info()
+        if tier != "Pro" and n_simulations > 1000:
+            _warn_pro(f"Monte Carlo capped to 1,000 sims (requested {n_simulations:,})")
+            n_simulations = 1000
+    except Exception:
+        if n_simulations > 1000:
+            n_simulations = 1000
+
+    if percentiles is None:
+        percentiles = [5, 25, 50, 75, 95]
+
+    if title is None:
+        method_label = "bootstrap" if method == "bootstrap" else "permutation"
+        title = f"Monte Carlo - {n_simulations:,} paths ({method_label})"
+
+    with theme_context():
+        fig = new_figure(figsize, title)
+
+        rets = daily_returns_array(result)
+        _, orig_equity = equity_with_dates(result)
+
+        if len(rets) < 2:
+            fig.update_layout(title_text=title + " (insufficient data)")
+            return finalize(fig, show=show, save=save)
+
+        rng = np.random.default_rng(seed)
+        initial = orig_equity[0] if len(orig_equity) > 0 else 1.0
+        n_days = len(rets)
+
+        # Generate simulated paths
+        paths = np.zeros((n_simulations, n_days + 1))
+        paths[:, 0] = initial
+        for i in range(n_simulations):
+            if method == "permutation":
+                sampled = rng.permutation(rets)
+            else:  # bootstrap (default)
+                sampled = rng.choice(rets, size=n_days, replace=True)
+            paths[i, 1:] = initial * np.cumprod(1.0 + sampled)
+
+        x = np.arange(n_days + 1)
+        pct_lines = {pct: np.percentile(paths, pct, axis=0) for pct in percentiles}
+
+        sample_trace = _batched_paths_trace(x, paths, n_sample_paths, band_color)
+        if sample_trace is not None:
+            fig.add_trace(sample_trace)
+        _fan_bands(fig, x, pct_lines, percentiles, band_color)
+
+        # Original equity (dashed), resampled to MC daily resolution
+        if len(orig_equity) > n_days * 2:
+            indices = np.linspace(0, len(orig_equity) - 1, n_days + 1, dtype=int)
+            orig_resampled = np.array(orig_equity)[indices]
+        else:
+            orig_resampled = np.array(orig_equity[:n_days + 1])
+        fig.add_trace(go.Scatter(
+            x=np.arange(len(orig_resampled)), y=orig_resampled, mode="lines",
+            name="Original", line=dict(color="#e8e9ed", width=0.8, dash="dash"),
+            opacity=0.4,
+        ))
+
+        running_peak = np.maximum.accumulate(paths, axis=1)
+        drawdowns = (paths - running_peak) / running_peak
+        max_dd_per_path = drawdowns.min(axis=1) * 100
+
+        if method == "bootstrap":
+            for pct in percentiles:
+                ret_pct = (pct_lines[pct][-1] / initial - 1) * 100
+                if pct == 50:
+                    fig.add_trace(go.Scatter(
+                        x=x, y=pct_lines[pct], mode="lines",
+                        name=f"P{pct} (median): {ret_pct:+.1f}%",
+                        line=dict(color=median_color, width=2),
+                    ))
+                else:
+                    fig.add_trace(go.Scatter(
+                        x=x, y=pct_lines[pct], mode="lines",
+                        name=f"P{pct}: {ret_pct:+.1f}%",
+                        line=dict(color=band_color, width=0.5), opacity=0.4,
+                    ))
+
+            dd_p5 = np.percentile(max_dd_per_path, 5)
+            dd_p50 = np.percentile(max_dd_per_path, 50)
+            p_ruin = np.mean((paths[:, -1] / initial - 1) < -0.5) * 100
+            _stats_annotation(fig, (
+                f"P(ruin) = {p_ruin:.2f}%\n"
+                f"Max DD (P5): {dd_p5:.1f}%\n"
+                f"Max DD (median): {dd_p50:.1f}%"
+            ))
+        else:
+            # Permutation: skill vs luck via drawdown rank
+            fig.add_trace(go.Scatter(
+                x=x, y=pct_lines[50], mode="lines", name="Median path",
+                line=dict(color=median_color, width=2),
+            ))
+            for pct in percentiles:
+                if pct != 50:
+                    fig.add_trace(go.Scatter(
+                        x=x, y=pct_lines[pct], mode="lines", showlegend=False,
+                        line=dict(color=band_color, width=0.5), opacity=0.4,
+                    ))
+
+            orig_eq = np.array(orig_resampled)
+            orig_peak = np.maximum.accumulate(orig_eq)
+            orig_max_dd = ((orig_eq - orig_peak) / orig_peak).min() * 100
+
+            dd_p5 = np.percentile(max_dd_per_path, 5)
+            dd_p50 = np.percentile(max_dd_per_path, 50)
+            dd_p95 = np.percentile(max_dd_per_path, 95)
+            dd_rank = np.mean(max_dd_per_path <= orig_max_dd) * 100
+            _stats_annotation(fig, (
+                f"Realized max DD:  {orig_max_dd:.1f}%\n"
+                f"Permuted DD P5:   {dd_p5:.1f}%\n"
+                f"Permuted DD P50:  {dd_p50:.1f}%\n"
+                f"Permuted DD P95:  {dd_p95:.1f}%\n"
+                f"DD rank:          {dd_rank:.0f}th percentile"
+            ))
+
+        fig.update_xaxes(title_text="Days")
+        fig.update_yaxes(title_text="Equity")
+        fig.update_layout(legend=dict(x=0.01, y=0.99, font=dict(size=10)))
+        return finalize(fig, show=show, save=save)
+
+
+# ── Stochastic Simulation Paths ───────────────────────────────────────────
+
+
+def stochastic_paths(
+    result: Dict[str, Any],
+    *,
+    percentiles: Optional[List[int]] = None,
+    n_sample_paths: int = 50,
+    ax=None,
+    median_color: str = ACCENT,
+    band_color: str = ACCENT,
+    title: Optional[str] = None,
+    figsize: Tuple[float, float] = (12, 5),
+    show: "bool | str | None" = None,
+    save: Optional[Union[str, Path]] = None,
+) -> go.Figure:
+    """Fan chart for stochastic simulation paths with percentile bands.
+
+    Args:
+        result: Dict returned by ``mbt.run_stochastic(..., store_paths=True)``.
+            Must contain ``paths`` (flat Arrow array) and ``paths_n_steps``.
+        percentiles: Percentile levels for bands. Default ``[5, 25, 50, 75, 95]``.
+        n_sample_paths: Number of individual paths to draw (faded). 0 to disable.
+    """
+    if percentiles is None:
+        percentiles = [5, 25, 50, 75, 95]
+
+    paths_raw = result.get("paths")
+    n_steps = result.get("paths_n_steps")
+    n_paths = result.get("n_paths", 0)
+    model_name = result.get("model_name", "stochastic")
+
+    if paths_raw is None or n_steps is None:
+        raise ValueError(
+            "result has no paths data. Run with store_paths=True."
+        )
+
+    # Reshape flat Arrow/numpy array -> (n_paths, n_steps+1)
+    flat = np.asarray(paths_raw, dtype=np.float64)
+    paths = flat.reshape((n_paths, n_steps))
+
+    if title is None:
+        title = f"Stochastic simulation - {model_name} ({n_paths:,} paths)"
+
+    with theme_context():
+        fig = new_figure(figsize, title)
+
+        x = np.arange(paths.shape[1])
+        pct_lines = {pct: np.percentile(paths, pct, axis=0) for pct in percentiles}
+
+        sample_trace = _batched_paths_trace(x, paths, n_sample_paths, band_color)
+        if sample_trace is not None:
+            fig.add_trace(sample_trace)
+        _fan_bands(fig, x, pct_lines, percentiles, band_color)
+
+        s0 = paths[0, 0] if paths.shape[1] > 0 else 100.0
+        for pct in percentiles:
+            final = pct_lines[pct][-1]
+            ret_pct = (final / s0 - 1) * 100
+            if pct == 50:
+                fig.add_trace(go.Scatter(
+                    x=x, y=pct_lines[pct], mode="lines",
+                    name=f"P{pct} (median): {ret_pct:+.1f}%",
+                    line=dict(color=median_color, width=2),
+                ))
+            else:
+                fig.add_trace(go.Scatter(
+                    x=x, y=pct_lines[pct], mode="lines",
+                    name=f"P{pct}: {ret_pct:+.1f}%",
+                    line=dict(color=band_color, width=0.5), opacity=0.4,
+                ))
+
+        # Stats box
+        final_prices = paths[:, -1]
+        running_peak = np.maximum.accumulate(paths, axis=1)
+        drawdowns = (paths - running_peak) / running_peak
+        max_dd_per_path = drawdowns.min(axis=1) * 100
+
+        dd_p5 = np.percentile(max_dd_per_path, 5)
+        dd_p50 = np.percentile(max_dd_per_path, 50)
+        mean_ret = (np.mean(final_prices) / s0 - 1) * 100
+        _stats_annotation(fig, (
+            f"Mean return: {mean_ret:+.1f}%\n"
+            f"Max DD (P5): {dd_p5:.1f}%\n"
+            f"Max DD (P50): {dd_p50:.1f}%"
+        ))
+
+        fig.update_xaxes(title_text="Time steps")
+        fig.update_yaxes(title_text="Price")
+        fig.update_layout(legend=dict(x=0.01, y=0.99, font=dict(size=10)))
+        return finalize(fig, show=show, save=save)

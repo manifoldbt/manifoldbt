@@ -1,0 +1,65 @@
+name: Bug report
+description: Something behaves differently than documented
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For usage questions, the [Discord](https://discord.gg/bvU6Wjc72d) is faster.
+        This form is for behaviour that looks wrong.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you expected, and what you got instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction
+      description: >
+        A script we can run as-is. Please use a free connector (Binance, Yahoo)
+        or generated data rather than a file we do not have. If the numbers look
+        wrong, include the ones you got.
+      render: python
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: manifoldbt version
+      description: "`python -c \"import manifoldbt; print(manifoldbt.__version__)\"`"
+      placeholder: "0.20.0"
+    validations:
+      required: true
+
+  - type: input
+    id: env
+    attributes:
+      label: Python version and OS
+      placeholder: "Python 3.12, Windows 11"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: tier
+    attributes:
+      label: Tier
+      options:
+        - Community
+        - Pro
+    validations:
+      required: true
+
+  - type: textarea
+    id: traceback
+    attributes:
+      label: Full traceback
+      description: If it raised, paste the whole thing rather than the last line.
+      render: shell
+    validations:
+      required: false
