@@ -101,6 +101,56 @@ class Result:
             })
         return cols
 
+    def fill_marks_df(self, backend: str = "auto") -> Any:
+        """What the market did after each fill, one row per fill.
+
+        ``None`` unless the run set ``execution.fill_marks=True``; the
+        aggregates then live on ``result.fill_marks``.
+
+        Columns: ``timestamp`` (the fill's row label), ``anchor`` (the close of
+        that row, where the horizons count from), ``symbol_id``, ``side``
+        (1 buy, -1 sell), ``price``, ``qty``, ``position_after``,
+        ``ref_at_fill`` and ``ref_source``, then ``mark_100ms`` / ``mark_1s`` /
+        ``mark_10s`` with a ``source_*`` beside each saying whether that mark
+        read the book (``"book"``) or the last print (``"tape"``), and
+        ``book_half_spread_bps``. A mark past the end of the data is ``NaN``
+        with no source, never the last known value.
+
+        The markout in basis points, signed with the position, is
+        ``1e4 * side * (mark - price) / price``.
+
+        Args:
+            backend: ``"pandas"``, ``"polars"``, or ``"auto"``.
+        """
+        from manifoldbt.dataframe import _resolve_backend, record_to_frame
+
+        backend = _resolve_backend(backend)
+        if backend in ("pandas", "polars"):
+            # The engine's columns, handed over without a copy; an empty table
+            # takes the list path below, which types its columns on its own.
+            batch = self._raw.fill_marks_arrow()
+            if batch is None:
+                return None
+            if batch.num_rows:
+                return record_to_frame(batch, ("timestamp", "anchor"), backend)
+
+        cols = self._raw.fill_marks_detail()
+        if cols is None:
+            return None
+        if backend == "pandas":
+            import pandas as pd
+            df = pd.DataFrame(cols)
+            for c in ("timestamp", "anchor"):
+                df[c] = pd.to_datetime(df[c], unit="ns", utc=True)
+            return df
+        if backend == "polars":
+            import polars as pl
+            df = pl.DataFrame(cols)
+            return df.with_columns(
+                pl.col(c).cast(pl.Datetime("ns", "UTC")) for c in ("timestamp", "anchor")
+            )
+        return cols
+
     def positions_df(self, backend: str = "auto") -> Any:
         """Position trace as a DataFrame.
 
@@ -127,7 +177,9 @@ class Result:
         if not isinstance(m, dict):
             return str(m)
 
-        name = self._raw.manifest.get("strategy_name", "backtest") if isinstance(self._raw.manifest, dict) else "backtest"
+        # One read: the getter builds the manifest (and the config in it) anew.
+        manifest = self._raw.manifest
+        name = manifest.get("strategy_name", "backtest") if isinstance(manifest, dict) else "backtest"
 
         lines = [
             f"Strategy: {name}",
@@ -151,6 +203,9 @@ class Result:
             val = m.get(key)
             if val is not None:
                 lines.append(f"  {label:<20s} {fmt(val):>12s}")
+        sharpe = m.get("sharpe")
+        if isinstance(sharpe, float) and sharpe != sharpe:
+            lines.append("  n/a: less than two days of daily returns, see .warnings")
 
         # Trade stats
         ts = m.get("trade_stats")
@@ -236,7 +291,8 @@ class Result:
             kind: Chart type: ``"tearsheet"``, ``"equity"``, ``"drawdown"``,
                 ``"monthly_returns"``, ``"summary"``, ``"annual_returns"``,
                 ``"rolling_sharpe"``, ``"rolling_volatility"``,
-                ``"returns_histogram"``, ``"trades"``, ``"trade_pnl"``.
+                ``"returns_histogram"``, ``"trades"``, ``"trade_pnl"``,
+                ``"fill_marks"``.
             **kwargs: Forwarded to the underlying plot function.
         """
         from manifoldbt import plot
@@ -253,6 +309,7 @@ class Result:
             "returns_histogram": plot.returns_histogram,
             "trades": plot.trades,
             "trade_pnl": plot.trade_pnl,
+            "fill_marks": plot.fill_marks,
         }
         fn = dispatch.get(kind)
         if fn is None:
@@ -301,7 +358,9 @@ class Result:
         if not isinstance(m, dict):
             return f"<pre>{self.summary()}</pre>"
 
-        name = self._raw.manifest.get("strategy_name", "backtest") if isinstance(self._raw.manifest, dict) else "backtest"
+        # One read: the getter builds the manifest (and the config in it) anew.
+        manifest = self._raw.manifest
+        name = manifest.get("strategy_name", "backtest") if isinstance(manifest, dict) else "backtest"
 
         rows_html = []
         _fmt = [
@@ -345,21 +404,32 @@ class Result:
 # Formatting helpers
 # ------------------------------------------------------------------
 
+# A metric the run did not report is NaN (a run shorter than two days has no
+# Sharpe, no CAGR): shown as "n/a" rather than "nan" or "nan%".
+_NA = "n/a"
+
+
 def _pct(v: Any) -> str:
     if not isinstance(v, (int, float)):
         return str(v)
+    if v != v:
+        return _NA
     return f"{v:+.2%}" if v >= 0 else f"{v:.2%}"
 
 
 def _f2(v: Any) -> str:
     if not isinstance(v, (int, float)):
         return str(v)
+    if v != v:
+        return _NA
     return f"{v:.2f}"
 
 
 def _f4(v: Any) -> str:
     if not isinstance(v, (int, float)):
         return str(v)
+    if v != v:
+        return _NA
     return f"{v:.4f}"
 
 
@@ -367,3 +437,58 @@ def _int(v: Any) -> str:
     if isinstance(v, (int, float)):
         return str(int(v))
     return str(v)
+
+
+class QuoteResult(Result):
+    """What ``mbt.run`` returns for a strategy that quotes.
+
+    Everything a :class:`Result` has, read the same way: equity and positions
+    sampled at ``output_resolution`` (one second when left out), one row of
+    ``trades`` per fill, ``metrics`` (returns on the capital, and in money
+    ``final_equity`` and ``pnl``), ``order_activity`` (orders posted,
+    requotes, orders cancelled unfilled; under a latency ``stale_fills`` and
+    ``overlapping_live_orders``, counted per quote; ``post_only_rejected`` and
+    ``levels_snapped`` when not zero), ``fill_fragility`` (what the queue
+    decided: ``maker_fills`` and the ``queue`` counters, among them
+    ``book_unknown_at_post``, the quotes posted behind ``assumed_queue``) and
+    ``fill_marks`` (the markouts of every fill, counted from the fill itself).
+    Every quote price is put on the symbol's tick grid before it is compared
+    or posted: a few ulps off a tick is that tick, between two ticks a bid
+    goes down and an ask up. Beside it, the venue's own
+    record, in the columns of ``bt.sim.SimResult``: :meth:`orders_df`,
+    :meth:`fills_df`, :meth:`events_df`, and the whole record as :attr:`sim`.
+
+    ``mbt.run_sweep`` and ``mbt.run_batch`` of strategies that quote return
+    one per combination, each the same object ``mbt.run`` returns for that
+    run alone.
+    """
+
+    __slots__ = ("_sim",)
+
+    def __init__(self, raw: Any, sim: Any) -> None:
+        super().__init__(raw)
+        object.__setattr__(self, "_sim", sim)
+
+    @property
+    def sim(self) -> Any:
+        """The venue's record, as ``bt.sim.run`` returns it: every order,
+        fill and order event, and the equity at each wake-up."""
+        return self._sim
+
+    def orders_df(self, backend: str = "auto") -> Any:
+        """Every order as it ended: ``order_id``, ``symbol``, ``side``,
+        ``price``, ``qty``, ``filled``, ``avg_price``, ``status``, ``tif``,
+        ``sent_at`` (local time)."""
+        return self._sim.orders_df(backend)
+
+    def fills_df(self, backend: str = "auto") -> Any:
+        """Every fill at the venue's instant: ``timestamp``, ``order_id``,
+        ``symbol``, ``side``, ``price``, ``qty``, ``fee``, ``channel``
+        (``"queue"``, ``"traverse"``, ``"book_cross"`` or ``"taker"``) and
+        ``maker``."""
+        return self._sim.fills_df(backend)
+
+    def events_df(self, backend: str = "auto") -> Any:
+        """The order journal: what the strategy sent, at its local time, and
+        what the venue did, at the venue's."""
+        return self._sim.events_df(backend)

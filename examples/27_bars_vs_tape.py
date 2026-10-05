@@ -32,11 +32,9 @@ Demonstrates:
   - `result.tape_resolution`: what the tape decided, and what fell back
   - the return a bar backtest books on the bars it had to guess at
 
-NOT RUNNABLE YET. Reading a stored tape is not unlocked by any licence sold
-today, a Pro one included: the code ships ahead of its availability, so this
-file is here to be READ. On the gate it exits with the refusal message rather
-than a traceback; nothing in it is a placeholder, and the numbers it prints are
-the ones it will print when the layer opens.
+NEEDS THE RESEARCHER PLAN. Reading a stored tape is a Researcher feature; a
+Pro licence does not unlock it. Without it the file exits with the refusal
+message rather than a traceback; nothing in it is a placeholder.
 
 The strategy is a device, not a claim: fees are zeroed and the bracket is a few
 basis points wide, which is what makes single bars cover both levels often

@@ -74,11 +74,31 @@ def _box_blur_2d(a: np.ndarray, sigma_y: float, sigma_x: float, passes: int = 3)
     return out
 
 
+def _argmax_ignoring_nan(a: np.ndarray):
+    """Index of the highest cell, a NaN ranked below every number; ``None``
+    when every cell is NaN.
+
+    ``np.argmax`` returns the FIRST NaN when there is one: a metric a run did
+    not report (a Sharpe under two days of data) would be marked as the best.
+    Among equal maxima the first wins, as ``np.argmax`` has it.
+    """
+    a = np.asarray(a, dtype=np.float64)
+    known = ~np.isnan(a)
+    if not known.any():
+        return None
+    vals = np.where(known, a, -np.inf)
+    flat = np.flatnonzero((vals == vals.max()) & known)[0]
+    return np.unravel_index(flat, a.shape)
+
+
 def _plateau_best(grid: np.ndarray):
     """Plateau-optimal cell: a blur finds the center of the best stable region,
     not a lucky spike (overfit-resistant). sigma = ~5% of each axis. Uses
     scipy's Gaussian filter when installed, else a pure-numpy box blur so the
-    plotting extra needs no scipy."""
+    plotting extra needs no scipy. ``None`` when every cell is NaN: there is
+    no best to mark."""
+    if np.isnan(grid).all():
+        return None
     filled = np.nan_to_num(grid, nan=np.nanmin(grid))
     sigma_y = max(1.0, grid.shape[0] * 0.05)
     sigma_x = max(1.0, grid.shape[1] * 0.05)
@@ -87,7 +107,7 @@ def _plateau_best(grid: np.ndarray):
         smoothed = gaussian_filter(filled, sigma=(sigma_y, sigma_x))
     except ImportError:
         smoothed = _box_blur_2d(filled, sigma_y, sigma_x)
-    return np.unravel_index(np.argmax(smoothed), smoothed.shape)
+    return _argmax_ignoring_nan(smoothed)
 
 
 def _stats_annotation(fig, text: str) -> None:
@@ -191,9 +211,11 @@ def heatmap_2d(
         if highlight_best:
             if zones:
                 # Match the colouring: best = what holds up, not the spike.
-                best_idx = np.unravel_index(np.argmax(worst), worst.shape)
+                best_idx = _argmax_ignoring_nan(worst)
             else:
                 best_idx = _plateau_best(grid)
+        # Every cell NaN (a metric no combination reported): nothing to mark.
+        if highlight_best and best_idx is not None:
             best_val = grid[best_idx]
             best_x = x_vals[best_idx[1]]
             best_y = y_vals[best_idx[0]]
@@ -244,7 +266,7 @@ def _worst_case(grid: np.ndarray, radius: int) -> np.ndarray:
     plateaus keep their value. Edges are replicated so the border is not
     flattered by having fewer neighbours.
     """
-    if radius < 1:
+    if radius < 1 or np.isnan(grid).all():
         return grid
     filled = np.nan_to_num(grid, nan=np.nanmin(grid))
     padded = np.pad(filled, radius, mode="edge")
@@ -447,11 +469,13 @@ def surface_3d(
                 # With zones on, "best" means the combo that holds up best
                 # under drift, not the tallest cell. Reporting the spike here
                 # would contradict the colouring right next to it.
-                best_idx = np.unravel_index(np.argmax(worst), worst.shape)
-                held = worst[best_idx]
+                best_idx = _argmax_ignoring_nan(worst)
+                held = worst[best_idx] if best_idx is not None else None
             else:
                 best_idx = _plateau_best(grid)
                 held = None
+        # Every cell NaN (a metric no combination reported): nothing to mark.
+        if highlight_best and best_idx is not None:
             best_val = grid[best_idx]
             bx = x_vals[best_idx[1]]
             by = y_vals[best_idx[0]]

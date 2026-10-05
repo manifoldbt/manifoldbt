@@ -13,13 +13,29 @@ data.binance.vision, or one from :func:`generate_tape` for a reproducible
 example. Bar-level backtests are unaffected by this module; it is a separate
 layer, not a change to :func:`manifoldbt.run`.
 
-The bar engine has its own door to a tape, and it is not this module:
-``ExecutionConfig(fill_resolution="ticks")`` makes :func:`manifoldbt.run`
-resolve level orders (stop-loss, take-profit, trailing stop, limit and stop
-entries) against the trades stored for the symbol -- put there by
-:func:`manifoldbt.ingest_trades`, not by a CSV path -- instead of against each
-bar's high and low, and ``result.tape_resolution`` counts what the tape
-decided. Same tier, different entry point.
+**This module is the research harness, not the product path.** The queue, the
+market maker and the per-trade runner here are where those mechanics were
+prototyped, on a CSV and outside the engine. They then became engine settings,
+and that is where a strategy reaches for them: the same DSL, the same
+:func:`manifoldbt.run`, the same result object, on a tape put in the store by
+:func:`manifoldbt.ingest_trades` rather than named by a path.
+
+  * ``fill_resolution="ticks"`` -- level orders (stop-loss, take-profit,
+    trailing stop, limit and stop entries) resolved against the prints inside
+    each bar instead of against its high and low, with
+    ``result.tape_resolution`` counting what the tape decided;
+  * ``bar_interval=Interval.trades()`` -- the trade clock: one simulation row
+    per print;
+  * ``fill_model={"queue": ...}`` -- the volume resting ahead of an order
+    decides its fill, read from a book stored by
+    :func:`manifoldbt.ingest_book`;
+  * ``execution.latency`` -- the round trip between a decision and the book;
+  * ``execution.fill_marks`` -- what the market did after each fill.
+
+See "Backtesting on the Tape" in the strategy authoring guide for the reading
+order, and ``examples/28_trade_clock_market_maker.py`` for all of it on one
+day. The same refusal answers every one of these doors today, this module
+included.
 
 Three ways to run a strategy on a tape:
 
@@ -44,14 +60,17 @@ Example::
     print(bt.ticks.run_orderflow("tape.csv", enter_thr=0.35))
 
 .. note::
-   No licence currently sold enables this layer: every function raises
-   ``PermissionError`` today. ``sweep_orderflow_thr`` additionally fans out,
-   so it is counted like a bar sweep: one threshold is one combination.
+   This layer is a Researcher feature: a Pro licence does not unlock it, and
+   every function then raises ``PermissionError``. ``sweep_orderflow_thr``
+   additionally fans out, so it is counted like a bar sweep: one threshold is
+   one combination.
 
 .. note::
-   The queue in :func:`run_market_maker` is *modelled* from the trade tape, not
-   read from an order book. Order-book depth (L2) is not part of this layer, so
-   market-making results are indicative rather than execution-grade.
+   The queue in :func:`run_market_maker` is *modelled* from the trade tape: it
+   starts every order behind a constant multiple of its own size, so a
+   market-making result here is indicative rather than execution-grade. The
+   engine's own ``fill_model={"queue": ...}`` reads the depth stored at the
+   order's own level and instant instead, which is what a queue is.
 """
 from __future__ import annotations
 

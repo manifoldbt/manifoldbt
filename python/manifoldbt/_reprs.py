@@ -28,7 +28,8 @@ def _fmt(v: float) -> str:
 
 
 def _span(values) -> str:
-    vals = [v for v in values if v is not None]
+    # NaN out: min/max over a list holding one answer by position, not value.
+    vals = [v for v in values if v is not None and v == v]
     if not vals:
         return "n/a"
     lo, hi = min(vals), max(vals)

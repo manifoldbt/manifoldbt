@@ -31,7 +31,102 @@ from manifoldbt._convert import (
     run_currency,
 )
 from manifoldbt.plot._decimate import maybe_decimate
-from manifoldbt.plot._utils import finalize, format_pct, new_figure
+from manifoldbt.plot._utils import finalize, format_pct, format_ratio, new_figure
+
+
+# ── Grouping in time order ──────────────────────────────────────────────────
+#
+# The charts below group a curve by timestamp, day, month or year. They did it
+# with np.unique (a full sort of the curve) and one boolean mask per group: on
+# a curve of a million bars that was most of the time of the summary chart and
+# of the tearsheet. A curve comes out of the engine in time order, and a sorted
+# array holds its distinct values as the starts of its runs, in the order the
+# sort would give them: each helper reads them that way when the array is in
+# order, and falls back to the sort when it is not (several symbols per
+# timestamp, or a NaT, which compares false to everything). Either way the
+# values, the indices and their types are those np.unique gave.
+
+
+def _run_starts(a: np.ndarray) -> np.ndarray:
+    """Positions where a new value starts, in an array already in order."""
+    mask = np.empty(a.size, dtype=bool)
+    if a.size:
+        mask[0] = True
+        np.not_equal(a[1:], a[:-1], out=mask[1:])
+    return np.flatnonzero(mask)
+
+
+def _in_order(a: np.ndarray, strict: bool) -> bool:
+    if a.size < 2:
+        return True
+    return bool(np.all(a[1:] > a[:-1] if strict else a[1:] >= a[:-1]))
+
+
+def _unique_with_first_rows(a: np.ndarray):
+    """``np.unique(a, return_index=True)`` with the index then sorted."""
+    if _in_order(a, strict=True):
+        return a, np.arange(a.size)
+    values, first = np.unique(a, return_index=True)
+    first.sort()
+    return values, first
+
+
+def _unique_values(a: np.ndarray) -> np.ndarray:
+    """``np.unique(a)``."""
+    if _in_order(a, strict=False):
+        return a[_run_starts(a)]
+    return np.unique(a)
+
+
+def _groups(keys: np.ndarray):
+    """The distinct ``keys`` in sorted order, with the rows of each: what
+    ``np.unique`` and one ``np.nonzero(keys == k)`` per key gave, as
+    ``(values, first_rows, last_rows, counts)``. A key no row equals (a NaT)
+    has a count of zero and a first and last row of -1."""
+    if _in_order(keys, strict=False):
+        starts = _run_starts(keys)
+        last = np.empty_like(starts)
+        last[:-1] = starts[1:] - 1
+        if starts.size:
+            last[-1] = keys.size - 1
+        return keys[starts], starts, last, last - starts + 1
+    values = np.unique(keys)
+    first = np.full(values.size, -1, dtype=np.intp)
+    last = np.full(values.size, -1, dtype=np.intp)
+    counts = np.zeros(values.size, dtype=np.intp)
+    for i, k in enumerate(values):
+        idx = np.nonzero(keys == k)[0]
+        counts[i] = len(idx)
+        if len(idx):
+            first[i], last[i] = idx[0], idx[-1]
+    return values, first, last, counts
+
+
+def _calendar_groups(dates: np.ndarray, unit: str, key=None):
+    """``_groups`` of the calendar periods of ``dates``: the groups of
+    ``dates.astype(f"datetime64[{unit}]")``, with ``key`` applied to it first.
+
+    Converting a million timestamps to months or years is a calendar
+    computation per timestamp (~20 ms); in order, the timestamps are cut at
+    the start of each period instead, a handful of binary searches.
+    """
+    # Nanosecond stamps (what `equity_with_dates` hands back), cut into days,
+    # months or years: each period start is then a nanosecond stamp too.
+    if (dates.dtype != np.dtype("datetime64[ns]") or unit not in ("D", "M", "Y")
+            or dates.size < 2 or not _in_order(dates, strict=False)):
+        periods = dates.astype(f"datetime64[{unit}]")
+        return _groups(key(periods) if key is not None else periods)
+    first_p = dates[0].astype(f"datetime64[{unit}]")
+    last_p = dates[-1].astype(f"datetime64[{unit}]")
+    periods = np.arange(first_p, last_p + 1)
+    first = np.searchsorted(dates, periods.astype(dates.dtype), side="left")
+    end = np.empty_like(first)
+    end[:-1] = first[1:]
+    end[-1] = dates.size
+    counts = end - first
+    held = counts > 0
+    values = periods[held]
+    return (key(values) if key is not None else values), first[held], (end - 1)[held], counts[held]
 
 
 def _rgba(hex_color: str, alpha: float) -> str:
@@ -121,8 +216,7 @@ def summary(
         close_col = positions.column("close")
         close_raw = close_col.to_numpy(zero_copy_only=False) if hasattr(close_col, "to_numpy") else np.array(close_col.to_pylist())
         ts_ns = _ts_to_int64(positions.column("timestamp"))
-        _, unique_idx = np.unique(ts_ns, return_index=True)
-        unique_idx.sort()
+        _, unique_idx = _unique_with_first_rows(ts_ns)
         close_vals = close_raw[unique_idx].astype(np.float64)
 
         if len(close_vals) > 0 and close_vals[0] > 0:
@@ -162,7 +256,7 @@ def summary(
         n_trades = metrics.get("total_trades", result.trade_count)
         title = (
             f"Return {ret * 100:+.1f}%"
-            f"    Sharpe {sharpe:.2f}"
+            f"    Sharpe {format_ratio(sharpe)}"
             f"    Max DD {mdd * 100:.1f}%"
             f"    Trades {n_trades:,}"
         )
@@ -198,7 +292,7 @@ def summary(
 
                 # Rolling 7-day average overlay
                 eq_days = dates.astype("datetime64[D]")
-                unique_eq_days = np.unique(eq_days)
+                unique_eq_days = _unique_values(eq_days)
                 daily_on_grid = np.zeros(len(unique_eq_days), dtype=np.float64)
                 day_map = {d: c for d, c in zip(unique_days, day_counts)}
                 for i, d in enumerate(unique_eq_days):
@@ -223,8 +317,7 @@ def summary(
             pos_cap = pa["capital"]
             pos_eq = pa["equity"]
 
-            unique_ts, first_idx = np.unique(pos_ts, return_index=True)
-            first_idx.sort()
+            unique_ts, first_idx = _unique_with_first_rows(pos_ts)
             cap = pos_cap[first_idx]
             eq_arr = pos_eq[first_idx]
             used = np.where(eq_arr > 0, (1.0 - cap / eq_arr) * 100, 0.0)
@@ -233,7 +326,7 @@ def summary(
 
             # Resample to daily (end-of-day snapshot)
             days = used_dates.astype("datetime64[D]")
-            unique_days, _ = np.unique(days, return_index=True)
+            unique_days = _unique_values(days)
             day_last = np.searchsorted(days, unique_days, side="right") - 1
             daily_used = used[day_last]
             daily_dates = unique_days.astype("datetime64[ns]")
@@ -386,13 +479,11 @@ def monthly_returns(
 
     with theme_context():
         dates, values = equity_with_dates(result)
-        ts = dates.astype("datetime64[M]")
-        months = np.unique(ts)
+        months, firsts, lasts, counts = _calendar_groups(dates, "M")
         month_returns = {}
-        for m in months:
-            idx = np.nonzero(ts == m)[0]
-            if len(idx) >= 2:
-                month_returns[m] = values[idx[-1]] / values[idx[0]] - 1.0
+        for m, first, last, count in zip(months, firsts.tolist(), lasts.tolist(), counts.tolist()):
+            if count >= 2:
+                month_returns[m] = values[last] / values[first] - 1.0
 
         years = sorted({int(m.astype("datetime64[Y]").astype(int)) + 1970 for m in months})
         grid = np.full((len(years), 13), np.nan)
@@ -450,12 +541,12 @@ def annual_returns(
     """Annual returns bar chart with green/red conditional coloring."""
     with theme_context():
         dates, values = equity_with_dates(result)
-        years_arr = dates.astype("datetime64[Y]").astype(int) + 1970
-        unique_years = sorted(set(years_arr))
+        years, firsts, lasts, counts = _calendar_groups(
+            dates, "Y", key=lambda y: y.astype(int) + 1970)
+        unique_years = list(years)
         ann_rets = []
-        for y in unique_years:
-            idx = np.nonzero(years_arr == y)[0]
-            ann_rets.append(values[idx[-1]] / values[idx[0]] - 1.0 if len(idx) >= 2 else 0.0)
+        for first, last, count in zip(firsts.tolist(), lasts.tolist(), counts.tolist()):
+            ann_rets.append(values[last] / values[first] - 1.0 if count >= 2 else 0.0)
 
         fig = new_figure(figsize, title)
         colors = [GREEN if r >= 0 else RED for r in ann_rets]

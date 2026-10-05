@@ -8,8 +8,8 @@ fills the bar traded through. Running both conventions side by side says how
 much of a verdict rests on the gap (see examples/26_fill_costs.py).
 
 The bar data below is hand-built so the interesting extreme lands EXACTLY on
-the order level (the touch-only case) — mirroring the Rust e2e tests in
-``crates/bt-core/tests/backtest_orders.rs``.
+the order level (the touch-only case), mirroring the engine's own end-to-end
+tests of resting orders.
 """
 import os
 

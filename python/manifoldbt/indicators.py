@@ -16,7 +16,7 @@ from __future__ import annotations
 from typing import Tuple
 
 from manifoldbt.expr import (
-    Expr, MultiExpr, col, lit, when, _coerce, _resolve_period, _resolve_span, s, scan,
+    Expr, MultiExpr, col, lit, position, when, _coerce, _resolve_period, _resolve_span, s, scan,
 )
 
 # ---------------------------------------------------------------------------
@@ -34,6 +34,16 @@ volume = col("volume")
 _BAND_NAMES = ("upper", "middle", "lower")
 vwap = col("vwap")
 timestamp = col("timestamp")
+
+
+def _given(value, default: Expr) -> Expr:
+    """``value`` if the caller passed one, else the native column ``default``.
+
+    An explicit ``is None``, not ``value or default``: an expression has no
+    truth value (``Expr.__bool__`` raises), so ``h or high`` would refuse
+    every custom column instead of using it.
+    """
+    return default if value is None else value
 
 # ---------------------------------------------------------------------------
 # Math helpers (wrapping Rust built-in functions)
@@ -150,7 +160,7 @@ def stoch_k(period: int = 14, *, h: Expr = None, l: Expr = None, c: Expr = None)
         h, l, c: Custom high/low/close columns (e.g. exo columns).
                  Defaults to native bar columns.
     """
-    return Expr("StochK", h or high, l or low, c or close, _resolve_period(period))
+    return Expr("StochK", _given(h, high), _given(l, low), _given(c, close), _resolve_period(period))
 
 
 def stochastic_k(period: int = 14, source: Expr = None) -> Expr:
@@ -170,7 +180,7 @@ def williams_r(period: int = 14, *, h: Expr = None, l: Expr = None, c: Expr = No
     Args:
         h, l, c: Custom high/low/close columns. Defaults to native bar columns.
     """
-    return Expr("WilliamsR", h or high, l or low, c or close, _resolve_period(period))
+    return Expr("WilliamsR", _given(h, high), _given(l, low), _given(c, close), _resolve_period(period))
 
 
 def cci(period: int = 20, *, h: Expr = None, l: Expr = None, c: Expr = None) -> Expr:
@@ -179,7 +189,7 @@ def cci(period: int = 20, *, h: Expr = None, l: Expr = None, c: Expr = None) -> 
     Args:
         h, l, c: Custom high/low/close columns. Defaults to native bar columns.
     """
-    return Expr("Cci", h or high, l or low, c or close, _resolve_period(period))
+    return Expr("Cci", _given(h, high), _given(l, low), _given(c, close), _resolve_period(period))
 
 
 def adx(period: int = 14, *, h: Expr = None, l: Expr = None, c: Expr = None) -> Expr:
@@ -189,7 +199,7 @@ def adx(period: int = 14, *, h: Expr = None, l: Expr = None, c: Expr = None) -> 
         h, l, c: Custom high/low/close columns (e.g. exo columns).
                  Defaults to native bar columns.
     """
-    return Expr("Adx", h or high, l or low, c or close, _resolve_period(period))
+    return Expr("Adx", _given(h, high), _given(l, low), _given(c, close), _resolve_period(period))
 
 
 # ---------------------------------------------------------------------------
@@ -222,7 +232,7 @@ def atr(period: int = 14, *, h: Expr = None, l: Expr = None, c: Expr = None) -> 
     Args:
         h, l, c: Custom high/low/close columns. Defaults to native bar columns.
     """
-    return Expr("Atr", h or high, l or low, c or close, _resolve_period(period))
+    return Expr("Atr", _given(h, high), _given(l, low), _given(c, close), _resolve_period(period))
 
 
 def true_range(*, h: Expr = None, l: Expr = None, c: Expr = None) -> Expr:
@@ -231,7 +241,7 @@ def true_range(*, h: Expr = None, l: Expr = None, c: Expr = None) -> Expr:
     Args:
         h, l, c: Custom high/low/close columns. Defaults to native bar columns.
     """
-    return Expr("TrueRange", h or high, l or low, c or close)
+    return Expr("TrueRange", _given(h, high), _given(l, low), _given(c, close))
 
 
 def natr(period: int = 14, *, h: Expr = None, l: Expr = None, c: Expr = None) -> Expr:
@@ -240,7 +250,7 @@ def natr(period: int = 14, *, h: Expr = None, l: Expr = None, c: Expr = None) ->
     Args:
         h, l, c: Custom high/low/close columns. Defaults to native bar columns.
     """
-    return Expr("Natr", h or high, l or low, c or close, _resolve_period(period))
+    return Expr("Natr", _given(h, high), _given(l, low), _given(c, close), _resolve_period(period))
 
 
 def keltner_channels(
@@ -252,7 +262,7 @@ def keltner_channels(
     Args:
         h, l, c: Custom high/low/close columns. Defaults to native bar columns.
     """
-    _h, _l, _c = h or high, l or low, c or close
+    _h, _l, _c = _given(h, high), _given(l, low), _given(c, close)
     upper = Expr("KeltnerUpper", _h, _l, _c, _resolve_period(period), _resolve_span(multiplier))
     # La bande centrale est une EMA de meme longueur. `ewm_mean` prend un span
     # (DynFloat), donc un `param()` doit passer par la resolution DynFloat et non
@@ -271,7 +281,7 @@ def supertrend(
     Args:
         h, l, c: Custom high/low/close columns. Defaults to native bar columns.
     """
-    return Expr("SuperTrend", h or high, l or low, c or close, _resolve_period(period),
+    return Expr("SuperTrend", _given(h, high), _given(l, low), _given(c, close), _resolve_period(period),
                 _resolve_span(multiplier))
 
 
@@ -338,7 +348,7 @@ def vwap(*, h: Expr = None, l: Expr = None, c: Expr = None, v: Expr = None) -> E
     Args:
         h, l, c, v: Custom high/low/close/volume columns. Defaults to native bar columns.
     """
-    return Expr("Vwap", h or high, l or low, c or close, v or volume)
+    return Expr("Vwap", _given(h, high), _given(l, low), _given(c, close), _given(v, volume))
 
 
 def ad_line(*, h: Expr = None, l: Expr = None, c: Expr = None, v: Expr = None) -> Expr:
@@ -347,7 +357,7 @@ def ad_line(*, h: Expr = None, l: Expr = None, c: Expr = None, v: Expr = None) -
     Args:
         h, l, c, v: Custom high/low/close/volume columns. Defaults to native bar columns.
     """
-    return Expr("AdLine", h or high, l or low, c or close, v or volume)
+    return Expr("AdLine", _given(h, high), _given(l, low), _given(c, close), _given(v, volume))
 
 
 def mfi(period: int = 14, *, h: Expr = None, l: Expr = None, c: Expr = None, v: Expr = None) -> Expr:
@@ -356,7 +366,7 @@ def mfi(period: int = 14, *, h: Expr = None, l: Expr = None, c: Expr = None, v: 
     Args:
         h, l, c, v: Custom high/low/close/volume columns. Defaults to native bar columns.
     """
-    return Expr("Mfi", h or high, l or low, c or close, v or volume, _resolve_period(period))
+    return Expr("Mfi", _given(h, high), _given(l, low), _given(c, close), _given(v, volume), _resolve_period(period))
 
 
 # ---------------------------------------------------------------------------
@@ -543,7 +553,7 @@ def plus_di(period: int = 14, *, h: Expr = None, l: Expr = None, c: Expr = None)
     Args:
         h, l, c: Custom high/low/close columns. Defaults to native bar columns.
     """
-    return Expr("PlusDi", h or high, l or low, c or close, _resolve_period(period))
+    return Expr("PlusDi", _given(h, high), _given(l, low), _given(c, close), _resolve_period(period))
 
 
 def minus_di(period: int = 14, *, h: Expr = None, l: Expr = None, c: Expr = None) -> Expr:
@@ -552,7 +562,7 @@ def minus_di(period: int = 14, *, h: Expr = None, l: Expr = None, c: Expr = None
     Args:
         h, l, c: Custom high/low/close columns. Defaults to native bar columns.
     """
-    return Expr("MinusDi", h or high, l or low, c or close, _resolve_period(period))
+    return Expr("MinusDi", _given(h, high), _given(l, low), _given(c, close), _resolve_period(period))
 
 
 def aroon_up(period: int = 25, *, h: Expr = None) -> Expr:
@@ -561,12 +571,12 @@ def aroon_up(period: int = 25, *, h: Expr = None) -> Expr:
     ``100`` when the current bar is the highest of the trailing ``period + 1``
     bars, ``0`` when that high is ``period`` bars old.
     """
-    return Expr("AroonUp", h or high, _resolve_period(period))
+    return Expr("AroonUp", _given(h, high), _resolve_period(period))
 
 
 def aroon_down(period: int = 25, *, l: Expr = None) -> Expr:
     """Aroon Down (native Rust): how recent the window's low is, as a percent."""
-    return Expr("AroonDown", l or low, _resolve_period(period))
+    return Expr("AroonDown", _given(l, low), _resolve_period(period))
 
 
 def aroon_oscillator(period: int = 25, *, h: Expr = None, l: Expr = None) -> Expr:
@@ -614,8 +624,8 @@ def donchian_channels(period: int = 20, *, h: Expr = None, l: Expr = None) -> Tu
         ``(upper, middle, lower)`` — the rolling high, their midpoint, the
         rolling low.
     """
-    upper = (h or high).rolling_max(period)
-    lower = (l or low).rolling_min(period)
+    upper = (_given(h, high)).rolling_max(period)
+    lower = (_given(l, low)).rolling_min(period)
     return MultiExpr(
         (upper, (upper + lower) / lit(2.0), lower), "donchian_channels", _BAND_NAMES
     )
@@ -630,8 +640,8 @@ def vortex(period: int = 14, *, h: Expr = None, l: Expr = None, c: Expr = None) 
     """
     eps = lit(1e-12)
     tr_sum = true_range(h=h, l=l, c=c).rolling_sum(period)
-    vm_plus = abs_val((h or high) - (l or low).lag(1))
-    vm_minus = abs_val((l or low) - (h or high).lag(1))
+    vm_plus = abs_val((_given(h, high)) - (_given(l, low)).lag(1))
+    vm_minus = abs_val((_given(l, low)) - (_given(h, high)).lag(1))
     return MultiExpr(
         (
             vm_plus.rolling_sum(period) / (tr_sum + eps),
@@ -644,7 +654,7 @@ def vortex(period: int = 14, *, h: Expr = None, l: Expr = None, c: Expr = None) 
 
 def cmf(period: int = 20, *, h: Expr = None, l: Expr = None, c: Expr = None, v: Expr = None) -> Expr:
     """Chaikin Money Flow: volume-weighted close position over the window."""
-    _h, _l, _c, _v = h or high, l or low, c or close, v or volume
+    _h, _l, _c, _v = _given(h, high), _given(l, low), _given(c, close), _given(v, volume)
     eps = lit(1e-12)
     mfm = ((_c - _l) - (_h - _c)) / (_h - _l + eps)
     return (mfm * _v).rolling_sum(period) / (_v.rolling_sum(period) + eps)
@@ -952,22 +962,22 @@ def log10(x: Expr) -> Expr:
 
 def median_price(*, h: Expr = None, l: Expr = None) -> Expr:
     """TA-Lib ``MEDPRICE``: ``(high + low) / 2``."""
-    return Expr("Function", "median_price", [h or high, l or low])
+    return Expr("Function", "median_price", [_given(h, high), _given(l, low)])
 
 
 def typical_price(*, h: Expr = None, l: Expr = None, c: Expr = None) -> Expr:
     """TA-Lib ``TYPPRICE``: ``(high + low + close) / 3``."""
-    return Expr("Function", "typical_price", [h or high, l or low, c or close])
+    return Expr("Function", "typical_price", [_given(h, high), _given(l, low), _given(c, close)])
 
 
 def weighted_close(*, h: Expr = None, l: Expr = None, c: Expr = None) -> Expr:
     """TA-Lib ``WCLPRICE``: ``(high + low + 2*close) / 4``."""
-    return Expr("Function", "weighted_close", [h or high, l or low, c or close])
+    return Expr("Function", "weighted_close", [_given(h, high), _given(l, low), _given(c, close)])
 
 
 def average_price(*, o: Expr = None, h: Expr = None, l: Expr = None, c: Expr = None) -> Expr:
     """TA-Lib ``AVGPRICE``: ``(open + high + low + close) / 4``."""
-    return Expr("Function", "average_price", [o or open, h or high, l or low, c or close])
+    return Expr("Function", "average_price", [_given(o, open), _given(h, high), _given(l, low), _given(c, close)])
 
 
 # ---------------------------------------------------------------------------
@@ -975,7 +985,7 @@ def average_price(*, o: Expr = None, h: Expr = None, l: Expr = None, c: Expr = N
 # ---------------------------------------------------------------------------
 #
 # 38 of TA-Lib's 61 ``CDL*`` functions, bit-exact against TA-Lib 0.7.1 (pinned by
-# ``crates/bt-expr/tests/talib_candles.rs``). Each returns one of
+# the engine's own tests). Each returns one of
 # ``{-100, -80, 0, 80, 100}``: the sign is the direction, the magnitude is
 # TA-Lib's confidence, and warmup bars are **0** rather than NaN because a
 # detector's 0 already means "no pattern here".
@@ -983,7 +993,7 @@ def average_price(*, o: Expr = None, h: Expr = None, l: Expr = None, c: Expr = N
 
 def _cdl(name: str, o: Expr, h: Expr, l: Expr, c: Expr) -> Expr:
     """Build a candlestick pattern call over the four OHLC columns."""
-    return Expr("Function", name, [o or open, h or high, l or low, c or close])
+    return Expr("Function", name, [_given(o, open), _given(h, high), _given(l, low), _given(c, close)])
 
 
 def cdl_doji(*, o: Expr = None, h: Expr = None, l: Expr = None, c: Expr = None) -> Expr:

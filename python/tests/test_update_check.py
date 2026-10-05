@@ -9,6 +9,7 @@ import os
 import threading
 import time
 import urllib.error
+import urllib.request  # manifoldbt._update imports it only where it asks PyPI
 
 import pytest
 
@@ -163,7 +164,7 @@ def test_fetch_reads_info_version_from_the_pypi_json_api(monkeypatch):
         body = json.dumps({"info": {"version": "0.20.0", "yanked": False}})
         return _FakeResponse(body, {"ETag": '"xyz"'})
 
-    monkeypatch.setattr(_update.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(urllib.request, "urlopen", urlopen)
     assert _update._fetch(None) == {
         "latest": "0.20.0",
         "yanked": False,
@@ -180,7 +181,7 @@ def test_fetch_revalidates_with_the_stored_etag(monkeypatch):
         captured["headers"] = {k.lower(): v for k, v in request.headers.items()}
         raise urllib.error.HTTPError(request.full_url, 304, "Not Modified", {}, None)
 
-    monkeypatch.setattr(_update.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(urllib.request, "urlopen", urlopen)
     assert _update._fetch('"xyz"') == {"unchanged": True}
     assert captured["headers"]["if-none-match"] == '"xyz"'
 
@@ -189,7 +190,7 @@ def test_fetch_swallows_everything_else(monkeypatch):
     def urlopen(request, timeout=None):
         raise OSError("no route to host")
 
-    monkeypatch.setattr(_update.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(urllib.request, "urlopen", urlopen)
     assert _update._fetch(None) is None
 
 
@@ -197,7 +198,7 @@ def test_fetch_swallows_a_server_error(monkeypatch):
     def urlopen(request, timeout=None):
         raise urllib.error.HTTPError(request.full_url, 503, "nope", {}, None)
 
-    monkeypatch.setattr(_update.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(urllib.request, "urlopen", urlopen)
     assert _update._fetch(None) is None
 
 

@@ -1,9 +1,12 @@
 """Expression AST builder — the core of the Python DSL.
 
-Builds an expression tree that serializes to JSON matching the Rust
-``bt_expr::Expr`` serde (externally-tagged) format.
+Builds an expression tree that serializes to the externally-tagged JSON
+format the engine reads.
 """
 from __future__ import annotations
+
+import builtins
+import warnings
 
 from typing import Any, Dict, Optional, Union
 
@@ -14,12 +17,47 @@ Period = Union[int, "Expr", Dict[str, int]]
 Span = Union[float, int, "Expr"]
 
 
-# Global registry of param metadata encountered during expression construction.
-# Populated by _resolve_period/_resolve_span, read by Strategy.to_json_dict().
-_param_registry: dict = {}
+class _ParamRef(str):
+    """The name of a ``param()`` passed as an indicator period or span.
+
+    Such an argument serialises as the bare name (``DynPeriod::Param`` /
+    ``DynFloat::Param`` on the Rust side), so the ``Parameter`` node that held
+    the default is gone once the indicator is built. The name stays a ``str``,
+    and the JSON is byte for byte what it was, but it carries the metadata of
+    the ``param()`` it came from: the strategy that holds the expression reads
+    its own default here.
+
+    It replaces a module-level registry, keyed by name, where the last
+    ``param()`` built anywhere in the process won. A strategy built with
+    ``param("slow", default=20)`` then serialised after a variant built with
+    ``default=41`` ran with 41, in silence.
+    """
+
+    __slots__ = ("_param_meta",)
+
+    def __new__(cls, name: str, meta: Dict[str, Any]) -> "_ParamRef":
+        self = super().__new__(cls, name)
+        self._param_meta = meta
+        return self
+
+    def __reduce__(self) -> Any:
+        # copy, deepcopy and pickle rebuild it with its metadata, whatever the
+        # protocol, instead of falling back to a plain str.
+        return (_ParamRef, (str(self), self._param_meta))
+
+
+def _param_name(value: "Expr") -> Any:
+    """What a ``param()`` period or span serialises as: its name, carrying its
+    metadata when it has some."""
+    name = value._args[0]
+    if value._param_meta is None:
+        return name
+    return _ParamRef(name, value._param_meta)
+
 
 # Nanoseconds per unit of an ``Interval`` (see manifoldbt.helpers.Interval).
 _NANOS_PER_UNIT = {
+    "Millis": 1_000_000,
     "Seconds": 1_000_000_000,
     "Minutes": 60_000_000_000,
     "Hours": 3_600_000_000_000,
@@ -46,6 +84,17 @@ def _resolve_period(value: Period, allow_duration: bool = False) -> Any:
     - Interval.seconds(30) → {"duration_ns": ...} → DynPeriod::Duration,
       accepted only by the operators that implement a window in time.
     """
+    # `isinstance` first, and not merely for tidiness: `Expr.__eq__` builds a
+    # comparison expression rather than answering a bool, so `value == "Trades"`
+    # on a `param()` is a truthy object and would raise on every swept period.
+    if isinstance(value, str) and value == "Trades":
+        raise TypeError(
+            "Interval.trades() is a simulation clock, not a window: it says how "
+            "often the engine steps, not how far back an indicator looks. Pass "
+            "an integer to count EVENTS (rolling_sum(34) = thirty-four prints) "
+            "or Interval.seconds(n) to count time (rolling_sum(Interval."
+            "seconds(34)) = thirty-four seconds of prints)."
+        )
     nanos = _interval_to_nanos(value)
     if nanos is not None:
         if not allow_duration:
@@ -65,9 +114,7 @@ def _resolve_period(value: Period, allow_duration: bool = False) -> Any:
             "Interval.seconds/minutes/hours/days(n)"
         )
     if isinstance(value, Expr) and value._variant == "Parameter":
-        if value._param_meta is not None:
-            _param_registry[value._args[0]] = value._param_meta
-        return value._args[0]
+        return _param_name(value)
     if isinstance(value, Expr):
         raise TypeError("Only param() expressions can be used as indicator periods, not arbitrary expressions")
     return int(value)
@@ -76,12 +123,35 @@ def _resolve_period(value: Period, allow_duration: bool = False) -> Any:
 def _resolve_span(value: Span) -> Any:
     """Convert a span/float argument for DynFloat serialization."""
     if isinstance(value, Expr) and value._variant == "Parameter":
-        if value._param_meta is not None:
-            _param_registry[value._args[0]] = value._param_meta
-        return value._args[0]
+        return _param_name(value)
     if isinstance(value, Expr):
         raise TypeError("Only param() expressions can be used as indicator spans, not arbitrary expressions")
     return float(value)
+
+
+def _round_step(step: Any, what: str) -> float:
+    """Check a price-grid step here, where the message can name the caller.
+
+    The engine refuses the same thing at compile time; catching it in Python
+    turns a backtest that fails on its first bar into a TypeError/ValueError on
+    the line that wrote it. A ``param()`` is refused outright: the step is read
+    once as an exact decimal, so it cannot be an axis of a sweep.
+    """
+    if isinstance(step, Expr):
+        raise TypeError(
+            f"{what}(step=...) takes a literal number, not an expression: the step is "
+            "read once as the exact decimal it is written as, so it cannot be a "
+            "param() axis"
+        )
+    if isinstance(step, bool) or not isinstance(step, (int, float)):
+        raise TypeError(f"{what}(step=...) takes a number, got {type(step).__name__}")
+    step = float(step)
+    if step != step or step in (float("inf"), float("-inf")):
+        raise ValueError(f"{what}(step=...) must be a finite number, got {step}")
+    if step <= 0.0:
+        raise ValueError(f"{what}(step=...) must be strictly positive, got {step}")
+    return step
+
 
 # Variants that wrap a single Box<Expr>
 _UNARY_BOX = frozenset(
@@ -147,6 +217,12 @@ _EXPR_SCALAR = frozenset(
         # Coupe transversale (Box<Expr>, f64)
         "CsWinsorize",
         "CsQuantile",
+        # Grille de prix (Box<Expr>, f64) -- le pas est un LITTERAL, pas un
+        # param() : il est lu une fois a la compilation comme le decimal qu'il
+        # ecrit.
+        "RoundTo",
+        "FloorTo",
+        "CeilTo",
     ]
 )
 
@@ -266,6 +342,20 @@ class Expr:
             # grille de la timeframe nommee puis etalee en escalier.
             return {"OnTimeframe": [args[0], args[1].to_json()]}
 
+        if v == "Position":
+            # Variante unitaire cote Rust : une chaine nue, pas un objet.
+            return "Position"
+
+        if v == "SimState":
+            # SimState(SimStateRef) : ("Cash",) -> "Cash" ; (kind, side) ->
+            # {kind: side} ; ("BookPriceAt", side, level) -> un objet.
+            kind = args[0]
+            if kind in ("Cash", "PositionAge"):
+                return {"SimState": kind}
+            if kind == "BookPriceAt":
+                return {"SimState": {"BookPriceAt": {"side": args[1], "level": args[2].to_json()}}}
+            return {"SimState": {kind: args[1]}}
+
         if v == "Column":
             return {"Column": args[0]}
         if v == "Literal":
@@ -326,6 +416,36 @@ class Expr:
     def __neg__(self) -> Expr:
         return Expr("Mul", Expr("Literal", -1.0), self)
 
+    def __pow__(self, exponent: Any, modulo: Any = None) -> Expr:
+        return _power(self, exponent, modulo)
+
+    def __rpow__(self, base: Any, modulo: Any = None) -> Expr:
+        raise TypeError(
+            f"{base!r} ** expr is not supported: the engine has no power "
+            "function, so only an expression raised to a literal integer works "
+            "(x ** 2 is x * x). For a positive base write "
+            "exp(expr * math.log(base)) with manifoldbt.indicators.exp."
+        )
+
+    # -- Truth value ---------------------------------------------------------
+
+    def __bool__(self) -> bool:
+        # An Expr is a series the engine evaluates later, bar by bar. It has
+        # no truth value NOW, and answering one (every object is truthy by
+        # default) let `max(expr, lit(0.1))` return an operand picked by its
+        # position, with no error. Refusing is what numpy and polars do.
+        raise TypeError(
+            "an expression has no truth value in Python: it is a series the "
+            "engine evaluates bar by bar, so `if`, `and`, `or`, `not`, a "
+            "chained comparison (a < b < c), `in` and the builtins max()/min() "
+            "cannot read it (they would silently pick one operand). Write "
+            "instead: max_val(a, b) / min_val(a, b) from manifoldbt.indicators "
+            "for an elementwise max/min; (a > 0) & (b < 1), | and ~ for "
+            "and/or/not, each comparison in parentheses; (a < b) & (b < c) for "
+            "a chained comparison; when(cond, x, y) for if/else; "
+            "`x is None` to test whether an argument was given."
+        )
+
     # -- Comparison operators ------------------------------------------------
 
     def __gt__(self, other: Numeric) -> Expr:
@@ -336,6 +456,12 @@ class Expr:
 
     def __eq__(self, other: Numeric) -> Expr:  # type: ignore[override]
         return Expr("Eq", self, _coerce(other))
+
+    def __ne__(self, other: Numeric) -> Expr:  # type: ignore[override]
+        # Without it Python answered `not (self == other)`, a plain False
+        # whatever the series held; now that an Expr has no truth value that
+        # would raise instead. `~(a == b)` is what `!=` means on a series.
+        return ~(self == other)
 
     def __ge__(self, other: Numeric) -> Expr:
         return (self > other) | (self == other)
@@ -378,7 +504,8 @@ class Expr:
         -- gets a real thirty seconds instead of thirty bars. NaN until the
         series holds a full ``d`` of history, then equal to
         ``pandas.rolling("30s")``. Durations are literal: ``param()`` does not
-        sweep one yet.
+        sweep one yet. See "Windows in time" in the strategy authoring
+        guide.
         """
         return Expr("RollingMean", self, _resolve_period(window, allow_duration=True))
 
@@ -392,7 +519,8 @@ class Expr:
         -- gets a real thirty seconds instead of thirty bars. NaN until the
         series holds a full ``d`` of history, then equal to
         ``pandas.rolling("30s")``. Durations are literal: ``param()`` does not
-        sweep one yet.
+        sweep one yet. See "Windows in time" in the strategy authoring
+        guide.
         """
         return Expr("RollingStd", self, _resolve_period(window, allow_duration=True))
 
@@ -406,7 +534,8 @@ class Expr:
         -- gets a real thirty seconds instead of thirty bars. NaN until the
         series holds a full ``d`` of history, then equal to
         ``pandas.rolling("30s")``. Durations are literal: ``param()`` does not
-        sweep one yet.
+        sweep one yet. See "Windows in time" in the strategy authoring
+        guide.
         """
         return Expr("RollingSum", self, _resolve_period(window, allow_duration=True))
 
@@ -420,7 +549,8 @@ class Expr:
         -- gets a real thirty seconds instead of thirty bars. NaN until the
         series holds a full ``d`` of history, then equal to
         ``pandas.rolling("30s")``. Durations are literal: ``param()`` does not
-        sweep one yet.
+        sweep one yet. See "Windows in time" in the strategy authoring
+        guide.
         """
         return Expr("RollingMin", self, _resolve_period(window, allow_duration=True))
 
@@ -434,7 +564,8 @@ class Expr:
         -- gets a real thirty seconds instead of thirty bars. NaN until the
         series holds a full ``d`` of history, then equal to
         ``pandas.rolling("30s")``. Durations are literal: ``param()`` does not
-        sweep one yet.
+        sweep one yet. See "Windows in time" in the strategy authoring
+        guide.
         """
         return Expr("RollingMax", self, _resolve_period(window, allow_duration=True))
 
@@ -482,7 +613,8 @@ class Expr:
         -- gets a real thirty seconds instead of thirty bars. NaN until the
         series holds a full ``d`` of history, then equal to
         ``pandas.rolling("30s")``. Durations are literal: ``param()`` does not
-        sweep one yet.
+        sweep one yet. See "Windows in time" in the strategy authoring
+        guide.
         """
         return Expr("ZScore", self, _resolve_period(window, allow_duration=True))
 
@@ -542,7 +674,8 @@ class Expr:
         -- gets a real thirty seconds instead of thirty bars. NaN until the
         series holds a full ``d`` of history, then equal to
         ``pandas.rolling("30s")``. Durations are literal: ``param()`` does not
-        sweep one yet.
+        sweep one yet. See "Windows in time" in the strategy authoring
+        guide.
         """
         return Expr("RollingVar", self, _resolve_period(window, allow_duration=True))
 
@@ -580,7 +713,8 @@ class Expr:
         -- gets a real thirty seconds instead of thirty bars. NaN until the
         series holds a full ``d`` of history, then equal to
         ``pandas.rolling("30s")``. Durations are literal: ``param()`` does not
-        sweep one yet.
+        sweep one yet. See "Windows in time" in the strategy authoring
+        guide.
         """
         return Expr("RollingCorr", self, _coerce(other),
                     _resolve_period(window, allow_duration=True))
@@ -595,7 +729,8 @@ class Expr:
         -- gets a real thirty seconds instead of thirty bars. NaN until the
         series holds a full ``d`` of history, then equal to
         ``pandas.rolling("30s")``. Durations are literal: ``param()`` does not
-        sweep one yet.
+        sweep one yet. See "Windows in time" in the strategy authoring
+        guide.
         """
         return Expr("RollingCov", self, _coerce(other),
                     _resolve_period(window, allow_duration=True))
@@ -610,7 +745,8 @@ class Expr:
         -- gets a real thirty seconds instead of thirty bars. NaN until the
         series holds a full ``d`` of history, then equal to
         ``pandas.rolling("30s")``. Durations are literal: ``param()`` does not
-        sweep one yet.
+        sweep one yet. See "Windows in time" in the strategy authoring
+        guide.
         """
         return Expr("RollingBeta", self, _coerce(other),
                     _resolve_period(window, allow_duration=True))
@@ -681,7 +817,8 @@ class Expr:
         -- gets a real thirty seconds instead of thirty bars. NaN until the
         series holds a full ``d`` of history, then equal to
         ``pandas.rolling("30s")``. Durations are literal: ``param()`` does not
-        sweep one yet.
+        sweep one yet. See "Windows in time" in the strategy authoring
+        guide.
 
         With an always-true condition and a duration it counts the ROWS
         themselves, which is how a strategy measures how gappy its own grid
@@ -712,6 +849,54 @@ class Expr:
         """
         return Expr("Ffill", self)
 
+    # -- Price grid ----------------------------------------------------------
+
+    def round_to(self, step: float) -> Expr:
+        """Nearest multiple of ``step``; an exact half goes UP (towards +inf).
+
+        A venue quotes on a grid: an order at a price the grid does not carry
+        finds no depth in the book, and under the queue model there is nothing
+        for it to stand behind. Snap a computed level onto the venue's tick
+        size before resting on it::
+
+            quote = (col("fair") - lit(0.5) * col("spread")).round_to(0.1)
+
+        ``step`` is a strictly positive **literal**, not a ``param()``: it is
+        read once at compile time as the decimal it is written as (``0.1`` is
+        one tenth, not the binary double just above it), which is what a tick
+        size is. A step that is not a positive number is refused by name at
+        compile time.
+
+        The result is the double the corresponding literal denotes:
+        ``100.34`` on a ``0.1`` grid gives exactly ``100.3``, where
+        ``round(x / step) * step`` gives ``100.30000000000001`` -- one ulp
+        away, which is a different price level to a book lookup.
+
+        Half UP, not half to even: ``0.25`` on a ``0.1`` grid is ``0.3`` here
+        and ``0.2`` under ``numpy.round``.
+
+        Snapping twice is snapping once: a value already on the grid comes back
+        unchanged, by any of the three methods and in any order.
+        """
+        return Expr("RoundTo", self, _round_step(step, "round_to"))
+
+    def floor_to(self, step: float) -> Expr:
+        """Largest multiple of ``step`` at or below the value.
+
+        The passive direction for a **bid**: rounding a buy level down never
+        makes the order more aggressive than the author asked for. Same rules
+        for ``step`` as :meth:`round_to`.
+        """
+        return Expr("FloorTo", self, _round_step(step, "floor_to"))
+
+    def ceil_to(self, step: float) -> Expr:
+        """Smallest multiple of ``step`` at or above the value.
+
+        The passive direction for an **ask**. Same rules for ``step`` as
+        :meth:`round_to`.
+        """
+        return Expr("CeilTo", self, _round_step(step, "ceil_to"))
+
     def rising(self, n: Period) -> Expr:
         """1.0 if self strictly increased on each of the last ``n`` steps."""
         return Expr("Rising", self, _resolve_period(n))
@@ -731,13 +916,55 @@ class Expr:
     # -- Cumulative ----------------------------------------------------------
 
     def cumsum(self) -> Expr:
+        """Cumulative sum from the first bar to the current one."""
         return Expr("CumSum", self)
 
     def cumprod(self) -> Expr:
+        """Cumulative product from the first bar to the current one."""
         return Expr("CumProd", self)
 
-    def rank(self) -> Expr:
+    # -- Not causal ----------------------------------------------------------
+    #
+    # Its own section. This used to sit inside `-- Cumulative --`, right under
+    # `cumprod`, with no docstring: a reader filed it with its neighbours and
+    # read it as expanding, which is exactly the mistake it invites. A section
+    # heading is not documentation, but it is what a reader skims.
+
+    def full_series_rank(self) -> Expr:
+        """Rank of each value over the **whole series**, 1 to N.
+
+        **This operator is not causal.** It sorts the entire column, so the
+        rank at bar ``t`` depends on bars that come after ``t``. Feed it to an
+        entry signal or to position sizing and the backtest is worth nothing:
+        the strategy is choosing with information it could not have had. Two
+        operators in the DSL behave this way, this one and ``lead(n)``, and
+        ``detect_lookahead`` fails a strategy that lets either one decide.
+
+        What it is for: building labels and targets offline, where seeing the
+        whole series is the point.
+
+        For a rank you can trade on, use ``rolling_rank(window)``, which ranks
+        within a trailing window, or ``cs_rank()``, which ranks across symbols
+        at the same bar.
+        """
         return Expr("Rank", self)
+
+    def rank(self) -> Expr:
+        """Deprecated spelling of :meth:`full_series_rank`.
+
+        The bare name said nothing about the whole-series sort, and sat among
+        the cumulative operators, so it read as causal. It is kept working so
+        existing code still runs, and warns so that code gets fixed.
+        """
+        warnings.warn(
+            "Expr.rank() is not causal: it ranks over the whole series, so the "
+            "rank at bar t depends on bars after t. Renamed to "
+            "full_series_rank() to say so. For a causal rank use "
+            "rolling_rank(window), or cs_rank() across symbols.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.full_series_rank()
 
     # -- Cross-sectional -----------------------------------------------------
 
@@ -866,8 +1093,9 @@ class MultiExpr(tuple):
     for a caller that only sees the traceback. Every such use now names the
     call, lists what it returns, and shows the unpacking.
 
-    Equality is left alone: ``==`` against another tuple still compares
-    element by element, so ordinary container checks keep working. Only a
+    Equality is kept: ``==`` against another tuple still compares element by
+    element (two expressions are equal when they build the same tree), so
+    ordinary container checks keep working. Only a
     comparison against a number or an expression -- always a mistake -- is
     refused.
     """
@@ -917,12 +1145,34 @@ class MultiExpr(tuple):
     def __eq__(self, other: Any) -> Any:
         if isinstance(other, (Expr, int, float)):
             self._reject_op("==")
-        return tuple.__eq__(self, other)
+        return self._same_as(other)
 
     def __ne__(self, other: Any) -> Any:
         if isinstance(other, (Expr, int, float)):
             self._reject_op("!=")
-        return tuple.__ne__(self, other)
+        same = self._same_as(other)
+        return same if same is NotImplemented else not same
+
+    def _same_as(self, other: Any) -> Any:
+        # Not tuple.__eq__: it compares the members with `==`, which on two
+        # expressions builds an Eq node instead of answering, and an
+        # expression has no truth value. Two members are the same when they
+        # are the same object or serialise to the same tree.
+        if not isinstance(other, tuple):
+            return NotImplemented
+        if len(self) != len(other):
+            return False
+        for a, b in zip(self, other):
+            if a is b:
+                continue
+            if isinstance(a, Expr) or isinstance(b, Expr):
+                if not (isinstance(a, Expr) and isinstance(b, Expr)):
+                    return False
+                if a.to_json() != b.to_json():
+                    return False
+            elif a != b:
+                return False
+        return True
 
     # Defining __eq__ would otherwise drop the inherited hash.
     __hash__ = tuple.__hash__
@@ -988,6 +1238,69 @@ class MultiExpr(tuple):
 # ---------------------------------------------------------------------------
 
 
+# Largest |n| that ``expr ** n`` expands. The expansion is a chain of n - 1
+# multiplications, and each rounds once: past a handful of factors the result
+# drifts from a real power by more than an ulp, and a larger exponent on a
+# series is more likely a mistake than a need.
+_MAX_POWER = 8
+
+
+def _power(base: Expr, exponent: Any, modulo: Any = None) -> Expr:
+    """``base ** exponent`` for a literal integer ``exponent``, as products.
+
+    The engine has no power function, so ``x ** 3`` is written for it as
+    ``x * x * x`` and ``x ** -2`` as ``1 / (x * x)``: the same nodes as the
+    hand-written form, hence the same values everywhere an expression is
+    evaluated (in batch and in the program a quote runs at each wake-up), a
+    NaN or a null propagating as it does through ``*`` and ``/``. ``x ** 2``
+    is bit for bit ``x * x``; from ``x ** 3`` on, each product rounds once,
+    so the result can differ from ``numpy.power`` in the last bit.
+    """
+    if modulo is not None:
+        raise TypeError("pow(expr, n, mod) is not supported on an expression")
+    if isinstance(exponent, (Expr, MultiExpr)):
+        raise TypeError(
+            "expr ** expr is not supported: the engine has no power function, "
+            "so the exponent must be a literal integer (x ** 2 is x * x). For "
+            "a positive base write exp(y * log(x)) with manifoldbt.indicators."
+        )
+    if isinstance(exponent, bool) or not isinstance(exponent, (int, float)):
+        raise TypeError(
+            f"expr ** n takes a literal integer n, got {type(exponent).__name__}"
+        )
+    if isinstance(exponent, float):
+        if not exponent.is_integer():
+            hint = (
+                "sqrt(x) from manifoldbt.indicators"
+                if exponent == 0.5
+                else "exp(p * log(x)) from manifoldbt.indicators, for a positive x"
+            )
+            raise TypeError(
+                f"expr ** {exponent!r}: only a literal integer exponent is "
+                f"supported (the engine has no power function). Write {hint}."
+            )
+        exponent = int(exponent)
+    if exponent == 0:
+        raise ValueError(
+            "expr ** 0 is the constant 1 whatever the series holds (a NaN "
+            "included): write lit(1.0) if that is what you mean"
+        )
+    n = abs(exponent)
+    if n > _MAX_POWER:
+        raise ValueError(
+            f"expr ** {exponent}: exponents are expanded into products and "
+            f"stop at +/-{_MAX_POWER}. For a larger one write the products "
+            "yourself (y = x * x; y * y * ...) or exp(p * log(x)) for a "
+            "positive x"
+        )
+    out = base
+    for _ in range(n - 1):
+        out = Expr("Mul", out, base)
+    if exponent < 0:
+        out = Expr("Div", Expr("Literal", 1.0), out)
+    return out
+
+
 def _coerce(value: Any) -> Expr:
     """Coerce a raw Python value into an Expr.Literal.
 
@@ -1025,6 +1338,282 @@ def col(name: str) -> Expr:
 def lit(value: Any) -> Expr:
     """Create a literal constant expression."""
     return Expr("Literal", value)
+
+
+def position() -> Expr:
+    """The position held, in signed units, at the instant an order is posted.
+
+    Not a column. A column is computed for every bar before the simulation
+    starts; the position at bar ``i`` is the result of what the strategy did
+    with bars ``0..i``, and only the simulation knows it. So ``position()`` is
+    readable in exactly ONE place: the level of an entry order declared on the
+    strategy. That is what a market maker needs, and it is what it is for::
+
+        quote = col("fair") - lit(0.5) * col("spread") - lit(k) * position()
+
+        strategy = (
+            mbt.Strategy.create("maker")
+            .signal("quote", quote)
+            .size(col("wants_to_quote") * lit(qty))
+            .limit_entry(signal="quote", time_in_force=Interval.seconds(1))
+        )
+
+    The market data in that level is delayed like every other signal
+    (``signal_delay``); the inventory is not, because it is the strategy's own
+    book, known without a round trip.
+
+    Inside that level it combines with ``+``, ``-``, ``*``, ``/``, ``abs``,
+    ``min`` and ``max``, and with any sub-expression that does not itself read
+    it. A size, a plain signal, a comparison, a ``when()``, or any operator
+    with memory (a rolling window, a lag, an indicator) refuses it BY NAME at
+    compile time rather than reading it as something else.
+
+    See "Reading the position from a level" in the strategy authoring guide.
+
+    In the expressions of a quote (``Strategy.quote``) it is readable
+    everywhere, with every operator a wake-up takes: there it is the position
+    as the fills that have reached the strategy say, at each wake-up
+    (``execution.latency["response"]`` after the venue booked them). See
+    "Quoting in the DSL" in the guide.
+    """
+    return Expr("Position")
+
+
+# ---------------------------------------------------------------------------
+# Reading the simulation state at a wake-up
+# ---------------------------------------------------------------------------
+#
+# Like ``position()``, none of these is a column: each is what the venue knows
+# at the instant the engine wakes up, and exists only there. They are readable
+# in the expressions of a quote (its price, its size, its enabled condition),
+# which the engine evaluates at each wake-up without calling Python. A signal,
+# a size, or any operator with memory (a rolling window, a lag, an indicator)
+# refuses them BY NAME at compile time, as it refuses ``position()``.
+#
+# What they combine with there: ``+ - * /``, comparisons, ``& | ~``,
+# ``when()``, ``abs``, ``min``, ``max``, :func:`round`, :func:`clip`,
+# ``sqrt``, ``log``, ``exp``, ``round_to``, ``floor_to``, ``ceil_to``, and any
+# sub-expression that does not read the state (that part is computed in batch,
+# with every operator).
+
+
+def _side(side: Any) -> str:
+    """``"bid"`` / ``"ask"`` as the engine spells them."""
+    if not isinstance(side, str) or side.lower() not in ("bid", "ask"):
+        raise ValueError(f"side must be 'bid' or 'ask', got {side!r}")
+    return "Bid" if side.lower() == "bid" else "Ask"
+
+
+def live_qty(side: str) -> Expr:
+    """What is left to fill of the strategy's live orders on ``side``.
+
+    ``side`` is ``"bid"`` (the buy orders) or ``"ask"`` (the sell orders). The
+    sum, in units, of the unfilled size of every order of that side that may
+    still fill, as the strategy knows them: an order sent and not yet
+    acknowledged counts, an order whose cancellation is on its way counts
+    until the answer arrives. ``0`` when there is none.
+
+    Like every reading of the simulation state, only the expressions of a
+    quote (``Strategy.quote``) may use it; see "Quoting in the DSL" in the
+    guide.
+    """
+    return Expr("SimState", "LiveQty", _side(side))
+
+
+def order_age(side: str) -> Expr:
+    """Seconds since the strategy sent its newest live order on ``side``
+    (``"bid"`` or ``"ask"``), on the strategy's clock; NaN when there is none.
+
+    Readable only in the expressions of a quote (``Strategy.quote``).
+    """
+    return Expr("SimState", "OrderAge", _side(side))
+
+
+def last_fill_px(side: str) -> Expr:
+    """Price of the strategy's last fill on ``side`` (``"bid"``: a buy,
+    ``"ask"``: a sell) that has reached it; NaN before the first.
+
+    A fill reaches the strategy ``execution.latency["response"]`` after the
+    venue booked it. Readable only in the expressions of a quote
+    (``Strategy.quote``).
+    """
+    return Expr("SimState", "LastFillPx", _side(side))
+
+
+def queue_ahead(side: str) -> Expr:
+    """Size queued ahead of the strategy's newest live order on ``side``
+    (``"bid"`` or ``"ask"``), at its price.
+
+    The venue's estimate as of its last answer about that order (its
+    acknowledgement, a partial fill), delayed like every answer; NaN when
+    there is no live order on that side, or before the first answer about it
+    has arrived. On a market stored order by order, under its exact queue,
+    it is the volume ahead of the order exactly, as the feed shows it at the
+    strategy's clock (``feed`` behind): it moves at every execution or
+    cancellation ahead, once the acknowledgement has told the strategy which
+    order is its own. Readable only in the expressions of a quote
+    (``Strategy.quote``).
+    """
+    return Expr("SimState", "QueueAhead", _side(side))
+
+
+def order_price(side: str) -> Expr:
+    """Price of the strategy's newest live order on ``side`` (``"bid"`` or
+    ``"ask"``), as the strategy knows it; NaN when there is none.
+
+    The order ``order_age(side)`` and ``queue_ahead(side)`` read: with
+    several quotes on one side, the one sent last. An order sent and not yet
+    acknowledged has its price already (the price it was sent at, on the
+    symbol's tick grid); an order whose cancellation is on its way keeps it
+    until the answer arrives.
+
+    What it is for: withdrawing a quote whose price the market left, instead
+    of moving it (a moved price cancels AND posts again, rule 4 of
+    ``Strategy.quote``)::
+
+        from manifoldbt.indicators import abs_val
+
+        best = bt.book.bid_price_at(1)
+        left_behind = abs_val(bt.order_price("bid") - best) > 1e-6   # False without an order (NaN)
+
+    Readable only in the expressions of a quote (``Strategy.quote``).
+    """
+    return Expr("SimState", "OrderPrice", _side(side))
+
+
+def position_age() -> Expr:
+    """Seconds since the position left zero, or changed sign, as the
+    strategy knows it; NaN while it is flat.
+
+    The position is the one ``position()`` reads: the fills that have
+    reached the strategy, ``execution.latency["response"]`` after the venue
+    booked them. The age counts from the instant the fill that opened the
+    position (or flipped its sign) reached the strategy, on its clock, so at
+    the first wake-up that sees the position it is already the time elapsed
+    since that fill arrived. A fill that adds to or trims the position
+    without crossing zero leaves the age as it is; a position within 1e-12
+    of zero is flat. A maximum holding time is one comparison::
+
+        stale = bt.position_age() >= 2.0     # False while flat (NaN)
+
+    Readable only in the expressions of a quote (``Strategy.quote``).
+    """
+    return Expr("SimState", "PositionAge")
+
+
+def last_fill_age(side: Optional[str] = None) -> Expr:
+    """Seconds since the strategy's last fill on ``side`` reached it
+    (``"bid"``: a buy, ``"ask"``: a sell); without ``side``, since its last
+    fill on either. NaN before the first.
+
+    Counted, on the strategy's clock, from the instant the fill reached it:
+    ``execution.latency["response"]`` after the venue booked it, the instant
+    ``position()``, ``cash()`` and ``last_fill_px(side)`` change. Without
+    ``side`` it is ``min_val`` of the two sides, which ignores a side that
+    never filled.
+
+    Readable only in the expressions of a quote (``Strategy.quote``).
+    """
+    if side is None:
+        return Expr(
+            "Function",
+            "min",
+            [Expr("SimState", "LastFillAge", "Bid"), Expr("SimState", "LastFillAge", "Ask")],
+        )
+    return Expr("SimState", "LastFillAge", _side(side))
+
+
+def last_cancel_age(side: str) -> Expr:
+    """Seconds since the strategy SENT its last cancellation of an order on
+    ``side`` (``"bid"`` or ``"ask"``), on its clock; NaN before the first.
+
+    Counted from the sending, not from the venue's answer: the strategy
+    knows when it cancelled without waiting, whatever the latencies, and a
+    cancellation that arrives too late (the order filled first) was still
+    sent. Every cancellation of the side counts, whichever quote sent it: a
+    quote withdrawn (``enabled`` false, a size of zero) and a quote moved to
+    another price (cancelled, then posted again) alike. An order that fills,
+    is refused, or expires (the rest of an IOC) is not a cancellation.
+
+    A pause before a quote posts again after it cancelled is
+    ``.quote(..., cooldown=Interval.millis(500))``. Written with this age
+    instead, it is the pause of the side::
+
+        paused = bt.last_cancel_age("bid") < 0.5
+        .quote("buy", price, size, enabled=... & ~paused)
+
+    Write it as ``~(age < d)``, not ``age >= d``: before the first
+    cancellation the age is NaN, a comparison with NaN is false, and
+    ``age >= d`` would keep the quote off until something is cancelled.
+
+    Readable only in the expressions of a quote (``Strategy.quote``).
+    """
+    return Expr("SimState", "LastCancelAge", _side(side))
+
+
+def cash() -> Expr:
+    """Cash of the account as the fills that have reached the strategy say:
+    ``initial_capital``, minus what the buys cost, plus what the sells
+    brought, fees included.
+
+    Readable only in the expressions of a quote (``Strategy.quote``).
+    """
+    return Expr("SimState", "Cash")
+
+
+def _book_price_at(side: str, level: Any) -> Expr:
+    if isinstance(level, bool):
+        raise TypeError("level must be an int or an expression, got bool")
+    if isinstance(level, int) and level < 1:
+        raise ValueError(f"level must be 1 or more (1 = best), got {level}")
+    return Expr("SimState", "BookPriceAt", _side(side), _coerce(level))
+
+
+# ---------------------------------------------------------------------------
+# round / clip
+# ---------------------------------------------------------------------------
+#
+# Named after the Python builtins on purpose, and they answer as the builtins
+# do when nothing in the call is an expression: ``mbt.round(2.5) == 2``, so a
+# ``from manifoldbt import *`` that shadows the builtin changes nothing for
+# plain numbers.
+
+
+def round(x: Any, ndigits: Optional[int] = None) -> Any:  # noqa: A001 - mirrors the builtin
+    """Round to the nearest integer, an exact half going to the EVEN one.
+
+    The rule of Python's ``round`` (``round(0.5) == 0``, ``round(1.5) == 2``,
+    ``round(-2.5) == -2``), applied to a series. A null stays null, a NaN stays
+    NaN. For a price on a tick grid use ``expr.round_to(step)``, whose half
+    goes up.
+
+    On plain numbers, this IS the builtin ``round``.
+    """
+    if isinstance(x, Expr):
+        if ndigits is not None:
+            raise TypeError(
+                "round(expr) rounds to an integer and takes no ndigits; to round "
+                "onto a price grid use expr.round_to(step)"
+            )
+        return Expr("Function", "round", [x])
+    if isinstance(x, MultiExpr):
+        raise x._reject("It was passed to round().")
+    return builtins.round(x) if ndigits is None else builtins.round(x, ndigits)
+
+
+def clip(x: Any, lo: Any, hi: Any) -> Any:
+    """``x`` brought into ``[lo, hi]``.
+
+    A NaN in any of the three gives NaN (as ``numpy.clip``: an unknown value
+    does not become a bound), a null gives null, and ``lo > hi`` gives ``hi``.
+    Each argument may be a number or an expression.
+    """
+    if any(isinstance(v, (Expr, MultiExpr)) for v in (x, lo, hi)):
+        return Expr("Function", "clip", [_coerce(x), _coerce(lo), _coerce(hi)])
+    x, lo, hi = float(x), float(lo), float(hi)
+    if x != x or lo != lo or hi != hi:
+        return float("nan")
+    return min(max(x, lo), hi)
 
 
 def hold() -> Expr:
@@ -1087,6 +1676,15 @@ def param(
     The returned ``Expr`` serializes as ``Expr::Parameter(name)``.
     Metadata (default, range, description) is stored as ``_param_meta``
     and picked up by :class:`Strategy` when building the ``ParamSpec``.
+
+    The default belongs to the expression, so to the strategy that holds it:
+    two strategies built in one process, each with its own
+    ``param("slow", default=...)``, each run with their own default. Within
+    one strategy, a name may appear several times; a use without a default
+    reads the default another use gives, and two different defaults are
+    refused when the strategy is serialised, unless the strategy declares the
+    parameter itself with ``Strategy.param(name, default=...)``, which then
+    wins over every default written in its expressions.
     """
     expr = Expr("Parameter", name)
     expr._param_meta = {

@@ -81,8 +81,18 @@ def resolve_show(show: "bool | str | None",
 
 
 def format_pct(value: float, decimals: int = 1) -> str:
-    """Format a decimal fraction as a percentage string."""
+    """Format a decimal fraction as a percentage string; ``n/a`` for NaN (a
+    metric the run did not report, such as a CAGR under two days)."""
+    if value != value:
+        return "n/a"
     return f"{value * 100:+.{decimals}f}%"
+
+
+def format_ratio(value: float, decimals: int = 2) -> str:
+    """Format a ratio (Sharpe, Sortino, Calmar); ``n/a`` for NaN."""
+    if value != value:
+        return "n/a"
+    return f"{value:.{decimals}f}"
 
 
 def format_currency(value: float, currency: str = "USD") -> str:
