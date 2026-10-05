@@ -89,6 +89,22 @@ class Interval:
     """Factory for bar interval configuration dicts."""
 
     @staticmethod
+    def millis(n: int = 1) -> Dict[str, int]:
+        """Milliseconds.
+
+        Not a bar size: no store holds sub-second bars, and the bar engine
+        refuses it as ``bar_interval`` by name. It is a DURATION, for the
+        places that read one: a window in time
+        (``rolling_sum(Interval.millis(500))``), the lifetime of an order
+        (``time_in_force=Interval.millis(500)``), a latency
+        (``execution.latency={"order": Interval.millis(5)}``), and the
+        wake-up clock of a strategy that quotes (``Strategy.quote``), which
+        takes it as ``bar_interval``: ``Interval.millis(100)`` wakes it ten
+        times a second.
+        """
+        return {"Millis": n}
+
+    @staticmethod
     def seconds(n: int = 1) -> Dict[str, int]:
         return {"Seconds": n}
 
@@ -103,6 +119,31 @@ class Interval:
     @staticmethod
     def days(n: int = 1) -> Dict[str, int]:
         return {"Days": n}
+
+    @staticmethod
+    def trades() -> str:
+        """The trade clock: one simulation row per trade of the stored tape.
+
+        Not a duration, so it is a bare name rather than a count. Passed as
+        ``bar_interval``, the simulation grid becomes the tape itself, in the
+        order the venue printed it: ``open``, ``high``, ``low``, ``close`` and
+        ``vwap`` all equal the trade's price, ``volume`` is its quantity, and
+        the flow columns ``side`` (+1 aggressive buy, -1 aggressive sell),
+        ``buy_volume`` and ``sell_volume`` say who crossed. ``bid``, ``ask``,
+        ``spread``, ``depth_at_best_bid`` and ``depth_at_best_ask`` carry the
+        stored book as of each print, and are null when no book is stored.
+
+        Every count the engine expresses in bars then counts EVENTS:
+        ``signal_delay``, ``warmup_bars``, ``time_in_force={"GTB": n}`` and any
+        window given as an integer. A window given as a duration still counts
+        time, so ``rolling_sum(Interval.seconds(34))`` reads thirty-four
+        seconds of prints and ``rolling_sum(34)`` reads thirty-four prints.
+
+        Passed as ``output_resolution``, it asks for the equity and position
+        curves per event instead of the one-second default this clock uses.
+        See the "Trade Clock" section of the strategy authoring guide.
+        """
+        return "Trades"
 
 
 # ---------------------------------------------------------------------------

@@ -144,7 +144,13 @@ def test_lite_sweep_matches_run_on_intraday_bars(tmp_path):
         )
 
 
-@pytest.mark.parametrize("signal_delay", [0, 1])
+# Deux delais NON NULS, et c'est le point du test : ce qui est epingle est que
+# le noyau rapide remplit a l'ouverture de la barre d'EXECUTION, donc que le
+# decalage compte. `signal_delay=0` etait la troisieme valeur ; la surface le
+# refuse maintenant avec AtOpen, parce qu'on remplirait alors a une ouverture
+# anterieure a la cloture qui a produit le signal. Voir
+# test_garde_configuration_execution.
+@pytest.mark.parametrize("signal_delay", [1, 2])
 @pytest.mark.parametrize("allow_short", [False, True])
 def test_lite_sweep_matches_run_at_open(tmp_path, signal_delay, allow_short):
     """Same contract as above, for ``execution_price="AtOpen"``.
@@ -211,27 +217,21 @@ def test_lite_sweep_matches_run_at_open(tmp_path, signal_delay, allow_short):
         f"run_sweep_lite()={lite_result.final_equity!r}"
     )
 
-    # `run()` divides by the FIRST point of its equity curve; the lite path
-    # divides by the initial capital. Under AtOpen with signal_delay=0 the very
-    # first bar fills at its own open, so that first point already carries the
-    # bar's profit and loss and the two bases differ. That is a pre-existing
-    # choice-of-base defect -- the mirror of the one this file's docstring
-    # describes for the lite path -- and NOT a divergence of the simulation: the
-    # equity paths above are identical. Pinned by its exact relation rather than
-    # tolerated, so that fixing the base turns this branch red instead of
-    # leaving a silent tolerance behind.
+    # Both paths measure every return from the initial capital. Under AtOpen
+    # with signal_delay=0 the very first bar fills at its own open, so the first
+    # point of the equity curve already carries that bar's profit and loss.
+    # `run()` used to divide by that point instead, and the two total_returns
+    # differed by exactly their bases; it now measures from the capital too, so
+    # the first bar's costs count and every metric below matches.
     first_equity = float(np.asarray(result.equity_curve)[0])
     if first_equity != CAPITAL:
-        assert (1.0 + full["total_return"]) * first_equity == pytest.approx(
-            (1.0 + lite["total_return"]) * CAPITAL, rel=1e-12
-        ), "the two total_returns differ by more than their base"
-    else:
-        for name in MUST_MATCH:
-            expected, got = full[name], lite[name]
-            assert abs(expected - got) <= 1e-9 * max(1.0, abs(expected)), (
-                f"{name}: run()={expected!r} but run_sweep_lite()={got!r}. "
-                "The AtOpen fast path has drifted from the full simulation."
-            )
+        assert full["total_return"] == last_equity / CAPITAL - 1.0
+    for name in MUST_MATCH:
+        expected, got = full[name], lite[name]
+        assert abs(expected - got) <= 1e-9 * max(1.0, abs(expected)), (
+            f"{name}: run()={expected!r} but run_sweep_lite()={got!r}. "
+            "The AtOpen fast path has drifted from the full simulation."
+        )
 
     # AtOpen must not be the same backtest as AtClose, or everything above is
     # vacuous: a kernel that ignored the setting would pass it.

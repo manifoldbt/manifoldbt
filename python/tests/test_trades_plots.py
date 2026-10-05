@@ -2,7 +2,7 @@
 
 The pairing is pinned to the engine's own ``trade_stats`` rather than to
 hand-written expectations: if ``round_trips()`` ever drifts from
-``bt_analytics::build_round_trips``, the count, win rate and expectancy stop
+the engine's own round-trip pairing, the count, win rate and expectancy stop
 agreeing and these fail. The chart tests assert at the figure-spec level,
 the same way ``test_plot_charts.py`` does.
 """

@@ -1,9 +1,10 @@
 """Pure-Python tests for the Expr DSL serialization.
 
-These tests verify that the Python DSL produces JSON matching the Rust
-bt_expr::Expr serde (externally-tagged) format.  No compiled Rust
-extension needed.
+These tests verify that the Python DSL produces the externally-tagged JSON
+format the engine reads.  No compiled extension needed.
 """
+import pytest
+
 from manifoldbt.expr import Expr, col, lit, param, when
 
 
@@ -153,8 +154,19 @@ def test_cumprod():
     assert expr.to_json() == {"CumProd": {"Column": "returns"}}
 
 
-def test_rank():
-    expr = col("score").rank()
+def test_full_series_rank():
+    expr = col("score").full_series_rank()
+    assert expr.to_json() == {"Rank": {"Column": "score"}}
+
+
+def test_rank_reste_un_alias_mais_previent():
+    """L'ancien nom continue de marcher, en disant pourquoi il a change.
+
+    Le JSON est le meme : c'est le nom Python qui bouge, pas le format de
+    serialisation, donc une strategie deja enregistree se relit.
+    """
+    with pytest.warns(DeprecationWarning, match="whole series"):
+        expr = col("score").rank()
     assert expr.to_json() == {"Rank": {"Column": "score"}}
 
 

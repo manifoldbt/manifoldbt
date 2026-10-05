@@ -1,7 +1,7 @@
 """Round trips rebuilt from the fill log: one row per entry-to-flat cycle.
 
 The trades table the engine returns has one row per FILL. This module pairs
-those fills into round trips the way ``bt_analytics::build_round_trips`` does
+those fills into round trips the way the engine's own trade statistics do
 (FIFO on the average entry price, partial closes, direction flips), so that
 the count, win rate and expectancy read off the result agree with
 ``metrics["trade_stats"]`` to the last digit. Lives outside ``plot/`` for the
@@ -62,6 +62,78 @@ def round_trips(result, *, include_open: bool = True) -> Dict[str, np.ndarray]:
     ``include_open=False``. The engine's own ``trade_stats`` never counts
     open positions, so compare against ``include_open=False``.
     """
+    cols = _engine_columns(result, include_open)
+    if cols is None:
+        cols = _walk(result, include_open)
+    entry_ns = np.asarray(cols[1], dtype=np.int64)
+    exit_ns = np.asarray(cols[2], dtype=np.int64)
+    entry_price = np.asarray(cols[4], dtype=np.float64)
+    quantity = np.asarray(cols[6], dtype=np.float64)
+    pnl = np.asarray(cols[8], dtype=np.float64)
+    notional = entry_price * quantity
+    with np.errstate(divide="ignore", invalid="ignore"):
+        return_pct = np.where(notional > 0.0, pnl / notional, 0.0)
+
+    return {
+        "symbol_id": np.asarray(cols[0], dtype=np.uint32),
+        "entry_timestamp": entry_ns.view("datetime64[ns]"),
+        "exit_timestamp": exit_ns.view("datetime64[ns]"),
+        "side": np.asarray(cols[3], dtype=np.uint8),
+        "entry_price": entry_price,
+        "exit_price": np.asarray(cols[5], dtype=np.float64),
+        "quantity": quantity,
+        "fees": np.asarray(cols[7], dtype=np.float64),
+        "pnl": pnl,
+        "return_pct": return_pct,
+        "exit_reason": np.asarray(cols[9], dtype=np.int16),
+        "holding_seconds": (exit_ns - entry_ns) / _NS_PER_SECOND,
+        "is_open": np.asarray(cols[10], dtype=bool),
+        "entry_row": np.asarray(cols[11], dtype=np.int64),
+        "exit_row": np.asarray(cols[12], dtype=np.int64),
+    }
+
+
+#: The thirteen raw columns of a round trip, in the order of the walk's tuples,
+#: with the dtype each one is read as.
+_RAW_COLUMNS = (
+    ("symbol_id", np.uint32), ("entry_ns", np.int64), ("exit_ns", np.int64),
+    ("side", np.uint8), ("entry_price", np.float64), ("exit_price", np.float64),
+    ("quantity", np.float64), ("fees", np.float64), ("pnl", np.float64),
+    ("exit_reason", np.int16), ("is_open", bool), ("entry_row", np.int64),
+    ("exit_row", np.int64),
+)
+
+
+def _engine_columns(result, include_open: bool):
+    """The walk below, run in the engine on the result's trades table (and its
+    positions, for the open ones): the same thirteen columns to the bit.
+    ``None`` when the tables are not ``pyarrow`` batches in the engine's
+    shape, and the walk below answers."""
+    import pyarrow as pa
+
+    from manifoldbt._native import _round_trips_columns
+
+    trades = getattr(result, "trades", None)
+    if not isinstance(trades, pa.RecordBatch):
+        return None
+    positions = None
+    if include_open:
+        # Read only when a position is left open, by the walk: whatever reading
+        # it raises is the walk's to raise, so a failure here hands over to it.
+        try:
+            positions = result.positions
+        except Exception:
+            positions = None
+        if positions is not None and not isinstance(positions, pa.RecordBatch):
+            return None
+    got = _round_trips_columns(trades, positions, include_open)
+    if got is None:
+        return None
+    return [np.frombuffer(got[name], dtype=dtype) for name, dtype in _RAW_COLUMNS]
+
+
+def _walk(result, include_open: bool) -> list:
+    """The fill log paired in the interpreter: the thirteen columns as tuples."""
     ta = trades_arrays(result)
     n = len(ta.get("symbol_id", ()))
 
@@ -141,31 +213,4 @@ def round_trips(result, *, include_open: bool = True) -> Dict[str, np.ndarray]:
                 EXIT_REASON_OPEN, True, o[5], -1,
             ))
 
-    m = len(out)
-    cols = list(zip(*out)) if m else [()] * 13
-    entry_ns = np.asarray(cols[1], dtype=np.int64)
-    exit_ns = np.asarray(cols[2], dtype=np.int64)
-    entry_price = np.asarray(cols[4], dtype=np.float64)
-    quantity = np.asarray(cols[6], dtype=np.float64)
-    pnl = np.asarray(cols[8], dtype=np.float64)
-    notional = entry_price * quantity
-    with np.errstate(divide="ignore", invalid="ignore"):
-        return_pct = np.where(notional > 0.0, pnl / notional, 0.0)
-
-    return {
-        "symbol_id": np.asarray(cols[0], dtype=np.uint32),
-        "entry_timestamp": entry_ns.view("datetime64[ns]"),
-        "exit_timestamp": exit_ns.view("datetime64[ns]"),
-        "side": np.asarray(cols[3], dtype=np.uint8),
-        "entry_price": entry_price,
-        "exit_price": np.asarray(cols[5], dtype=np.float64),
-        "quantity": quantity,
-        "fees": np.asarray(cols[7], dtype=np.float64),
-        "pnl": pnl,
-        "return_pct": return_pct,
-        "exit_reason": np.asarray(cols[9], dtype=np.int16),
-        "holding_seconds": (exit_ns - entry_ns) / _NS_PER_SECOND,
-        "is_open": np.asarray(cols[10], dtype=bool),
-        "entry_row": np.asarray(cols[11], dtype=np.int64),
-        "exit_row": np.asarray(cols[12], dtype=np.int64),
-    }
+    return list(zip(*out)) if out else [()] * 13

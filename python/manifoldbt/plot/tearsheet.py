@@ -16,7 +16,7 @@ from manifoldbt.plot._theme import (
     theme_context,
 )
 from manifoldbt._convert import equity_with_dates
-from manifoldbt.plot._utils import auto_title, chart_div, format_pct, resolve_show
+from manifoldbt.plot._utils import auto_title, chart_div, format_pct, format_ratio, resolve_show
 from manifoldbt.plot.backtest import (
     annual_returns,
     drawdown,
@@ -201,11 +201,11 @@ def tearsheet(
         + _m("Volatility", format_pct(metrics.get("volatility", 0)))
         + _m("Best Day", format_pct(metrics.get("best_day", 0)))
         + _m("Worst Day", format_pct(metrics.get("worst_day", 0)))
-        + _m("% Pos Days", f"{metrics.get('pct_positive_days', 0):.1%}")
+        + _m("% Pos Days", format_pct(metrics.get("pct_positive_days", 0)).lstrip("+"))
         + _section("RATIOS")
-        + _m("Sharpe", f"{metrics.get('sharpe', 0):.2f}")
-        + _m("Sortino", f"{metrics.get('sortino', 0):.2f}")
-        + _m("Calmar", f"{metrics.get('calmar', 0):.2f}")
+        + _m("Sharpe", format_ratio(metrics.get("sharpe", 0)))
+        + _m("Sortino", format_ratio(metrics.get("sortino", 0)))
+        + _m("Calmar", format_ratio(metrics.get("calmar", 0)))
         + _section("TRADING")
         + _m("Trades", f"{ts.get('total_trades', metrics.get('total_trades', 0))}")
         + _m("Win Rate", f"{ts.get('win_rate', metrics.get('win_rate', 0)):.1%}")
@@ -213,6 +213,21 @@ def tearsheet(
         + _m("Avg Hold", _fmt_hold_time(ts.get("avg_holding_seconds", 0)))
         + _m("Fees", f"{ts.get('total_fees', 0):.2f}")
     )
+
+    # What the market did after each fill, when the run asked for it. A maker
+    # is judged on this as much as on its fees: the drift against the position
+    # after a fill is what a passive quote actually pays.
+    marks = getattr(result, "fill_marks", None)
+    if marks:
+        metrics_html += _section("FILL MARKS (bp)")
+        for h in marks.get("horizons", []):
+            mean = h.get("mean_bps", float("nan"))
+            se = h.get("stderr_bps", float("nan"))
+            metrics_html += _m(f"+{h.get('horizon', '?')}", f"{mean:+.3f} +/- {se:.3f}")
+        half = marks.get("half_spread_captured_bps", float("nan"))
+        if half == half:
+            metrics_html += _m("Half-spread", f"{half:+.4f}")
+        metrics_html += _m("Marked fills", f"{marks.get('fills_total', 0):,}")
 
     # ── plotly.js include ─────────────────────────────────────────
     if plotlyjs == "inline":

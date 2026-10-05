@@ -23,11 +23,8 @@ import json
 import os
 import re
 import sys
-import tempfile
 import threading
 import time
-import urllib.error
-import urllib.request
 from typing import Optional
 
 PACKAGE = "manifoldbt"
@@ -120,6 +117,8 @@ def _save(state: dict) -> None:
     notebook it was copied from), and a half-written file would be read as "never
     checked" by every run after it.
     """
+    import tempfile
+
     tmp = None
     try:
         os.makedirs(_cache_dir(), exist_ok=True)
@@ -221,6 +220,12 @@ def _newer(current: str, latest: str) -> Optional[str]:
 # ---------------------------------------------------------------------------
 def _fetch(etag: Optional[str]) -> Optional[dict]:
     """Ask PyPI for the latest release. None on any failure whatsoever."""
+    # Imported here, on the background thread that asks PyPI: urllib.request
+    # pulls http.client and the email package, some 20 ms that every
+    # `import manifoldbt` paid up front for a check it does not wait for.
+    import urllib.error
+    import urllib.request
+
     headers = {"Accept": "application/json", "User-Agent": "manifoldbt-update-check"}
     if etag:
         # The full document is a few hundred kilobytes (every file of every

@@ -13,6 +13,8 @@ Quick start::
     bt.plot.equity(result)                 # single chart, opens on its own
     bt.plot.trades(result)                 # round trips on the price
     bt.plot.trade_pnl(result)              # PnL of every round trip
+    bt.plot.fill_marks(result)             # adverse selection after each fill
+    bt.plot.reconcile(rec)                 # real fills against the backtest
 
 Every chart is interactive (crosshair, hover, zoom) and **shows itself by
 default**: plotting is what you asked for, so no ``show=`` is needed. Charts
@@ -59,6 +61,8 @@ from manifoldbt.plot.backtest import (
 from manifoldbt.plot.chart import chart
 
 # Trade-level charts
+from manifoldbt.plot.fill_marks import fill_marks
+from manifoldbt.plot.reconcile import reconcile
 from manifoldbt.plot.trades import trade_pnl, trades
 
 # Research charts
@@ -96,6 +100,8 @@ __all__ = [
     "rolling_volatility",
     "trades",
     "trade_pnl",
+    "fill_marks",
+    "reconcile",
     # Research plots
     "heatmap_2d",
     "surface_3d",

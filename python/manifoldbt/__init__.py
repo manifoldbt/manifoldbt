@@ -43,13 +43,21 @@ from manifoldbt._native import (
     _flush_usage as _flush_usage_native,
     license_expiry as _license_expiry,
     license_info as _license_info,
+    _grant_couvre,
     compile_strategy_json,
     run as _run_native,
+    run_quotes as _run_quotes_native,
+    run_quote_sweep as _run_quote_sweep_native,
+    run_quote_sweep_lite as _run_quote_sweep_lite_native,
+    run_quote_batch as _run_quote_batch_native,
+    run_quote_batch_lite as _run_quote_batch_lite_native,
+    run_with_fill_rule as _run_with_fill_rule_native,
     run_batch as _run_batch_native,
     run_batch_lite as _run_batch_lite_native,
     run_json,
     run_sweep as _run_sweep_native,
     run_sweep_lite as _run_sweep_lite_native,
+    reconcile_fills as _reconcile_fills_native,
     sweep_columns as _sweep_columns_native,
     run_with_parquet,
     py_run_walk_forward as _run_walk_forward_native,
@@ -66,11 +74,14 @@ from manifoldbt._native import (
 from manifoldbt._serde import scalar_value_to_json
 from manifoldbt.crossasset import prepare_cross_asset as _prepare_cross_asset
 from manifoldbt.config import (
+    AccountPhase,
+    AccountRules,
     BacktestConfig,
     ExecutionConfig,
     FeeConfig,
     OrderConfig,
     VenueFees,
+    account_sessions,
     entry_price,
     resolve_universe,
 )
@@ -81,7 +92,7 @@ from manifoldbt.exceptions import (
     LicenseError,
     StrategyError,
 )
-from manifoldbt.expr import AssetRef, Expr, TimeframeRef, asset, choice, col, exo, hold, lit, param, s, scan, symbol_ref, tf, when
+from manifoldbt.expr import AssetRef, Expr, TimeframeRef, asset, cash, choice, clip, col, exo, hold, last_cancel_age, last_fill_age, last_fill_px, lit, live_qty, order_age, order_price, param, position, position_age, queue_ahead, round, s, scan, symbol_ref, tf, when
 from manifoldbt.helpers import (
     ExecutionPrice,
     FillModel,
@@ -91,10 +102,12 @@ from manifoldbt.helpers import (
     time_range,
 )
 from manifoldbt.portfolio import Portfolio
-from manifoldbt.result import Result
+from manifoldbt.reconcile import Reconciliation, fills_to_columns as _fills_to_columns
+from manifoldbt.result import QuoteResult, Result
 from manifoldbt.strategy import Strategy
 from manifoldbt.sweep import SweepResult
 from manifoldbt import indicators
+from manifoldbt import book
 
 # Managed compute. Imported eagerly, unlike `plot` and `diagnostics`: it pulls
 # nothing but the standard library, and `mbt.cloud` reading as missing until
@@ -221,15 +234,25 @@ def _require_pro(feature: str) -> None:
     )
 
 
-def _require_pro_for_gpu(device, feature: str) -> None:
-    """Gate GPU acceleration (``device="cuda"``/``"gpu"``) behind Pro.
+def _require_grant_for_gpu(device, feature: str) -> None:
+    """Gate GPU acceleration (``device="cuda"``/``"gpu"``) behind its tier.
 
     Reported here so that every GPU entry point raises the same clean
-    ``LicenseError`` as the other Pro features, instead of each surfacing its own
-    error type from deeper in the run. No-op for CPU or for Pro users.
+    ``LicenseError``, instead of each surfacing its own error type from deeper in
+    the run. No-op for CPU, and no-op for a licence that carries it.
+
+    GPU acceleration is a Researcher feature. Note that
+    ``license_info()`` reports ``"Pro"`` for a Researcher licence, because
+    Researcher includes everything Pro has: the tier string is not the way to
+    tell whether a given feature is covered.
     """
     if isinstance(device, str) and device.lower() in ("cuda", "gpu"):
-        _require_pro(feature)
+        if _grant_couvre("gpu_sweep"):
+            return
+        raise LicenseError(
+            f"'{feature}' is a Researcher feature; a Pro licence does not unlock "
+            f"it. What Researcher includes: www.manifoldbt.com/researcher"
+        )
 
 
 # Community fan-out budget: sweeps and batches may run up to this many backtests
@@ -266,8 +289,8 @@ def _require_pro_over_combos(n_combos: int, what: str) -> None:
 #: Distances de bracket balayables par leur nom, en plus des ``param()``
 #: d'expression. Elles ne passent pas par ``param()`` parce qu'une distance de
 #: bracket est un champ de configuration, pas un noeud d'expression : rien ne
-#: l'evalue. Doit rester aligne sur ``ORDER_SWEEP_PARAMS`` (bt-core,
-#: orchestrator.rs), qui fait la substitution par combinaison.
+#: l'evalue. Doit rester aligne sur la liste des distances que le moteur
+#: substitue lui-meme a chaque combinaison.
 _ORDER_SWEEP_PARAMS = frozenset({"stop_loss", "take_profit", "trailing_stop"})
 
 
@@ -487,10 +510,86 @@ def _reject_resting_order_without_delay(cfg: BacktestConfig, strategy) -> None:
     )
 
 
+#: Execution prices that `signal_delay = 0` is sound with: both fill at the
+#: close of the bar that produced the signal, which is the information the
+#: decision was made on. Every other price is a point *inside* that bar, so
+#: reaching it would have meant trading before that close.
+_CLOSE_EXECUTION_PRICES = frozenset({"AtClose", "NextBarClose"})
+
+#: Columns `ExecutionPrice.custom(name)` resolves against the bar schema,
+#: before it looks at the strategy's own signals. Filling on one of these at
+#: `signal_delay = 0` hands the strategy a point of its own bar, which is why
+#: `custom("low")` measures +358% on the bench where `AtClose` measures +5%.
+#: A name absent from this set is either a signal the strategy declared, which
+#: is legitimate, or unknown, which the engine rejects on its own.
+_BAR_COLUMNS = frozenset({
+    "open", "high", "low", "close", "volume", "vwap",
+    "bid", "ask", "spread", "buy_volume", "sell_volume", "trade_count",
+})
+
+
+def _reject_intrabar_price_without_delay(cfg: BacktestConfig) -> None:
+    """At `signal_delay = 0`, a fill cannot land on a point of the bar it decided on.
+
+    Decide on bar `t`, execute on bar `t` is sound at the close: the fill price
+    *is* the information the decision was made on, and it is what
+    `signal_delay = 0` exists for. It stops being sound as soon as the fill
+    lands somewhere else inside that same bar, because reaching that point
+    would have meant trading before the close that produced the signal.
+    `AtOpen` fills at a price printed before it; `AtVwap` and `MidPrice` are
+    averages over the whole bar; a custom *bar column* like `low` or `high`
+    hands the strategy the bar's own extreme, which is perfect intrabar timing.
+    `NextBarOpen` counts from the signal row shifted by the delay, so at delay
+    zero it names the current bar and behaves exactly like `AtOpen`.
+
+    Measured on a driftless random walk, "long when close > open" returns
+    +1913% under `AtOpen`, +361% under `AtVwap`, `MidPrice` and
+    `custom("low")`, against +5% under the defaults. The engine said nothing.
+
+    **`custom(<a signal the strategy defines>)` is exempt, and deliberately.**
+    There the level is one the DSL computed, and the fill only books if the bar
+    actually traded through it: the band case of `test_exec_price_signal`. It
+    measures +5% on the same bench, like the close. What that level owes to its
+    own bar is the resting-order question, which
+    `_reject_resting_order_without_delay` already carries.
+    """
+    execution = getattr(cfg, "execution", None)
+    if execution is None or getattr(execution, "signal_delay", 1) != 0:
+        return
+    price = getattr(execution, "execution_price", "AtClose")
+    # `ExecutionPrice.custom(name)` serialises as {"Custom": name}.
+    label = next(iter(price)) if isinstance(price, dict) else price
+    if label in _CLOSE_EXECUTION_PRICES:
+        return
+    if isinstance(price, dict):
+        # Refuse only a name that resolves against the BAR schema. A name the
+        # strategy declares is a level it chose, and is exempt. A name that is
+        # neither stays for the engine to reject, so its own "neither a bar
+        # column nor a signal" message reaches the user unchanged.
+        if price[label] not in _BAR_COLUMNS:
+            return
+    shown = f'custom({price[label]!r})' if isinstance(price, dict) else label
+    # `ConfigError`, pas `ValueError` : `run()` enveloppe toute `ValueError`
+    # dans `_classify_error`, qui classe par mots-cles. Ce message contient
+    # "signal", donc il ressortirait en `StrategyError` alors que c'est la
+    # configuration d'execution qui est en cause. Lever la bonne classe des le
+    # depart la traverse intacte.
+    raise ConfigError(
+        f"execution_price={shown} needs signal_delay >= 1: with signal_delay=0 "
+        "the order fills at a price taken from the same bar whose close "
+        "produced the signal, so the fill precedes its own cause. Set "
+        "ExecutionConfig(signal_delay=1) to decide on one bar and execute on "
+        "the next, or keep signal_delay=0 with execution_price='AtClose' "
+        "(the default), which fills at the very close the signal was computed "
+        "on."
+    )
+
+
 def _prepare_config(config: BacktestConfig, strategy, store: DataStore) -> BacktestConfig:
     """Prepare config for execution: resolve symbols, convert deprecated fields."""
     cfg = copy.deepcopy(config)
     _reject_resting_order_without_delay(cfg, strategy)
+    _reject_intrabar_price_without_delay(cfg)
 
     # --- Dict universe: {"binance": ["BTC-USDT:perp"], "onchain": ["hashrate"]} ---
     if isinstance(cfg.universe, dict):
@@ -627,8 +726,25 @@ def _attach_option_contracts(cfg: BacktestConfig, store: DataStore) -> None:
     cfg.option_contracts = contracts
 
 
+def _is_trade_clock(interval: Any) -> bool:
+    """Return True for ``Interval.trades()``, which is a name, not a dict.
+
+    `isinstance` first: an `Expr` answers `==` with a comparison expression
+    rather than a bool, and a truthy object here would misread it as the clock.
+    """
+    return isinstance(interval, str) and interval == "Trades"
+
+
 def _is_sub_daily(res: Any) -> bool:
-    """Return True if an Interval dict represents sub-daily resolution."""
+    """Return True if an Interval dict represents sub-daily resolution.
+
+    ``Interval.trades()`` answers False, and deliberately: it is not a
+    resolution to round down but a SHAPE, legal only under the trade clock. The
+    cap below turns a resolution into a coarser one; turning this one into
+    ``None`` would replace a named refusal with a silent success.
+    """
+    if _is_trade_clock(res):
+        return False
     if not isinstance(res, dict):
         return False
     if "Seconds" in res or "Minutes" in res:
@@ -639,7 +755,11 @@ def _is_sub_daily(res: Any) -> bool:
 
 
 def _interval_to_seconds(interval: Any) -> int:
-    """Convert an Interval dict to total seconds."""
+    """Convert an Interval dict to total seconds.
+
+    ``Interval.trades()`` is not a duration and answers 0, which reads
+    everywhere here as "finer than anything", the truth for one row per trade.
+    """
     if not isinstance(interval, dict):
         return 0
     if "Seconds" in interval:
@@ -716,6 +836,11 @@ def _resolve_store(config: BacktestConfig, store: DataStore) -> DataStore:
     if current == "arrow_ipc":
         return store
 
+    # The trade clock reads the tape, never a bar dataset: swapping datasets
+    # under it would pick a resolution nothing then loads.
+    if _is_trade_clock(config.bar_interval):
+        return store
+
     # If user explicitly chose a non-default dataset, respect it
     if current != "bars_1m":
         return store
@@ -748,7 +873,12 @@ def _resolve_store(config: BacktestConfig, store: DataStore) -> DataStore:
 
 
 def _cap_output_resolution(config: BacktestConfig) -> BacktestConfig:
-    """Cap output_resolution to daily for Community users (Pro feature)."""
+    """Cap output_resolution to daily for Community users (Pro feature).
+
+    Per-event output (``Interval.trades()``) is left exactly as written: the
+    engine answers it, either by refusing the shape or by refusing the clock it
+    belongs to, and both answers are better than a silent downgrade.
+    """
     if config.output_resolution is None:
         return config
     if not _is_sub_daily(config.output_resolution):
@@ -937,8 +1067,10 @@ def ingest_trades(
     data_root: str = "data",
     metadata_db: str = "metadata/metadata.sqlite",
     exchange: Optional[str] = None,
-    asset_class: str = "crypto_spot",
+    asset_class: Optional[str] = None,
     progress: bool = True,
+    category: str = "spot",
+    cache_dir: Optional[str] = None,
 ) -> DataStore:
     """Ingest whole days of trades (a tape) from a venue's public archive.
 
@@ -947,19 +1079,76 @@ def ingest_trades(
     Arrow file per UTC day under ``{provider}/ticks/{symbol}/``. Nothing is
     fetched that you did not ask for.
 
-    Providers with a public trade archive: ``"bybit"`` (spot, one ``.csv.gz``
-    per day) and ``"binance"`` (spot aggTrades, one ``.zip`` per day). Both
-    keep a rolling window, so an old day raises a named error rather than
-    returning nothing. ``start`` and ``end`` are ``YYYY-MM-DD`` (an RFC 3339
-    instant is accepted; its date part is used), ``end`` inclusive.
+    Providers with a public trade archive: ``"bybit"`` (one ``.csv.gz`` per
+    day) and ``"binance"`` (spot aggTrades, one ``.zip`` per day). A day the
+    venue did not publish raises a named error rather than returning nothing.
+    ``start`` and ``end`` are ``YYYY-MM-DD`` (an RFC 3339 instant is accepted;
+    its date part is used), ``end`` inclusive.
 
-    Part of the tick layer: not unlocked by any licence sold today, a Pro one
-    included; the engine says so before touching the network.
+    ``category`` names the market, with the words of :func:`ingest_book`:
+
+    * ``"spot"`` (the default): the spot archive of either provider.
+      Timestamps to the millisecond on Bybit.
+    * ``"linear"`` (USDT perps, ``BTCUSDT``) and ``"inverse"``
+      (coin-margined, ``BTCUSD``): Bybit's derivatives archive, from the day
+      the contract was listed (2019-10-01 for BTCUSD, 2020-03-25 for
+      BTCUSDT). Inverse sizes are in contracts (one USD each on BTCUSD), as
+      in the book. Asking for one kind of contract under the other's name is
+      refused with the right name.
+
+    Bybit stamps its derivative trades in seconds with a decimal fraction,
+    converted to nanoseconds exactly (no float on the way). How fine the
+    fraction is depends on the day: up to 2021-12-06, a microsecond on the
+    inverse contracts and a tenth of a millisecond on the linear ones; from
+    2021-12-07 to 2022-12-20, the whole second; from 2022-12-21, a tenth of a
+    millisecond. So several prints often share one timestamp (more than half
+    of them on a day of XRPUSDT in 2023, and every print of a second on the
+    whole-second days): they keep the order the venue matched them in, never
+    re-sorted, and a duration shorter than the stamp (a latency, a
+    ``time_in_force``, a window in time) cannot tell them apart. Files of the
+    days up to 2021-12-06 list the day newest first; they are read back in
+    time order. Bybit identifies a derivative trade by a UUID, which the
+    tape's integer ``trade_id`` cannot hold: it reads back null.
+
+    One symbol is one market and one id. Each stored day records its
+    category, and a store that keeps the ``spot`` tape or book of a symbol
+    refuses its ``linear`` tape (and so on), before anything is downloaded.
+    The tape and the book of a symbol share its ``symbol_id``, the one
+    :func:`ingest_book` used: another id for the same ticker is refused.
+
+    Part of the tick layer: a Researcher licence unlocks it, a Pro one does not;
+    the engine says so before touching the network.
+
+    The tape is the first door of the layer: see "Backtesting on the Tape" in
+    the strategy authoring guide for what reads it and in what order.
+
+    Args:
+        provider: ``"bybit"`` or ``"binance"``.
+        symbol: Symbol on the venue (e.g. ``"BTCUSDT"``).
+        symbol_id: Store id for the symbol, the same as its book's.
+        start: First day, ``YYYY-MM-DD``.
+        end: Last day, inclusive.
+        data_root: Store root.
+        metadata_db: Metadata database.
+        exchange: Venue the symbol is filed under; the provider's name by
+            default. A ``linear`` or ``inverse`` tape is filed under Bybit.
+        asset_class: ``"crypto_spot"`` for ``spot`` and ``"crypto_perp"`` for
+            the two others when left out.
+        progress: Print one line per day.
+        category: ``"spot"``, ``"linear"`` or ``"inverse"``.
+        cache_dir: Keep Bybit's raw daily archives here and reuse them.
 
     Example::
 
         store = bt.ingest_trades("bybit", "BTCUSDT", symbol_id=1,
                                  start="2026-08-25", end="2026-08-25")
+        # The perp's tape, beside its book:
+        bt.ingest_trades("bybit", "XRPUSDT", symbol_id=2,
+                         start="2023-03-01", end="2023-03-01",
+                         category="linear")
+        bt.ingest_book("bybit", "XRPUSDT", symbol_id=2,
+                       start="2023-03-01", end="2023-03-01",
+                       category="linear")
     """
     from manifoldbt._native import py_ingest_trades as _native
 
@@ -971,8 +1160,249 @@ def ingest_trades(
 
     return _native(
         provider, symbol, int(symbol_id), start, end, data_root, metadata_db,
-        exchange, asset_class, cb,
+        exchange, asset_class, cb, category, cache_dir,
     )
+
+
+def ingest_book(
+    provider: str,
+    symbol: str,
+    symbol_id: int,
+    start: str,
+    end: str,
+    *,
+    levels: Optional[int] = None,
+    data_root: str = "data",
+    metadata_db: str = "metadata/metadata.sqlite",
+    category: str = "spot",
+    cache_dir: Optional[str] = None,
+    progress: bool = True,
+    book_format: Optional[str] = None,
+) -> DataStore:
+    """Ingest whole days of order book from a venue's public archive.
+
+    The depth counterpart of :func:`ingest_trades`, with the same shape: you
+    name a provider, a symbol and a range, and the store keeps one Arrow file
+    per UTC day. Each row is one instant the book changed; reading the book
+    back at any instant gives the top ``levels`` of both sides as they stood
+    there.
+
+    How the days are stored (``book_format``):
+
+    * ``"deltas"`` (the default for a new symbol): under
+      ``{provider}/book_delta/{symbol}/``, each row holds only the levels that
+      changed at that instant, compressed. A day of BTCUSDT 200 levels deep
+      is about 44 MB instead of 2.7 GB, and loads in a fraction of a second
+      at any depth. The engine replays the changes as it reads; a book read
+      ten levels deep or less is laid out whole in memory as it loads.
+    * ``"ladder"``: under ``{provider}/book/{symbol}/``, the whole top
+      ``levels`` ladder on every row. Every read is a lookup, which is the
+      cheaper shape at ten levels, and the only shape earlier versions of
+      manifoldbt read.
+
+    Readers see the same states either way. A symbol keeps the shape of its
+    first stored day: ``None`` follows it, and naming the other shape is
+    refused. :func:`convert_book_to_deltas` rewrites a stored book as
+    deltas.
+
+    ``"bybit"`` is the only provider: its archive is the one free source of
+    historical depth. How deep a day goes depends on the market and the date
+    (checked on BTCUSDT, ETHUSDT and BTCUSD; a symbol listed later starts
+    later):
+
+    * ``"linear"`` (USDT perps, ``BTCUSDT``) and ``"inverse"`` (coin-margined,
+      ``BTCUSD``): 500 levels up to 2025-08-20, 200 levels from 2025-08-21.
+      Linear BTCUSDT goes back to 2023-01-18.
+    * ``"spot"``: 200 levels, from about 2025-04-30.
+    * Options: no archive.
+
+    Each day is read from the file Bybit published for it, whichever depth
+    that is. A day it did not publish raises a named error rather than
+    returning nothing. One symbol is one market: a store that already holds
+    the ``spot`` book or tape of a symbol refuses its ``linear`` book, because
+    a depth read from the other market is not an approximation, it is a
+    different number. The book and the tape (:func:`ingest_trades`, same
+    ``category``) of a symbol share its ``symbol_id``. Inverse books count
+    their sizes in contracts (one USD each on BTCUSD), as the venue publishes
+    them.
+
+    A day is a download of 100 to 400 MB and several gigabytes once inflated;
+    it is streamed straight into the store, never held. ``start`` and ``end``
+    are ``YYYY-MM-DD`` (an RFC 3339 instant is accepted; its date part is
+    used), ``end`` inclusive.
+
+    Part of the tick layer, a Researcher feature: a Pro licence does not
+    unlock it, and the engine says so before touching the network.
+
+    What reads the book: the strategy itself, level by level, on bars or on
+    the trade clock (:mod:`manifoldbt.book`: ``bt.book.imbalance(5)``,
+    ``bt.book.bid_size(3)``, ...); the quote columns of the trade clock; the
+    depth the queue finds in front of a resting order
+    (``fill_model={"queue": ...}``); and the mid the fill marks measure
+    against. See "Order Book Columns" and "Backtesting on the Tape" in the
+    strategy authoring guide.
+
+    Args:
+        provider: ``"bybit"``.
+        symbol: Symbol on the venue (e.g. ``"BTCUSDT"``).
+        symbol_id: Store id for the symbol, as for :func:`ingest`.
+        start: First day, ``YYYY-MM-DD``.
+        end: Last day, inclusive.
+        levels: Levels kept per side, up to 500. ``None`` (the default): the
+            depth the symbol's book already has in this store, 200 for a new
+            symbol, the depth Bybit publishes every day at. More than 200
+            holds only where every day of the range was published 500 levels
+            deep: a range with a shallower day in it is refused before
+            anything is downloaded, and the error names the day to end the
+            range before. A store keeps one depth per symbol. A run reads
+            every stored level unless ``BacktestConfig.book_levels`` bounds
+            it.
+        data_root: Store root.
+        metadata_db: Metadata database.
+        category: ``"spot"``, ``"linear"`` or ``"inverse"``.
+        cache_dir: Keep the raw daily archives here and reuse them, one
+            directory per category (``cache_dir/linear/...``); an archive
+            left directly in ``cache_dir`` is not reused.
+        progress: Print one line per day.
+        book_format: ``"deltas"``, ``"ladder"`` or ``None`` (the symbol's
+            shape, deltas for a new symbol).
+
+    Example::
+
+        store = bt.ingest_book("bybit", "BTCUSDT", symbol_id=1,
+                               start="2026-08-25", end="2026-08-25",
+                               category="linear")
+        # A day Bybit published 500 levels deep, all of it:
+        deep = bt.ingest_book("bybit", "BTCUSDT", symbol_id=1,
+                              start="2025-08-20", end="2025-08-20",
+                              category="linear", levels=500,
+                              data_root="data500",
+                              metadata_db="data500/meta.sqlite")
+    """
+    from manifoldbt._native import py_ingest_book as _native
+
+    cb = None
+    if progress:
+        def cb(i, n, day):
+            if i < n:
+                print(f"  book {symbol.upper()} {day} ({i + 1}/{n})", flush=True)
+
+    return _native(
+        provider, symbol, int(symbol_id), start, end,
+        None if levels is None else int(levels),
+        data_root, metadata_db, category, cache_dir, cb, book_format,
+    )
+
+
+def convert_book_to_deltas(
+    symbol: str,
+    *,
+    data_root: str = "data",
+    metadata_db: str = "metadata/metadata.sqlite",
+) -> list:
+    """Rewrite the stored order book of ``symbol`` as deltas, day by day.
+
+    For a book ingested with ``book_format="ladder"``, or by an earlier
+    version of manifoldbt: each day is written as the levels that changed at each
+    instant (see :func:`ingest_book`), then replayed against the stored
+    ladder row by row, every price and size bit for bit, and only then takes
+    its place. A day that does not replay exactly is left as it was and the
+    conversion stops with an error naming the row. Interrupted, the
+    conversion is finished by calling it again; until then the store refuses
+    to read that symbol's book, because it holds days in both shapes.
+
+    A day stored 200 levels deep goes from about 2.7 GB to about 44 MB.
+    Nothing a backtest reads changes. A converted book is not read by
+    earlier versions of manifoldbt.
+
+    Args:
+        symbol: The symbol's ticker in the store (e.g. ``"BTCUSDT"``).
+        data_root: Store root, as for :func:`ingest_book`.
+        metadata_db: Metadata database.
+
+    Returns:
+        ``[(day, rows), ...]`` for every day converted, empty when the book
+        was stored as deltas already.
+    """
+    from manifoldbt._native import py_convert_book_to_deltas as _native
+
+    return [tuple(d) for d in _native(symbol, data_root, metadata_db)]
+
+
+def ingest_mbo(
+    path: str,
+    symbols,
+    date: str,
+    *,
+    data_root: str = "data",
+    metadata_db: str = "metadata/metadata.sqlite",
+    exchange: str = "NASDAQ",
+    tick_size: float = 0.01,
+    progress: bool = True,
+) -> DataStore:
+    """Ingest a day of order-by-order data (market by order) from a file.
+
+    Where :func:`ingest_book` stores how much rests at each price, this
+    stores every order: when it entered the book, each execution,
+    cancellation, deletion or replacement of it, and the prints against
+    orders the book does not show. The place of an order in its queue is
+    then read off the data rather than estimated: a market loaded from these
+    days (:meth:`manifoldbt.sim.Market.from_store`, ``Strategy.quote``)
+    serves resting orders in the exact order of arrival, and reads its book
+    by price exactly as a stored book.
+
+    The file is a day of Nasdaq TotalView-ITCH 5.0: the file Nasdaq publishes
+    (``.gz``, read as it inflates), or a stream of its messages kept as they
+    are (plain or ZSTD-compressed), such as an extract of some symbols. Every
+    symbol asked for is read in one pass. ITCH stamps its messages in
+    nanoseconds since midnight in New York on ``date``: they are stored as
+    instants (UTC), one Arrow file per symbol and UTC day under
+    ``{exchange}/mbo/{symbol}/``. A day that crosses midnight UTC opens on
+    the orders resting then. Orders still resting when the session ends leave
+    the book then.
+
+    Each day is checked as it is written: an event about an order that is
+    not in the book, or taking out more than is left of it, is refused and
+    the day left as it was. Ingesting a day again replaces what it covers
+    and keeps the rest.
+
+    Args:
+        path: The ITCH file.
+        symbols: ``{ticker: symbol_id}``, the tickers as ITCH names them.
+        date: The session's date, ``YYYY-MM-DD`` (New York).
+        data_root: Store root.
+        metadata_db: Metadata database.
+        exchange: Venue the symbols are filed under.
+        tick_size: The price increment recorded for each symbol: a cent,
+            Nasdaq's increment for a price of a dollar or more.
+        progress: Print one line per symbol.
+
+    Returns:
+        The store.
+
+    Example::
+
+        store = bt.ingest_mbo("S120925-v50.txt.gz", {"AAPL": 1, "QQQ": 2},
+                              date="2025-12-09")
+        res = bt.sim.run(maker, bt.sim.Config(), store, symbols=["AAPL"],
+                         start="2025-12-09", end="2025-12-10")
+    """
+    from manifoldbt._native import py_ingest_mbo as _native
+
+    if isinstance(symbols, dict):
+        pairs = [(str(t), int(i)) for t, i in symbols.items()]
+    else:
+        pairs = [(str(t), int(i)) for t, i in symbols]
+
+    cb = None
+    if progress:
+        def cb(ticker, events, days):
+            print(f"  mbo {ticker}: {events} events, {days} day(s)", flush=True)
+
+    store, _ = _native(
+        str(path), pairs, date, data_root, metadata_db, exchange, float(tick_size), cb,
+    )
+    return store
 
 
 def bars_from_trades(
@@ -1055,15 +1485,18 @@ def attach_quotes(
     The bar schema has always carried these columns and the engine has always
     known how to read them (``execution_price="MidPrice"``, per-bar spread for
     cost analysis) — but no ingestion path filled them until now, so they were
-    null. This does, from Bybit's public order-book archives: one ~200 MB
-    archive per day is streamed and reduced to the best bid/ask standing at
-    each bar close, and only those few KB touch the store. Bars outside the
+    null. This does, from Bybit's public order-book archives: one archive of
+    100 to 400 MB per day is streamed and reduced to the best bid/ask standing
+    at each bar close, and only those few KB touch the store. Bars outside the
     quoted range keep their current values.
 
-    Bybit's archive is a rolling window of roughly one year, ``linear``
-    (USDT perps) and ``spot``. The venue quoted is Bybit: on another venue's
-    bars the spread is that of a different book — a reasonable proxy for
-    majors, a real approximation for thin alts.
+    Bybit publishes ``linear`` (USDT perps) and ``inverse`` (coin-margined)
+    books 500 levels deep up to 2025-08-20 and 200 from 2025-08-21 (linear
+    BTCUSDT goes back to 2023-01-18), and ``spot`` books from about
+    2025-04-30; each day is read from whichever file it was published as. A
+    day it did not publish raises a named error. The venue quoted is Bybit: on
+    another venue's bars the spread is that of a different book — a
+    reasonable proxy for majors, a real approximation for thin alts.
 
     Args:
         store: The store holding the symbol's bars (see :func:`ingest`).
@@ -1073,8 +1506,10 @@ def attach_quotes(
         provider: ``"bybit"`` (the only quote source with free history).
         provider_symbol: Symbol on the provider (e.g. ``"BTCUSDT"``). Derived
             from the ticker when omitted: ``BTC-USDT:perp`` -> ``BTCUSDT``.
-        category: ``"linear"`` or ``"spot"``.
-        cache_dir: Keep the raw daily archives here and reuse them.
+        category: ``"linear"``, ``"inverse"`` or ``"spot"``.
+        cache_dir: Keep the raw daily archives here and reuse them, one
+            directory per category (``cache_dir/linear/...``); an archive
+            left directly in ``cache_dir`` is not reused.
         progress: Print one line per day.
 
     Returns:
@@ -1376,6 +1811,14 @@ def _apply_cross_asset(strategy, config: BacktestConfig, store: DataStore):
     ``(strategy_json, config)``; both are the originals when there is nothing
     to rewrite, and resolution failures fall back to the engine's own error.
     """
+    # Nothing to rewrite without a SymbolRef, and the memoised JSON text says
+    # whether there is one without rebuilding the strategy dict and walking
+    # it, which was half of the Python cost of a small run. Conservative: the
+    # word anywhere in the text (a signal named after it, a description)
+    # takes the full path below.
+    strategy_json = strategy.to_json()
+    if '"SymbolRef"' not in strategy_json:
+        return strategy_json, config
     try:
         doc = strategy.to_json_dict()
     except Exception:
@@ -1398,25 +1841,406 @@ def _apply_cross_asset(strategy, config: BacktestConfig, store: DataStore):
     return json.dumps(new_doc), cfg
 
 
+def _split_fill_callable(config: BacktestConfig):
+    """Take a ``fill_model={"python": ...}`` callable out of the config.
+
+    Returns the config the engine serialises, the callable, and whether it
+    answers for traversals; or the config unchanged and ``None``. Written
+    ``{"python": callable}``, or ``{"python": {"fill": callable,
+    "override_traverse": True}}`` to mirror the shape of the DSL route.
+
+    The callable cannot be part of a config -- that is what separates it from a
+    rule written in the DSL -- so it travels beside one, on this one entry
+    point, and ``config._normalise_fill_model`` refuses it by name everywhere
+    else.
+    """
+    fill_model = getattr(config.execution, "fill_model", None) or {}
+    spec = fill_model.get("python")
+    if spec is None:
+        return config, None, False
+    override = False
+    if isinstance(spec, dict):
+        unknown = set(spec) - {"fill", "override_traverse"}
+        if unknown:
+            raise TypeError(
+                f'unknown fill_model["python"] key(s) {sorted(unknown)}: it takes '
+                '"fill" (the callable) and "override_traverse"'
+            )
+        override = bool(spec.get("override_traverse", False))
+        rule = spec.get("fill")
+    else:
+        rule = spec
+    if not callable(rule):
+        raise TypeError(
+            'fill_model["python"] must be a callable invoked once per event with '
+            "the seventeen context fields as positional arguments (or a dict "
+            '{"fill": callable, "override_traverse": bool}), got '
+            f"{type(rule).__name__}"
+        )
+    stripped = {k: v for k, v in fill_model.items() if k != "python"}
+    config = copy.copy(config)
+    config.execution = copy.copy(config.execution)
+    config.execution.fill_model = stripped or None
+    return config, rule, override
+
+def _execution_grid_json(execution_grid) -> str:
+    """An execution grid as the JSON the engine reads.
+
+    The paths are checked in Rust against the config's own shape, so nothing
+    here knows what a queue or a latency is. Two things are done at this
+    boundary because they are Python's alone: an ``Interval`` written as a
+    duration becomes its nanoseconds, and a grid that is not a mapping of
+    lists is refused before it becomes a JSON object with nothing in it.
+    """
+    if not execution_grid:
+        return "{}"
+    if not isinstance(execution_grid, dict):
+        raise TypeError(
+            "execution_grid takes a mapping of dotted config paths to lists of "
+            'values: {"fill_model.queue.assumed_queue": [1, 2, 5], '
+            '"latency.order": [Interval.millis(0), Interval.millis(20)]}'
+        )
+    from manifoldbt.expr import _interval_to_nanos
+
+    out = {}
+    for path, values in execution_grid.items():
+        if isinstance(values, (str, bytes)) or not hasattr(values, "__iter__"):
+            raise TypeError(
+                f"execution_grid[{path!r}] takes a list of values, got "
+                f"{type(values).__name__}"
+            )
+        converted = []
+        for v in values:
+            nanos = _interval_to_nanos(v) if isinstance(v, dict) else None
+            converted.append(nanos if nanos is not None else v)
+        if not converted:
+            raise ValueError(
+                f"execution_grid[{path!r}] has no value: an axis with an empty "
+                "list makes the whole sweep empty"
+            )
+        out[str(path)] = converted
+    return json.dumps(out)
+
+
+def _execution_grid_plan(execution_grid) -> "Tuple[str, int]":
+    """The grid as JSON, and how many configs the sweep will run under.
+
+    One call for both, and called BEFORE the run: a grid that is not a mapping
+    of lists, or an axis with no value, is the caller's own mistake and reads
+    as such rather than as an engine refusal wrapped in a BacktesterError.
+    """
+    payload = _execution_grid_json(execution_grid)
+    if not execution_grid:
+        return payload, 1
+    n = 1
+    for values in execution_grid.values():
+        n *= max(1, len(list(values)))
+    return payload, n
+
+
+def _by_day_arg(by_day) -> Optional[bool]:
+    """``by_day`` as the engine reads it: ``None`` for ``"auto"``."""
+    if isinstance(by_day, str) and by_day == "auto":
+        return None
+    if isinstance(by_day, bool):
+        return by_day
+    raise ValueError(f'by_day takes "auto", True or False, got {by_day!r}')
+
+
 def run(
     strategy: Strategy,
     config: BacktestConfig,
     store: DataStore,
+    *,
+    by_day: Any = "auto",
+    device: str = "cpu",
 ) -> Result:
     """Run a backtest and return a rich Result.
 
     Returns a :class:`Result` with DataFrame conversion, summaries,
     and plotting methods. Access the raw Rust object via ``result.raw``.
+
+    A ``fill_model={"python": callable}`` is routed here and nowhere else: the
+    callable answers how much of each event reaches each resting order, once
+    per event, under the GIL. It is the research route -- slow, and not part of
+    the config, so not sweepable. The rule that sweeps is
+    ``fill_model={"custom": {"fill": <expression>}}``.
+
+    A strategy that quotes (``Strategy.quote``) runs on the order-level
+    simulation instead: woken every ``bar_interval`` (``Interval.millis(n)``
+    is accepted there and nowhere else), its quotes posted, kept, repriced
+    and withdrawn by the venue of ``bt.sim``, entirely in the engine. The
+    result is a :class:`QuoteResult`: this same result plus ``orders_df()``,
+    ``fills_df()`` and ``events_df()``.
+
+    A strategy that quotes over more than one UTC day runs DAY BY DAY
+    (``by_day="auto"``): the engine holds the book and the tape of a few days
+    at a time (the day it plays, the one before it, the next ones prepared
+    ahead) and computes the batch of each day from the wake-ups of that day
+    and those of the days before it that its signals reach back to, so that a
+    month or a year runs in bounded memory. The orders, the fills and the
+    metrics are those of the range held whole. What cannot be computed from a
+    bounded reach (an exponential mean, a cumulative sum, a forward fill, a
+    lead) keeps the range whole under ``"auto"`` and is refused by name under
+    ``by_day=True``; ``by_day=False`` always holds it whole. Held day by day,
+    ``res.sim``'s equity curve is kept at the output resolution rather than
+    at every wake-up. ``device="cuda"`` prepares the days' book on the
+    graphics card, with the same result; a build or a machine without CUDA
+    prepares them on the CPU and says so in a warning.
     """
+    if _quotes(strategy):
+        return _run_quotes(strategy, config, store, by_day=by_day, device=device)
+    if not (isinstance(by_day, str) and by_day == "auto") or device != "cpu":
+        raise TypeError(
+            "by_day= and device= are read by a strategy that quotes (Strategy.quote), "
+            "whose run holds its market day by day; this strategy runs on bars"
+        )
     try:
+        config, fill_rule, override_traverse = _split_fill_callable(config)
         config = _cap_output_resolution(config)
         store = _resolve_store(config, store)
         strategy_json, config = _apply_cross_asset(strategy, config, store)
         cfg_json = _prepared_config_json(config, strategy, store)
-        raw = _run_native(strategy_json, cfg_json, store)
+        if fill_rule is None:
+            raw = _run_native(strategy_json, cfg_json, store)
+        else:
+            raw = _run_with_fill_rule_native(
+                strategy_json,
+                cfg_json,
+                store,
+                fill_rule,
+                override_traverse,
+            )
         return Result(raw)
     except (ValueError, RuntimeError) as exc:
         raise _classify_error(exc) from exc
+
+
+def _quote_config_json(config: BacktestConfig, strategy, store: DataStore) -> str:
+    """The config of a run of quoting strategies, as the engine reads it.
+
+    One preparation for :func:`run`, the sweeps and the batches, so that a
+    combination of a sweep reads exactly the config the same run reads alone.
+    """
+    config, fill_rule, _ = _split_fill_callable(config)
+    if fill_rule is not None:
+        raise ValueError(
+            'fill_model={"python": ...} is not read by a strategy that quotes: its '
+            "resting orders are served by the queue model alone"
+        )
+    return _prepare_config(config, strategy, store).to_json()
+
+
+def _quote_results(pairs, config: BacktestConfig) -> List["QuoteResult"]:
+    """``(result, venue record)`` pairs from the engine, as :class:`QuoteResult`."""
+    from manifoldbt.sim import Config as _SimConfig
+    from manifoldbt.sim import SimResult as _SimResult
+
+    initial_cash = float(config.initial_capital)
+    return [
+        QuoteResult(raw, _SimResult(sim_raw, _SimConfig(initial_cash=initial_cash)))
+        for raw, sim_raw in pairs
+    ]
+
+
+def _run_quotes(
+    strategy: Strategy,
+    config: BacktestConfig,
+    store: DataStore,
+    *,
+    by_day: Any = "auto",
+    device: str = "cpu",
+) -> "QuoteResult":
+    """``mbt.run`` for a strategy that quotes: see :func:`run`."""
+    _require_grant_for_gpu(device, "GPU day preparation")
+    try:
+        cfg_json = _quote_config_json(config, strategy, store)
+        pair = _run_quotes_native(
+            strategy.to_json(), cfg_json, store, by_day=_by_day_arg(by_day), device=device
+        )
+        return _quote_results([pair], config)[0]
+    except (ValueError, RuntimeError) as exc:
+        raise _classify_error(exc) from exc
+
+
+def _quotes(strategy) -> bool:
+    return bool(getattr(strategy, "_quotes", None))
+
+
+def _run_quote_sweep(
+    strategy: Strategy,
+    param_grid: Dict[str, List[Any]],
+    config: BacktestConfig,
+    store: DataStore,
+    max_parallelism: int,
+    execution_grid: Optional[Dict[str, List[Any]]],
+    exec_json: str,
+    lite: bool,
+):
+    """:func:`run_sweep` and :func:`run_sweep_lite` for a strategy that quotes.
+
+    Each combination is the run :func:`run` makes of the same strategy with
+    those values as its defaults, under that execution config: the market is
+    loaded once (day by day as :func:`run` holds it), and the combinations
+    run in parallel in the engine, with nothing called back into Python.
+    """
+    try:
+        cfg_json = _quote_config_json(config, strategy, store)
+        grid_json = json.dumps({
+            name: [scalar_value_to_json(v) for v in values]
+            for name, values in param_grid.items()
+        })
+        args = (strategy.to_json(), grid_json, cfg_json, store, None, max_parallelism, exec_json)
+        if lite:
+            from manifoldbt._reprs import wrap_sweep_lite
+
+            return wrap_sweep_lite(_run_quote_sweep_lite_native(*args))
+        pairs = _run_quote_sweep_native(*args)
+        return SweepResult(_quote_results(pairs, config), param_grid, execution_grid)
+    except (ValueError, RuntimeError) as exc:
+        raise _classify_error(exc) from exc
+
+
+def _run_quote_batch(
+    strategies: List[Strategy],
+    config: BacktestConfig,
+    store: DataStore,
+    max_parallelism: int,
+    exec_json: str,
+    lite: bool,
+):
+    """:func:`run_batch` and :func:`run_batch_lite` for strategies that quote."""
+    quoting = [_quotes(s) for s in strategies]
+    if not all(quoting):
+        names = ", ".join(repr(s.name) for s, q in zip(strategies, quoting) if not q)
+        raise StrategyError(
+            "a batch runs strategies that quote (Strategy.quote) on the order-level "
+            "simulation and the others on bars, never the two together: "
+            f"{names} do(es) not quote. Run them in two batches"
+        )
+    try:
+        cfg_json = _quote_config_json(config, strategies[0], store)
+        args = ([s.to_json() for s in strategies], cfg_json, store, None, max_parallelism,
+                exec_json)
+        if lite:
+            return _run_quote_batch_lite_native(*args)
+        return _quote_results(_run_quote_batch_native(*args), config)
+    except (ValueError, RuntimeError) as exc:
+        raise _classify_error(exc) from exc
+
+
+def reconcile(
+    result: Result,
+    live_fills: Any,
+    *,
+    store: DataStore,
+    symbol_id: Optional[int] = None,
+    tolerance: Any = None,
+    price_tolerance: Optional[float] = None,
+    orders_posted: Optional[int] = None,
+) -> Reconciliation:
+    """Reconcile a journal of REAL fills with the backtest of the same days.
+
+    An execution model is an assumption -- how long the queue in front of an
+    order was, how fast the volume ahead of it cancelled, how late the quote
+    reached the book -- and a backtest can only ever be consistent with itself.
+    This is the one measurement that settles any of them: the fills a broker
+    actually granted over the same days, marked by the same code, counted the
+    same way, put beside the backtest's own.
+
+    It also measures the one cost no simulation can produce. A backtest replays
+    a tape that never saw your quotes, so its adverse selection is whatever the
+    market was going to do anyway; the journal's fills were served by people
+    who could see the quote and react to it. The paired difference at each
+    horizon is that reactive part, and nothing else measures it.
+
+    Args:
+        result: A finished :func:`run`. Its manifest carries the config, so the
+            same days, the same grid and the same book are reloaded to mark the
+            journal against -- the reference on both sides is one reference.
+        live_fills: The journal, as a pandas/polars DataFrame or a dict of
+            columns. Minimum: a UTC ``timestamp``, a ``side``, a ``price`` and
+            a ``qty``; a numeric ``symbol_id`` if the run held more than one
+            symbol. Common broker spellings are read (``time``, ``quantity``,
+            ``avg_price``, ``B``/``S``, ``buy``/``sell``, ...); a side that
+            reads as neither is refused by name rather than taken for a sell.
+            Extra columns (``order_id``, ``posted_at``, ``level``) are the
+            caller's to keep; nothing here reads them.
+        store: Where the tape and the book of those days live. The store the
+            run used, unless the days were re-ingested elsewhere.
+        symbol_id: The symbol the journal's fills belong to, when the journal
+            carries no numeric one.
+        tolerance: How far apart two fills may be and still be the same fill:
+            an :class:`Interval` or a number of nanoseconds. One second by
+            default. A window wider than the strategy's own requote interval
+            starts pairing a real fill with the wrong quote.
+        price_tolerance: An optional absolute price tolerance, the venue's tick
+            typically. ``None`` (the default) matches on time alone, which is
+            usually what you want: the price gap between a real fill and its
+            backtest twin is a MEASUREMENT here, and a tolerance narrower than
+            that gap would hide it by turning both fills into unmatched ones.
+        orders_posted: The quotes the strategy posted, if you know it better
+            than the backtest does. Defaults to the run's own
+            ``order_activity["orders_posted"]``, which is the shared
+            denominator of the two service rates: the two sides ran the same
+            decisions, so the same posting count prices both.
+
+    Returns:
+        A :class:`Reconciliation`: ``by_day_df()`` / ``by_hour_df()`` for
+        service, ``horizons_df()`` for adverse selection on both sides and the
+        paired difference, ``pairs_df()`` for the price and time gaps fill by
+        fill, and ``verdict`` for one factual sentence per quantity. Nothing in
+        it names a setting to change; ``execution_grid`` on :func:`run_sweep`
+        is where that choice gets published as a surface.
+
+    The three horizons (+100 ms, +1 s, +10 s) are fixed, here as in
+    ``result.fill_marks``: a published markout is only comparable when everyone
+    reports the same three.
+
+    Needs the tape of those days in the store, since that is what a mark reads.
+
+    Example::
+
+        result = mbt.run(strategy, config, store)
+        rec = mbt.reconcile(result, broker_fills, store=store,
+                            symbol_id=1, tolerance=mbt.Interval.seconds(1))
+        print(rec.summary())
+        rec.horizons_df()
+        mbt.plot.reconcile(rec)
+    """
+    from manifoldbt.expr import _interval_to_nanos
+
+    if tolerance is None:
+        tolerance_ns = 1_000_000_000
+    else:
+        nanos = _interval_to_nanos(tolerance) if isinstance(tolerance, dict) else None
+        if nanos is None:
+            if isinstance(tolerance, bool) or not isinstance(tolerance, (int, float)):
+                raise TypeError(
+                    "reconcile: tolerance takes a duration -- Interval.millis(n), "
+                    "Interval.seconds(n), or a number of nanoseconds"
+                )
+            nanos = int(tolerance)
+        tolerance_ns = int(nanos)
+
+    columns = _fills_to_columns(live_fills, symbol_id)
+    raw_result = result.raw if isinstance(result, Result) else result
+    try:
+        raw = _reconcile_fills_native(
+            raw_result,
+            store,
+            columns["ts"],
+            columns["side"],
+            columns["price"],
+            columns["qty"],
+            columns["symbol"],
+            tolerance_ns,
+            price_tolerance,
+            None if orders_posted is None else int(orders_posted),
+        )
+    except (ValueError, RuntimeError) as exc:
+        raise _classify_error(exc) from exc
+    return Reconciliation(raw)
 
 
 def run_sweep(
@@ -1426,6 +2250,7 @@ def run_sweep(
     store: DataStore,
     *,
     max_parallelism: int = 0,
+    execution_grid: Optional[Dict[str, List[Any]]] = None,
 ) -> SweepResult:
     """Run a parameter sweep in parallel (rayon) and return a SweepResult.
 
@@ -1437,6 +2262,25 @@ def run_sweep(
         config: Backtest configuration.
         store: Data store.
         max_parallelism: Maximum threads. 0 = all available cores.
+        execution_grid: Mapping of dotted EXECUTION config paths to lists of
+            values, swept beside ``param_grid``. The paths are read relative to
+            ``config.execution``::
+
+                execution_grid={
+                    "fill_model.queue.assumed_queue": [1, 2, 5],
+                    "latency.order": [Interval.millis(0), Interval.millis(20)],
+                    "fill_model.queue.cancel_ahead_rate": [0.0, 0.1],
+                }
+
+            The queue in front of an order, the round trip to the book and the
+            rate the volume ahead cancels all make the P&L and none of them is
+            knowable from a backtest, so they belong on an axis rather than in
+            a decision. A path that names no setting, or a value the model
+            refuses, fails by name before a day is read -- an axis that does
+            nothing would publish a flat surface, which reads as "this setting
+            does not matter". These axes are the SLOWEST of the sweep: the
+            results come back as one block of the whole parameter surface per
+            execution combination, execution paths sorted, last axis fastest.
 
     Returns:
         A :class:`SweepResult` with ``.to_df()``, ``.best()``, ``.plot_metric()``.
@@ -1444,10 +2288,31 @@ def run_sweep(
         parameter name, last axis varying fastest, whatever order the dict
         was written in (:func:`manifoldbt.dataframe.grid_combos` lists it).
         ``to_df()`` labels each row from the run's own manifest, so it does
-        not depend on that order.
+        not depend on that order -- including the ``exec_*`` columns, which are
+        read out of the config the run actually executed under.
+
+    A strategy that quotes (``Strategy.quote``) is swept the same way, on the
+    order-level simulation: the book and the tape are loaded once (over more
+    than one UTC day, day by day as :func:`run` holds them, each day read
+    once for the ``max_parallelism`` combinations that run together), and each
+    combination is exactly the run :func:`run` makes of the strategy with
+    those values as its defaults, under that execution config -- the same
+    orders, fills and order events, to the bit, whatever ``max_parallelism``.
+    Each element is then a :class:`~manifoldbt.result.QuoteResult`, with its
+    ``orders_df()``, ``fills_df()`` and ``events_df()``. The natural
+    execution axes are ``latency.order``, ``latency.cancel``,
+    ``latency.response``, ``latency.feed`` and ``fill_model.queue.*``. Every
+    combination keeps its whole order journal, so a large grid is better read
+    through :func:`run_sweep_lite`, which keeps the metrics only.
     """
-    _require_pro_over_combos(_grid_combos(param_grid), "Parameter sweep")
+    exec_json, exec_combos = _execution_grid_plan(execution_grid)
+    _require_pro_over_combos(
+        _grid_combos(param_grid) * exec_combos, "Parameter sweep"
+    )
     _validate_swept_params(strategy, param_grid.keys(), "Parameter sweep")
+    if _quotes(strategy):
+        return _run_quote_sweep(strategy, param_grid, config, store, max_parallelism,
+                                execution_grid, exec_json, lite=False)
     try:
         config = _cap_output_resolution(config)
         store = _resolve_store(config, store)
@@ -1457,14 +2322,15 @@ def run_sweep(
             name: [scalar_value_to_json(v) for v in values]
             for name, values in param_grid.items()
         })
-        raw_results = _run_sweep_native(
-            strategy_json,
-            grid_json,
-            cfg_json,
-            store,
-            max_parallelism,
+        native_args = (strategy_json, grid_json, cfg_json, store, max_parallelism)
+        # The execution grid is passed only when there is one: a sweep without
+        # one calls the engine exactly as it always did.
+        raw_results = (
+            _run_sweep_native(*native_args, exec_json)
+            if execution_grid
+            else _run_sweep_native(*native_args)
         )
-        return SweepResult(raw_results, param_grid)
+        return SweepResult(raw_results, param_grid, execution_grid)
     except (ValueError, RuntimeError) as exc:
         raise _classify_error(exc) from exc
 
@@ -1475,6 +2341,7 @@ def run_batch(
     store: DataStore,
     *,
     max_parallelism: int = 0,
+    execution_grid: Optional[Dict[str, List[Any]]] = None,
 ) -> List[Result]:
     """Run many strategies in parallel sharing a single data load.
 
@@ -1491,20 +2358,39 @@ def run_batch(
         config: Shared backtest configuration (same universe/time range).
         store: Data store.
         max_parallelism: Maximum threads. 0 = all available cores.
+        execution_grid: Execution settings swept beside the strategies, same
+            shape as :func:`run_sweep`'s. The execution axes are the slowest:
+            the results are one block of the whole batch per execution
+            combination, in input order inside each block.
 
     Returns:
-        One :class:`Result` per strategy, in input order.
+        One :class:`Result` per strategy, in input order; one per strategy and
+        execution combination when an ``execution_grid`` is given.
+
+    Strategies that quote (``Strategy.quote``) are batched the same way on
+    the order-level simulation, one :class:`~manifoldbt.result.QuoteResult`
+    each, each the run :func:`run` makes of it alone. A batch holds strategies
+    that quote or strategies that do not, never both.
     """
-    _require_pro_over_combos(len(strategies), "Batch backtesting")
+    exec_json, exec_combos = _execution_grid_plan(execution_grid)
+    _require_pro_over_combos(len(strategies) * exec_combos, "Batch backtesting")
+    if any(_quotes(s) for s in strategies):
+        return _run_quote_batch(strategies, config, store, max_parallelism, exec_json,
+                                lite=False)
     try:
         config = _cap_output_resolution(config)
         store = _resolve_store(config, store)
         cfg_json = _prepared_config_json(config, None, store)
-        raw_results = _run_batch_native(
+        native_args = (
             [strat.to_json() for strat in strategies],
             cfg_json,
             store,
             max_parallelism,
+        )
+        raw_results = (
+            _run_batch_native(*native_args, exec_json)
+            if execution_grid
+            else _run_batch_native(*native_args)
         )
         return [Result(r) for r in raw_results]
     except (ValueError, RuntimeError) as exc:
@@ -1537,8 +2423,14 @@ def run_batch_lite(
 
     Returns:
         One :class:`BatchResultLite` per strategy (name, metrics, equity, trade_count).
+
+    Strategies that quote (``Strategy.quote``) run on the order-level
+    simulation, each without its order journal and its markouts; the metrics
+    are those :func:`run` reports for the same strategy, to the bit.
     """
     _require_pro_over_combos(len(strategies), "Batch backtesting")
+    if any(_quotes(s) for s in strategies):
+        return _run_quote_batch(strategies, config, store, max_parallelism, "{}", lite=True)
     try:
         config = _cap_output_resolution(config)
         store = _resolve_store(config, store)
@@ -1562,6 +2454,7 @@ def run_sweep_lite(
     max_parallelism: int = 0,
     device: str = "auto",
     precision: str = "fp64",
+    execution_grid: Optional[Dict[str, List[Any]]] = None,
 ) -> List["BatchResultLite"]:
     """Run a parameter sweep returning only metrics (no Arrow output).
 
@@ -1625,10 +2518,46 @@ def run_sweep_lite(
         silently transposes the grid. :func:`manifoldbt.dataframe.grid_combos`
         lists the combinations in this order, and
         :func:`manifoldbt.dataframe.results_to_df` labels the results with it.
+        With an ``execution_grid``, the execution axes are slower still: one
+        block of the whole parameter surface per execution combination.
+
+    Execution grid:
+        ``execution_grid`` sweeps execution settings beside the parameters,
+        exactly as in :func:`run_sweep`. The lite driver walks no tape, so the
+        settings that need one -- ``fill_model.queue``, ``execution.latency``,
+        the trade clock -- are refused by name for every combination, as they
+        already are for a base config; and the CUDA sweep takes one execution
+        config, so ``device="cuda"`` with an execution grid is refused too
+        (``device="auto"`` simply stays on the CPU). A tape sweep belongs on
+        :func:`run_sweep`.
+
+    A strategy that quotes:
+        ``Strategy.quote`` strategies are swept on the order-level simulation,
+        on the CPU (``device="auto"`` stays there, ``"cuda"`` is refused), in
+        ``fp64``. Each combination runs exactly as in :func:`run_sweep`,
+        without keeping its order journal or marking its fills, and hands back
+        the metrics the full run reports, to the bit -- not a daily
+        approximation of them. ``execution_grid`` takes every axis a quoting
+        run reads, ``latency.response`` and ``latency.feed`` included.
     """
-    _require_pro_over_combos(_grid_combos(param_grid), "Parameter sweep")
+    exec_json, exec_combos = _execution_grid_plan(execution_grid)
+    _require_pro_over_combos(
+        _grid_combos(param_grid) * exec_combos, "Parameter sweep"
+    )
     _validate_swept_params(strategy, param_grid.keys(), "Parameter sweep")
-    _require_pro_for_gpu(device, "GPU sweep")
+    if _quotes(strategy):
+        if device not in ("auto", "cpu"):
+            raise ValueError(
+                f"device={device!r}: a strategy that quotes (Strategy.quote) is swept on "
+                'the order-level simulation, on the CPU; use device="cpu" or "auto"'
+            )
+        if precision not in ("fp64", "f64", "double"):
+            raise ValueError(
+                f"precision={precision!r}: a strategy that quotes is swept in fp64 only"
+            )
+        return _run_quote_sweep(strategy, param_grid, config, store, max_parallelism,
+                                execution_grid, exec_json, lite=True)
+    _require_grant_for_gpu(device, "GPU acceleration")
     try:
         config = _cap_output_resolution(config)
         store = _resolve_store(config, store)
@@ -1642,15 +2571,15 @@ def run_sweep_lite(
         # printed one BatchResultLite line per combo. Indexing, iteration and
         # len() are unchanged.
         from manifoldbt._reprs import wrap_sweep_lite
-        return wrap_sweep_lite(_run_sweep_lite_native(
-            strategy_json,
-            grid_json,
-            cfg_json,
-            store,
-            max_parallelism,
-            device,
+        native_args = (
+            strategy_json, grid_json, cfg_json, store, max_parallelism, device,
             precision,
-        ))
+        )
+        return wrap_sweep_lite(
+            _run_sweep_lite_native(*native_args, exec_json)
+            if execution_grid
+            else _run_sweep_lite_native(*native_args)
+        )
     except (ValueError, RuntimeError) as exc:
         raise _classify_error(exc) from exc
 
@@ -1667,7 +2596,8 @@ def sweep_columns(
     ~20x faster: on a 1M-combo sweep, ~1.1s of extraction becomes ~0.05s.
 
     Args:
-        batch: The list returned by :func:`run_sweep_lite`.
+        batch: The list returned by :func:`run_sweep_lite`, or the one returned
+            by :func:`run_sweep` (a ``SweepResult`` iterates into it).
         names: One column name, or a list of them. Available: ``final_equity``,
             ``trade_count``, and every :class:`PerformanceMetrics` field
             (``sharpe``, ``sortino``, ``calmar``, ``max_drawdown``, ``alpha``,
@@ -1676,6 +2606,25 @@ def sweep_columns(
             ``omega_ratio``, ``ulcer_index``, ``best_day``, ``worst_day``,
             ``avg_daily_return``, ``pct_positive_days``,
             ``max_drawdown_duration_days``, ``tstat_sharpe``).
+
+            From a FULL sweep, six more say what the execution did, which is
+            what an ``execution_grid`` is swept to read:
+
+            * ``service_rate`` -- maker fills over the quotes that were posted;
+            * ``queue_decided_fills`` -- fills the queue granted because the
+              volume ahead of the order was consumed;
+            * ``stale_fills`` -- fills taken by a quote after its cancellation
+              was decided and before it took effect;
+            * ``adverse_1s_bps`` / ``adverse_10s_bps`` -- mean markout at those
+              horizons, negative when the market left in the direction that
+              hurts;
+            * ``half_spread_captured_bps`` -- what the quote earned at the
+              instant it was served.
+
+            Each is ``NaN`` on a run that configured no model behind it (no
+            queue, no latency, no ``execution.fill_marks``), and asking a LITE
+            sweep for one is refused by name: the lite drivers walk no tape, so
+            they produce none of these.
 
     Returns:
         A single ``np.ndarray`` if ``names`` is a string, else a dict mapping
@@ -1687,16 +2636,27 @@ def sweep_columns(
         The arrays are read-only views over the returned buffers (no copy). Call
         ``.copy()`` if you need to mutate one.
 
+        A metric a combination did not report is NaN: a run shorter than two
+        days has no Sharpe, Sortino, volatility, CAGR or other statistic of
+        the daily returns. ``np.argmax`` returns the index of the FIRST NaN
+        when there is one; rank with ``np.nanargmax`` (which raises when every
+        value is NaN) or ``np.argsort`` on the negated array, which puts NaN
+        last.
+
     Example:
         >>> batch = mbt.run_sweep_lite(strategy, grid, config, store, device="cuda")
         >>> sharpe = mbt.sweep_columns(batch, "sharpe")
-        >>> best = batch[int(sharpe.argmax())]
+        >>> best = batch[int(np.nanargmax(sharpe))]
     """
     import numpy as _np
 
     single = isinstance(names, str)
     wanted = [names] if single else list(names)
-    raw = _sweep_columns_native(batch, wanted)
+    # A SweepResult hands back Result wrappers; the native extractor reads the
+    # engine's own objects. Unwrapping here rather than asking the caller to
+    # keeps `sweep_columns(list(sweep), ...)` working on both sweeps.
+    rows = [r.raw if isinstance(r, Result) else r for r in batch]
+    raw = _sweep_columns_native(rows, wanted)
     out = {n: _np.frombuffer(raw[n], dtype=_np.float64) for n in wanted}
     return out[names] if single else out
 
@@ -1749,6 +2709,13 @@ def run_walk_forward(
     with trading suppressed until the test window, so indicators are hot at
     the boundary instead of restarting empty.
 
+    Windows shorter than two days report no metric taken from daily returns
+    (Sharpe, Sortino, volatility, CAGR, Calmar, ...: NaN). A NaN never wins a
+    fold's selection; a fold where ``optimize_metric`` is NaN for every
+    combination is refused with a ``ValueError`` that says so, and an OOS
+    window under two days gives NaN ``oos_metrics`` and a ``wfe`` of ``None``.
+    Optimise ``total_return`` or ``max_drawdown`` on such windows.
+
     Note: the legacy ``method="Rolling"`` was renamed ``geometry="blocked"``
     (independent blocks separated by gaps, not Pardo's rolling); for Pardo's
     walk-forward use ``geometry="pardo"``.
@@ -1756,6 +2723,11 @@ def run_walk_forward(
     # Pro feature: report it here so a notebook gets a clean LicenseError rather
     # than a traceback from deeper in the run.
     _require_pro("Walk-forward optimization")
+    # And the accelerator is a tier of its own. The engine refuses it too, before
+    # loading any data, but that refusal surfaces as a ValueError from the native
+    # boundary: a caller catching LicenseError would miss it. Asked here, the
+    # four GPU entry points all raise the same exception with the same wording.
+    _require_grant_for_gpu(wf_config.get("device"), "GPU walk-forward")
     _validate_swept_params(strategy, (wf_config.get("param_grid") or {}).keys(),
                            "Walk-forward")
     config = _prepare_config(config, strategy, store)
@@ -1915,7 +2887,7 @@ def run_stochastic(
         ... )
         >>> result = mbt.run_stochastic(model, s0=100, n_paths=5000)
     """
-    _require_pro_for_gpu(device, "GPU stochastic simulation")
+    _require_grant_for_gpu(device, "GPU stochastic simulation")
     config: Dict[str, Any] = {
         "s0": s0,
         "n_paths": n_paths,
@@ -2002,6 +2974,8 @@ def __getattr__(name: str):
         return _importlib.import_module("manifoldbt.diagnostics")
     if name == "ticks":
         return _importlib.import_module("manifoldbt.ticks")
+    if name == "sim":
+        return _importlib.import_module("manifoldbt.sim")
     raise AttributeError(f"module 'manifoldbt' has no attribute {name!r}")
 
 
@@ -2084,7 +3058,7 @@ def register_exo(
 
     if provider:
         # Unified layout: {root}/{provider}/{timeframe}/{name}.arrow
-        # Minuscules obligatoires: les deux ecrivains Rust (ingest.rs) et les
+        # Minuscules obligatoires: les deux ecrivains natifs du moteur et les
         # deux lecteurs creent ce dossier en minuscules. Ecrire "BINANCE" ici
         # produisait un second dossier, invisible aux lecteurs sur un systeme
         # de fichiers sensible a la casse.
@@ -2218,6 +3192,28 @@ Research
 bt.run_sweep(strat, {"fast": [10, 20], "slow": [50, 100]}, cfg, store)
 bt.run_walk_forward(...)   # and run_stability, run_stochastic, run_portfolio
 
+Quotes (order-level simulation, one symbol, book and tape in the store)
+------------------------------------------------------------------------
+from manifoldbt import book
+maker = (bt.Strategy.create("maker")    # no .size(): each quote carries its own
+         .quote("buy", book.bid_price_at(1), 0.01, enabled=bt.position() < 0.05)
+         .quote("sell", book.ask_price_at(1), 0.01, enabled=bt.position() > -0.05))
+cfg = bt.BacktestConfig(..., bar_interval=bt.Interval.millis(100),   # the wake-up clock
+        execution=bt.ExecutionConfig(latency={"order": bt.Interval.millis(5),
+            "cancel": bt.Interval.millis(5), "response": bt.Interval.millis(5),
+            "feed": bt.Interval.millis(2)}))
+res = bt.run(maker, cfg, store)        # QuoteResult: + orders_df(), fills_df(), events_df()
+# a wake-up: NaN price/size or null enabled holds; enabled False or size <= 0
+# withdraws; same price keeps the queue; else cancel and repost.
+# .quote(..., cooldown=bt.Interval.millis(500)): no post for 500 ms after the
+# quote sent a cancellation (a requote then cancels now, posts after the pause).
+# state it reads: bt.position(), bt.cash(), bt.live_qty("bid"), bt.order_age("ask"),
+# bt.order_price("bid"), bt.last_fill_px("bid"), bt.queue_ahead("ask"),
+# bt.position_age(), bt.last_fill_age("bid"), bt.last_cancel_age("ask") (seconds,
+# NaN before the event), book.bid_price_at(k), book.bid_levels();
+# bt.round (half to even), bt.clip. Sweeps: run_sweep / run_sweep_lite / run_batch,
+# each combination exactly the run alone.
+
 Worked recipes -- yes, the DSL expresses these
 ----------------------------------------------
 Stateful thresholds (hysteresis). hold() keeps the previous POSITION, so a band
@@ -2274,15 +3270,22 @@ Common errors
 
 
 __all__ = [
+    "AccountPhase",
+    "AccountRules",
+    "account_sessions",
     # Core types
     "BacktestResult",
     "BatchResultLite",
     "DataStore",
     "Result",
+    "QuoteResult",
     "SweepResult",
     # Data ingestion
     "ingest",
     "ingest_trades",
+    "ingest_book",
+    "ingest_mbo",
+    "convert_book_to_deltas",
     "bars_from_trades",
     "attach_quotes",
     "import_csv",
@@ -2291,6 +3294,8 @@ __all__ = [
     "run",
     "run_sweep",
     "run_batch",
+    "reconcile",
+    "Reconciliation",
     "run_batch_lite",
     "run_json",
     "run_with_parquet",
@@ -2303,6 +3308,18 @@ __all__ = [
     "col",
     "exo",
     "lit",
+    "position",
+    "live_qty",
+    "order_age",
+    "order_price",
+    "position_age",
+    "last_fill_age",
+    "last_cancel_age",
+    "last_fill_px",
+    "queue_ahead",
+    "cash",
+    "round",
+    "clip",
     "param",
     "s",
     "scan",
@@ -2353,6 +3370,8 @@ __all__ = [
     "guide",
     # Indicators (submodule)
     "indicators",
+    # The stored order book as columns (submodule)
+    "book",
     # Managed compute (submodule)
     "cloud",
     # Plotting (lazy, requires plotly)
@@ -2361,4 +3380,6 @@ __all__ = [
     "diagnostics",
     # Tick-level layer (lazy)
     "ticks",
+    # Order-level simulation (lazy)
+    "sim",
 ]

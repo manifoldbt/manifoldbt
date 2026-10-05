@@ -65,6 +65,13 @@ def equity_with_dates(result) -> Tuple[np.ndarray, np.ndarray]:
     # Get timestamps as int64 nanoseconds for deduplication
     ts_ns = _ts_to_int64(ts_col)
 
+    # One row per timestamp already, which is every single-symbol run: there
+    # is nothing to deduplicate, and the sort inside np.unique was most of the
+    # cost of this function. The arrays are the ones the deduplication would
+    # return, copies as they were.
+    if ts_ns.size < 2 or bool(np.all(ts_ns[1:] > ts_ns[:-1])):
+        return ts_ns.copy().view("datetime64[ns]"), eq_raw.astype(np.float64)
+
     _, unique_idx = np.unique(ts_ns, return_index=True)
     unique_idx.sort()
 

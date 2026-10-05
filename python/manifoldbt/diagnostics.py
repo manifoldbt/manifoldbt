@@ -65,7 +65,11 @@ class LookaheadReport:
     def __str__(self) -> str:
         status = "PASS" if self.passed else "FAIL"
         if self.method == "static":
-            lines = [f"  [static] {status}  (reads ahead={self.mismatched})"]
+            # "non-causal", pas "reads ahead" : le compte couvre maintenant
+            # tout operateur dont la valeur a la barre t depend de barres
+            # posterieures, pas seulement ceux qui lisent un nombre fixe de
+            # barres devant.
+            lines = [f"  [static] {status}  (non-causal={self.mismatched})"]
             for d in self.details[:3]:
                 lines.append(f"    {d['field']}: {d['base']}, {d['extended']}")
             return "\n".join(lines)
@@ -123,8 +127,13 @@ def detect_lookahead(
     """Detect look-ahead bias: a static read of the strategy, then two re-runs.
 
     Three sub-tests:
-      * **static** -- walks the strategy's expressions for ``lead()``: a value
-        at bar T taken from bar T+n. Reported by signal, with the period.
+      * **static** -- walks the strategy's expressions for any operator that
+        is not causal, that is, whose value at bar T depends on bars after T.
+        Reported by signal, and named. Two operators qualify: ``lead(n)``,
+        reported with its period, and ``full_series_rank()``, which sorts the
+        whole column. The list is not hardcoded here: every DSL operator is
+        classified in a registry the engine checks exhaustively, so a new
+        operator cannot be added without answering the question.
       * **extension** -- re-run on the first 2/3 of the data and compare the
         trades with the full run. Catches look-ahead that depends on how much
         data the run was given (a statistic over the whole series, a
@@ -283,6 +292,26 @@ class RiskReport:
         return "\n".join(parts)
 
 
+def _timestamp_groups(ts_ns: np.ndarray):
+    """The rows of each distinct timestamp, in ascending timestamp order.
+
+    Returns ``(unique_ts, order, bounds)``: the rows of the ``i``-th timestamp
+    are ``order[bounds[i]:bounds[i + 1]]``, in their original order -- the
+    rows ``ts_ns == unique_ts[i]`` selects, in the order it selects them.
+
+    One stable sort for the whole curve. The functions below used to build
+    one boolean mask over the whole curve per timestamp, which is quadratic:
+    a few seconds on a daily run of some years, hours on a curve of a
+    million bars.
+    """
+    order = np.argsort(ts_ns, kind="stable")
+    sorted_ts = ts_ns[order]
+    starts = np.flatnonzero(np.concatenate(([True], sorted_ts[1:] != sorted_ts[:-1]))) \
+        if len(sorted_ts) else np.zeros(0, dtype=np.intp)
+    bounds = np.append(starts, len(sorted_ts))
+    return sorted_ts[starts], order, bounds
+
+
 def _compute_per_timestamp(pos: dict) -> dict:
     """Aggregate position-level data to per-timestamp metrics.
 
@@ -296,24 +325,37 @@ def _compute_per_timestamp(pos: dict) -> dict:
 
     market_value = np.abs(position) * close
 
-    unique_ts, inverse = np.unique(ts_ns, return_inverse=True)
-    n = len(unique_ts)
+    if len(ts_ns) < 2 or bool(np.all(ts_ns[1:] > ts_ns[:-1])):
+        # One row per timestamp (a run on one symbol): each group is its own
+        # row, and its weight that row over itself. Its sum is that row plus
+        # zero, as numpy sums one element: a -0.0 comes out as 0.0.
+        unique_ts = np.array(ts_ns, copy=True)
+        agg_equity = equity.copy()
+        agg_exposure = market_value + 0.0
+        held = market_value > 1e-12
+        # Divided only where the loop divided, so it warns where it warned.
+        weights = np.divide(market_value, market_value,
+                            out=np.zeros_like(market_value), where=held)
+        agg_hhi = np.where(held, weights ** 2, 0.0)
+    else:
+        unique_ts, order, bounds = _timestamp_groups(ts_ns)
+        n = len(unique_ts)
 
-    agg_equity = np.empty(n, dtype=np.float64)
-    agg_exposure = np.zeros(n, dtype=np.float64)
-    agg_hhi = np.zeros(n, dtype=np.float64)
+        agg_equity = np.empty(n, dtype=np.float64)
+        agg_exposure = np.zeros(n, dtype=np.float64)
+        agg_hhi = np.zeros(n, dtype=np.float64)
 
-    for i in range(n):
-        mask = inverse == i
-        agg_equity[i] = equity[mask][0]
-        mv = market_value[mask]
-        total_mv = mv.sum()
-        agg_exposure[i] = total_mv
-        if total_mv > 1e-12:
-            weights = mv / total_mv
-            agg_hhi[i] = (weights ** 2).sum()
-        else:
-            agg_hhi[i] = 0.0
+        for i in range(n):
+            rows = order[bounds[i]:bounds[i + 1]]
+            agg_equity[i] = equity[rows[0]]
+            mv = market_value[rows]
+            total_mv = mv.sum()
+            agg_exposure[i] = total_mv
+            if total_mv > 1e-12:
+                weights = mv / total_mv
+                agg_hhi[i] = (weights ** 2).sum()
+            else:
+                agg_hhi[i] = 0.0
 
     safe_eq = np.where(np.abs(agg_equity) > 1e-12, agg_equity, 1e-12)
     utilization = agg_exposure / safe_eq
@@ -565,19 +607,35 @@ def _exposure_for_result(result) -> dict:
     sym_ids = pos["symbol_id"]
 
     market_value = np.abs(position) * close
-
-    unique_ts = np.unique(ts_ns)
     data = {}
 
-    for ts in unique_ts:
-        mask = ts_ns == ts
-        mv = market_value[mask]
-        eq = equity[mask][0]
+    if len(ts_ns) < 2 or bool(np.all(ts_ns[1:] > ts_ns[:-1])):
+        # One row per timestamp: read as plain Python numbers, the same
+        # doubles and the same operations (a sum of one element is that
+        # element plus zero, as numpy computes it), without a numpy scalar
+        # per value.
+        for ts, mv, eq, sid, p in zip(ts_ns.tolist(), market_value.tolist(), equity.tolist(),
+                                      sym_ids.tolist(), position.tolist()):
+            total_mv = mv + 0.0
+            data[ts] = {
+                "utilization": total_mv / max(abs(eq), 1e-12),
+                "exposure": total_mv,
+                "equity": eq,
+                "positions": {sid: p},
+            }
+        return data
+
+    unique_ts, order, bounds = _timestamp_groups(ts_ns)
+
+    for i, ts in enumerate(unique_ts):
+        rows = order[bounds[i]:bounds[i + 1]]
+        mv = market_value[rows]
+        eq = equity[rows[0]]
         total_mv = mv.sum()
         util = total_mv / max(abs(eq), 1e-12)
 
         sym_pos = {}
-        for sid, p in zip(sym_ids[mask], position[mask]):
+        for sid, p in zip(sym_ids[rows], position[rows]):
             sym_pos[int(sid)] = float(p)
 
         data[int(ts)] = {

@@ -88,7 +88,7 @@ def test_import_dataframe_roundtrip(tmp_path):
     assert equity[-1] > 1000.0
 
 
-def test_import_dataframe_matches_import_csv(tmp_path):
+def test_import_dataframe_matches_import_csv(tmp_path, same_metrics):
     """Same bars through import_csv and import_dataframe → identical results."""
     df = _bars_df()
 
@@ -116,7 +116,7 @@ def test_import_dataframe_matches_import_csv(tmp_path):
     res_csv = _run_buy_and_hold(store_csv)
     res_df = _run_buy_and_hold(store_df)
     assert res_df.equity_curve.to_pylist() == res_csv.equity_curve.to_pylist()
-    assert res_df.metrics == res_csv.metrics
+    assert same_metrics(res_df.metrics, res_csv.metrics)
 
 
 def test_import_dataframe_naive_timestamps_assumed_utc(tmp_path):

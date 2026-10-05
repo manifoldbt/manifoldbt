@@ -135,18 +135,29 @@ The self-contained and synthetic examples need none of this.
 | 24 | `24_option_spread.py` | a two-leg option structure | network |
 | 25 | `25_lookahead_trap.py` | the look-ahead no re-run can detect | synthetic ⚠ |
 | 26 | `26_fill_costs.py` | the same signal filled four ways, and what each costs | shared store |
-| 27 | `27_bars_vs_tape.py` | the same bracket resolved on the candle and on the trades inside it | network, **not runnable yet** |
+| 27 | `27_bars_vs_tape.py` | the same bracket resolved on the candle and on the trades inside it | network, **Researcher** |
+| 28 | `28_trade_clock_market_maker.py` | a market maker on the trade clock: queue, latency, and what each fill cost | network, **Researcher** |
+| 29 | `29_reconcile_live_fills.py` | a broker's own fills against the backtest of the same days | network, **Researcher** |
 
 ⚠ marks the two files whose fixture determines the outcome, as described above.
 
-**27 does not run today, on any licence.** Reading a stored tape is not
-unlocked by anything sold today: the code ships ahead of its availability. The
-file is there to be read, and it will run unchanged when the layer opens -- on
-the gate it exits with the refusal message rather than a traceback. It is the
-only example that both fetches a trade tape and reads it back through `run()`:
-`fill_resolution="ticks"` resolves stop-loss, take-profit, trailing and entry
-levels against the individual trades of each bar instead of against its high
-and low, and `result.tape_resolution` counts what the tape decided.
+**27, 28 and 29 need the Researcher plan.** Reading a stored tape or a stored
+book is a Researcher feature, and a Pro licence does not unlock it. Without it
+they exit with the refusal message rather than a traceback.
+
+27 is the small door: `fill_resolution="ticks"` keeps the bar grid and resolves
+stop-loss, take-profit, trailing and entry levels against the individual trades
+of each bar instead of against its high and low, and `result.tape_resolution`
+counts what the tape decided. 28 is the whole layer on one BTCUSDT day: one
+simulation row per print, a quote that lives one second, the queue in front of
+it read from a stored book, a twenty millisecond round trip, and
+`result.fill_marks` saying what being quoted actually cost. 29 is the check on
+all of it: `bt.reconcile` puts a journal of the fills a broker really granted
+beside the backtest of the same days, marked by the same code and counted the
+same way, and says where the two part company -- its journal is SYNTHETIC, the
+run's own fill log degraded on purpose, so the file can show what the tables
+read like without pretending to data it does not have. Read them in that order;
+`docs/strategy-authoring.md`, "Backtesting on the Tape", is the map.
 
 Two files here are not examples and carry no number:
 

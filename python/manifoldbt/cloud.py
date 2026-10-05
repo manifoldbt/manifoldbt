@@ -10,7 +10,7 @@ serialization a local run uses, so a job that runs on a worker is the run you
 would have got here, through the same code path. Nothing about the strategy
 changes because it moved.
 
-Authentication is an API key from the team portal, read from `MANIFOLDBT_API_KEY`
+Authentication is an API key from the Firm portal, read from `MANIFOLDBT_API_KEY`
 or passed to `configure()`. The key is never logged, and never travels anywhere
 but the Authorization header.
 
@@ -27,8 +27,6 @@ from __future__ import annotations
 import json
 import os
 import time
-import urllib.error
-import urllib.request
 from typing import Any, Dict, List, Optional
 
 from manifoldbt._serde import scalar_value_to_json
@@ -102,7 +100,7 @@ def _key() -> str:
     if not key:
         raise CloudError(
             "no API key. Pass it with mbt.cloud.configure(api_key=...) or set "
-            "MANIFOLDBT_API_KEY. Keys are created in the team portal, under Keys."
+            "MANIFOLDBT_API_KEY. Keys are created in the Firm portal, under Keys."
         )
     return key
 
@@ -113,6 +111,12 @@ def _url(path: str) -> str:
 
 
 def _call(path: str, method: str = "GET", body: Optional[dict] = None, timeout: int = 60):
+    # Imported here, not at the top: urllib.request pulls http.client and the
+    # email package, some 40 ms at every `import manifoldbt`, for a module most
+    # sessions never call.
+    import urllib.error
+    import urllib.request
+
     request = urllib.request.Request(
         _url(path),
         method=method,
@@ -180,6 +184,15 @@ def _payload(strategy, config, store, param_grid=None, rank_by="sharpe", top_n=5
         body["rank_by"] = rank_by
         body["top_n"] = top_n
     return body
+
+
+def _sharpe_text(metrics: dict) -> str:
+    """The Sharpe of a result read from JSON, where a NaN arrives as ``None``
+    (a run shorter than two days reports none): ``n/a`` then, not a crash."""
+    v = metrics.get("sharpe")
+    if not isinstance(v, (int, float)) or v != v:
+        return "n/a"
+    return f"{v:.4f}"
 
 
 class CloudJob:
@@ -316,9 +329,9 @@ class CloudJob:
             for row in self.top[:5]:
                 params = ", ".join(f"{k}={v}" for k, v in (row.get("params") or {}).items())
                 metrics = row.get("metrics") or {}
-                lines.append(f"    {params:<28} sharpe={metrics.get('sharpe', float('nan')):.4f}")
+                lines.append(f"    {params:<28} sharpe={_sharpe_text(metrics)}")
         elif self.metrics:
-            lines.append(f"  sharpe={self.metrics.get('sharpe', float('nan')):.4f}")
+            lines.append(f"  sharpe={_sharpe_text(self.metrics)}")
         return "\n".join(lines)
 
     def __repr__(self) -> str:
