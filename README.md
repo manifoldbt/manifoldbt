@@ -259,9 +259,11 @@ precomputed with future bars and imported as data). Bar T sees the same T+1
 in every window, so the shorter run trades exactly like the full one and the
 re-runs report PASS, next to a Sharpe in the hundreds. No choice of split
 changes that. The detector therefore also walks the strategy's expressions
-and fails any explicit `lead()`, naming the signal; for an implicit one, the
-check that works is to perturb the bars after some K and require the equity
-up to K to be bit-identical, which `examples/25_lookahead_trap.py` does.
+and fails any explicit `lead()`, naming the signal. For an implicit one, the
+check belongs to the pipeline that built the column: perturb the raw data
+after some bar K, rebuild the column from it, and require the equity up to K
+to be bit-identical. Perturbing the bars alone leaves a precomputed column
+untouched and sees nothing, as `examples/25_lookahead_trap.py` shows.
 
 A parameter derived from the data *before* the backtest is a different
 question: a threshold computed over the whole history in a notebook and then

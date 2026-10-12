@@ -19,8 +19,9 @@ from _bootstrap import open_store, plots_available
 
 # -- Strategy with tunable parameters ----------------------------------------
 # The sweep engine substitutes each grid value into the param() references at
-# runtime. The period MUST be param("..."): a hardcoded int compiles every
-# combo to the same strategy, so the sweep becomes a silent no-op.
+# runtime. The period MUST be param("..."): with a hardcoded int no expression
+# reads the grid key, every combo would be the same strategy, and the engine
+# refuses the run with a StrategyError naming the undeclared parameter.
 fast = ema(close, mbt.param("fast", default=12))
 slow = ema(close, mbt.param("slow", default=26))
 

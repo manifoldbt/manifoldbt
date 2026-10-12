@@ -513,6 +513,8 @@ class ExecutionConfig:
     """Fill model configuration. None = Rust defaults (atomic fill, single point).
     Example: {"max_participation_rate": 0.1, "intra_bar_price": "TypicalPrice"}
     intra_bar_price options: "SinglePoint", "TypicalPrice", "OhlcAverage"
+      (the two averages need signal_delay >= 1: at delay 0 they would average
+      the bar whose close produced the signal, and run() refuses them)
     passive_fill options: "touch" (default: a maker fill books when the bar
       reaches its level) or "traverse" (the bar must trade through the level;
       conservative, and the run stays on the general loop). The result's

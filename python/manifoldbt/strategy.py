@@ -637,6 +637,34 @@ class Strategy:
         """Order config dict (stop-loss, take-profit, trailing), or None."""
         return self._orders
 
+    def _expression_params(self) -> "_Declarations":
+        """The param() references this strategy's expressions read."""
+        declared = _Declarations()
+        for expr in self.signals.values():
+            _collect_params(expr, declared)
+        _collect_params(self.position_sizing, declared)
+        for q in self._quotes:
+            for key in ("price", "size", "enabled"):
+                if key in q:
+                    _collect_params(q[key], declared)
+        return declared
+
+    def _unset_params(self) -> List[str]:
+        """Parameters an expression reads that have no value outside a sweep.
+
+        A param() without a default serialises with a null default. A sweep
+        sets every name it sweeps, but a plain run reads the null, which the
+        engine evaluated as an empty series: no signal, no trade, no error. A
+        name only declared with ``.param()`` and read by no expression is not
+        reported: nothing reads it.
+        """
+        specs = self.to_json_dict()["parameters"]
+        return sorted(
+            name
+            for name in self._expression_params().metas
+            if specs.get(name, {}).get("default") == "Null"
+        )
+
     def to_json_dict(self) -> dict:
         """Serialize to a dict matching Rust ``StrategyDef`` serde format."""
         # `signals` is a plain public dict, so a caller can drop anything into it
@@ -649,14 +677,7 @@ class Strategy:
         # Auto-collect params from this strategy's own expressions: the
         # default of a param() is the one written in the expression that uses
         # it, never one another strategy of the process declared.
-        declared = _Declarations()
-        for expr in self.signals.values():
-            _collect_params(expr, declared)
-        _collect_params(self.position_sizing, declared)
-        for q in self._quotes:
-            for key in ("price", "size", "enabled"):
-                if key in q:
-                    _collect_params(q[key], declared)
+        declared = self._expression_params()
 
         # Merge: explicit .param() calls override auto-collected. One without
         # a default keeps the default the expressions give (like a param()

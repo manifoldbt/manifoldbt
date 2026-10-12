@@ -41,9 +41,18 @@ class LookaheadReport:
     mismatched: int
     method: str = ""
     details: List[Dict[str, Any]] = field(default_factory=list)
+    inconclusive: Optional[str] = None
+    """Why a re-run sub-test compared nothing (a strategy that never trades, a
+    truncated run that failed). Such a report is not a pass: ``passed`` is
+    False, and it prints INCONCLUSIVE rather than PASS or FAIL."""
 
     def assert_clean(self) -> None:
-        """Raise AssertionError if look-ahead bias was detected."""
+        """Raise AssertionError if look-ahead bias was detected, or if the
+        sub-test could not look for it."""
+        if self.inconclusive:
+            raise AssertionError(
+                f"Look-ahead check inconclusive ({self.method}): {self.inconclusive}"
+            )
         if not self.passed:
             if self.method == "static":
                 msg = (
@@ -63,6 +72,8 @@ class LookaheadReport:
             raise AssertionError(msg)
 
     def __str__(self) -> str:
+        if self.inconclusive:
+            return f"  [{self.method}] INCONCLUSIVE  ({self.inconclusive})"
         status = "PASS" if self.passed else "FAIL"
         if self.method == "static":
             # "non-causal", pas "reads ahead" : le compte couvre maintenant
@@ -102,7 +113,12 @@ class DiagnosticsResult:
             r.assert_clean()
 
     def __str__(self) -> str:
-        status = "PASS" if self.passed else "FAIL"
+        if self.passed:
+            status = "PASS"
+        elif all(r.passed or r.inconclusive for r in self.reports):
+            status = "INCONCLUSIVE"
+        else:
+            status = "FAIL"
         parts = [f"Lookahead diagnostics: {status}"]
         for r in self.reports:
             parts.append(str(r))
@@ -135,14 +151,24 @@ def detect_lookahead(
         classified in a registry the engine checks exhaustively, so a new
         operator cannot be added without answering the question.
       * **extension** -- re-run on the first 2/3 of the data and compare the
-        trades with the full run. Catches look-ahead that depends on how much
-        data the run was given (a statistic over the whole series, a
-        normalisation by the last value).
+        trades with the full run. Catches a strategy whose past trades change
+        with how much data the run was given: in this engine that takes a
+        non-causal operator over the whole column, which the static test
+        already names. A statistic computed outside the engine (a z-score or
+        a normalisation fitted on the whole history, handed in as a constant
+        or a column) reads the same in every window and is NOT caught: see
+        the warning and the note below.
       * **truncation** -- the same comparison, split at 1/3.
 
     The re-runs load the data once and slice it (no redundant I/O). The
     verdict is the conjunction: ``.passed`` is False as soon as one sub-test
     fails.
+
+    A re-run sub-test that has nothing to compare reports INCONCLUSIVE, not
+    PASS, and ``.passed`` is False: a strategy that never trades (a
+    ``param()`` left without a value is enough), a truncated run that fails,
+    or no trade before the split. A cut run with no trade while the full run
+    traded before the split is a FAIL: the same bars gave two answers.
 
     .. warning::
        **What the re-runs cannot see.** A leak that reads a *fixed* number of
@@ -158,9 +184,12 @@ def detect_lookahead(
        clean bill of health.
 
        The ``static`` sub-test is the one that names an explicit ``lead()``.
-       For an implicit one (a column built outside the engine) the check that
-       works is to perturb the bars after some bar K and require the equity
-       up to K to be bit-identical: ``examples/25_lookahead_trap.py`` does it.
+       For an implicit one (a column built outside the engine) the check
+       belongs to the pipeline that built it: perturb the raw data after some
+       bar K, REBUILD the column from it, and require the equity up to K to be
+       bit-identical. Perturbing the bars alone leaves a precomputed column
+       untouched, so it sees nothing: ``examples/25_lookahead_trap.py`` shows
+       exactly that.
 
     .. note::
        **Scope.** The re-runs re-run the *same strategy* over a different
@@ -227,6 +256,7 @@ def detect_lookahead(
             mismatched=r["mismatched"],
             method=r["method"],
             details=r["details"],
+            inconclusive=r.get("inconclusive"),
         )
         for r in raw
     ]
@@ -746,9 +776,14 @@ def check_exposure_stability(
 
     Sub-tests:
       * **extension** — compare full period vs first 2/3.
-        Catches global normalization (e.g. zscore over entire series).
       * **truncation** — compare full period vs first 1/3.
-        Catches rolling window that peeks ahead.
+
+    Both catch sizing whose past values change with how much data the run is
+    given, which in this engine takes a non-causal operator over the whole
+    column. Neither catches a fixed read-ahead (a window shifted by ``lead``
+    reads the same bars in every window), nor a statistic fitted outside the
+    engine on the whole history and handed in as a constant or a column: see
+    :func:`detect_lookahead` for what each method can and cannot see.
 
     Args:
         strategy: Strategy definition.
