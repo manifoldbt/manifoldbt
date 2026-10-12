@@ -545,6 +545,8 @@ def _reject_intrabar_price_without_delay(cfg: BacktestConfig) -> None:
     Measured on a driftless random walk, "long when close > open" returns
     +1913% under `AtOpen`, +361% under `AtVwap`, `MidPrice` and
     `custom("low")`, against +5% under the defaults. The engine said nothing.
+    `fill_model.intra_bar_price` (`TypicalPrice`, `OhlcAverage`) is the same
+    average reached by another key, and is refused the same way.
 
     **`custom(<a signal the strategy defines>)` is exempt, and deliberately.**
     There the level is one the DSL computed, and the fill only books if the bar
@@ -556,6 +558,23 @@ def _reject_intrabar_price_without_delay(cfg: BacktestConfig) -> None:
     execution = getattr(cfg, "execution", None)
     if execution is None or getattr(execution, "signal_delay", 1) != 0:
         return
+    # The same question under a second key: `fill_model.intra_bar_price`
+    # averages the execution bar ((H+L+C)/3, (O+H+L+C)/4) whatever
+    # `execution_price` says, and at delay zero that bar is the signal's own.
+    # Read first, because the default price (the close) returns early below,
+    # and that is the very combination that slipped through: Sharpe 37 and 65
+    # on a driftless walk, against 1.3 at the close.
+    fill = getattr(execution, "fill_model", None)
+    intra = fill.get("intra_bar_price", "SinglePoint") if isinstance(fill, dict) else "SinglePoint"
+    if intra not in (None, "SinglePoint"):
+        raise ConfigError(
+            f'fill_model["intra_bar_price"]={intra!r} needs signal_delay >= 1: '
+            "with signal_delay=0 the fill is an average over the same bar whose "
+            "close produced the signal, prices the decision came after. Set "
+            "ExecutionConfig(signal_delay=1) to decide on one bar and execute on "
+            'the next, or drop intra_bar_price ("SinglePoint", the default) to '
+            "fill at the very close the signal was computed on."
+        )
     price = getattr(execution, "execution_price", "AtClose")
     # `ExecutionPrice.custom(name)` serialises as {"Custom": name}.
     label = next(iter(price)) if isinstance(price, dict) else price
@@ -1947,6 +1966,28 @@ def _by_day_arg(by_day) -> Optional[bool]:
     raise ValueError(f'by_day takes "auto", True or False, got {by_day!r}')
 
 
+def _reject_unset_params(strategy) -> None:
+    """A plain run needs a value for every param() its expressions read.
+
+    Without a default, a param() is set by a sweep and by nothing else. A run
+    read it as an empty series: an EMA of no period, no signal, no trade, and
+    no error (example 08's strategy run on its own made 0 trades, and
+    detect_lookahead answered PASS on it). Sweeps never come through here.
+    """
+    unset = getattr(strategy, "_unset_params", lambda: [])()
+    if not unset:
+        return
+    names = ", ".join(repr(n) for n in unset)
+    first = unset[0]
+    raise StrategyError(
+        f"strategy {strategy.name!r}: param({names}) has no value in a plain run. "
+        "A param() without a default is set by a sweep; run() would read it as "
+        f"empty and the strategy would make no trade. Give it one, "
+        f"param({first!r}, default=...), or declare it with "
+        f"Strategy.param({first!r}, default=...), or sweep it (run_sweep_lite)."
+    )
+
+
 def run(
     strategy: Strategy,
     config: BacktestConfig,
@@ -1988,6 +2029,7 @@ def run(
     graphics card, with the same result; a build or a machine without CUDA
     prepares them on the CPU and says so in a warning.
     """
+    _reject_unset_params(strategy)
     if _quotes(strategy):
         return _run_quotes(strategy, config, store, by_day=by_day, device=device)
     if not (isinstance(by_day, str) and by_day == "auto") or device != "cpu":

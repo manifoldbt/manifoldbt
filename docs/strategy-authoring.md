@@ -3618,9 +3618,16 @@ store = mbt.DataStore(data_root="data", metadata_db="...", dataset="bars_1m")
 # Look-ahead bias detection: a static walk for every non-causal operator,
 # then two re-runs over shorter windows. The two halves catch different
 # things. The re-runs cannot see a fixed read-ahead (close.lead(1) trades
-# the same in every window); the static walk names it. The static walk
-# only knows the operators, so it cannot see a leak that comes from the
-# data itself; the re-runs can.
+# the same in every window); the static walk names it. The re-runs catch a
+# strategy whose past trades change with how much data the run is given.
+# NEITHER half sees a leak carried by the data itself: a column computed
+# with future bars and imported, or a constant fitted on the whole history,
+# reads the same in every window and passes both. That one is caught
+# upstream, by re-deriving every data-dependent input on the window under
+# test (examples/25_lookahead_trap.py).
+#
+# A re-run with nothing to compare (a strategy that never trades, a cut
+# run that fails) reports INCONCLUSIVE, not PASS.
 #
 # The static walk reads a registry in which every DSL operator is
 # classified causal or not, so a new operator cannot be added without

@@ -149,6 +149,37 @@ def test_le_message_nomme_le_prix_et_la_sortie(store):
     assert "AtClose" in message
 
 
+@pytest.mark.parametrize("moyenne", ["TypicalPrice", "OhlcAverage"])
+def test_une_moyenne_intrabarre_sans_delai_est_refusee(store, moyenne):
+    """`fill_model.intra_bar_price` averages the execution bar whatever the
+    price says: at delay 0, with the default close, it filled at (H+L+C)/3 or
+    (O+H+L+C)/4 of the signal's own bar (Sharpe 37 and 65 on a driftless
+    walk, `detect_lookahead` PASS). Refused like `AtVwap`."""
+    with pytest.raises(ConfigError, match="needs signal_delay >= 1") as exc:
+        bt.run(_reads_its_own_bar(),
+               _config(signal_delay=0, fill_model={"intra_bar_price": moyenne}),
+               store)
+    assert moyenne in str(exc.value)
+    assert "signal_delay=1" in str(exc.value)
+
+
+@pytest.mark.parametrize("moyenne", ["TypicalPrice", "OhlcAverage"])
+def test_une_moyenne_intrabarre_avec_delai_reste_permise(store, moyenne):
+    """With a delay the averaged bar follows the signal: nothing to refuse."""
+    result = bt.run(_reads_its_own_bar(),
+                    _config(signal_delay=1, fill_model={"intra_bar_price": moyenne}),
+                    store)
+    assert abs(result.metrics["total_return"]) < 0.5
+
+
+def test_single_point_sans_delai_reste_permis(store):
+    """`SinglePoint` is the default: the price named by `execution_price`."""
+    result = bt.run(_reads_its_own_bar(),
+                    _config(signal_delay=0, fill_model={"intra_bar_price": "SinglePoint"}),
+                    store)
+    assert abs(result.metrics["total_return"]) < 0.5
+
+
 @pytest.mark.parametrize("price", ["AtClose", "NextBarClose"])
 def test_la_cloture_reste_permise_sans_delai(store, price):
     """These two fill at the close that produced the signal: nothing to refuse.

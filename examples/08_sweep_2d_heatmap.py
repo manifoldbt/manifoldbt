@@ -2,7 +2,7 @@
 
 Demonstrates:
   - param() in indicator periods (engine re-compiles per combo)
-  - run_sweep() for Cartesian grid search
+  - run_sweep_lite() for Cartesian grid search
   - Heatmap visualization with mbt.plot.heatmap_2d()
 
 Data: shared store — real market data from `data/` (see examples/README.md)
@@ -18,8 +18,11 @@ from manifoldbt.helpers import time_range, Slippage, Interval
 from _bootstrap import open_store, plots_available
 
 # -- Strategy (single definition, param() in periods) ------------------------
-fast = ema(close, mbt.param("fast"))
-slow = ema(close, mbt.param("slow"))
+# The sweep sets both periods for every combo. The defaults are what a plain
+# mbt.run(strategy, ...) or a diagnostic uses: without one, a period has no
+# value outside the sweep.
+fast = ema(close, mbt.param("fast", default=20))
+slow = ema(close, mbt.param("slow", default=100))
 
 signal = mbt.when(fast > slow, 0.25, mbt.when(fast < slow, -0.25, 0.0))
 
