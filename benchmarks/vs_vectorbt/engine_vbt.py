@@ -32,6 +32,7 @@ import pandas as pd
 import vectorbt as vbt
 
 import data as data_mod
+import divergence
 from vectorbt.portfolio.enums import StopExitPrice
 
 from workloads import CAPITAL, FREQ, WORKLOADS
@@ -103,27 +104,73 @@ def _level(key: str, ind: Dict[str, pd.Series]) -> pd.Series:
     raise KeyError(f"unknown workload {key!r}")
 
 
-def prepare(key: str, df, workdir: str | None = None) -> Callable[[], Dict[str, Any]]:
-    """Untimed setup; returns the closure the harness times."""
-    p = WORKLOADS[key].params
+def _series(df):
+    """The four price Series, marshalled once. Shared with ``diagnose`` so the
+    measurement does not read a differently-built frame than the run."""
     index = pd.DatetimeIndex(df["timestamp"])
-    close = pd.Series(df["close"].to_numpy(dtype=np.float64), index=index)
-    open_ = pd.Series(df["open"].to_numpy(dtype=np.float64), index=index)
-    high = pd.Series(df["high"].to_numpy(dtype=np.float64), index=index)
-    low = pd.Series(df["low"].to_numpy(dtype=np.float64), index=index)
+    return (
+        pd.Series(df["close"].to_numpy(dtype=np.float64), index=index),
+        pd.Series(df["open"].to_numpy(dtype=np.float64), index=index),
+        pd.Series(df["high"].to_numpy(dtype=np.float64), index=index),
+        pd.Series(df["low"].to_numpy(dtype=np.float64), index=index),
+    )
 
+
+def _sizing(key: str) -> Dict[str, Any]:
+    """Workload params in ``from_signals`` spelling. Shared for the same reason
+    ``indicators`` is: two callers, one definition, no way to drift."""
+    p = WORKLOADS[key].params
     if "units" in p:
         size, size_type = p["units"], "amount"
     else:
         size, size_type = p["alloc"], "percent"
-    fees = float(p.get("fee_bps", 0.0)) / 10_000.0
-    slippage = float(p.get("slippage_bps", 0.0)) / 10_000.0
+    return {
+        "size": size,
+        "size_type": size_type,
+        "fees": float(p.get("fee_bps", 0.0)) / 10_000.0,
+        "slippage": float(p.get("slippage_bps", 0.0)) / 10_000.0,
+        "sl": p["sl_pct"] / 100.0 if "sl_pct" in p else None,
+        "tp": p["tp_pct"] / 100.0 if "tp_pct" in p else None,
+    }
+
+
+def _book(close, open_, high, low, level, *, size, size_type, fees, slippage, sl, tp):
+    """``from_signals`` in one place. The timed path and the untimed measurement
+    call this, so a semantics change reaches both or neither."""
+    return vbt.Portfolio.from_signals(
+        close,
+        entries=level,
+        exits=~level,
+        open=open_,
+        high=high,
+        low=low,
+        init_cash=CAPITAL,
+        size=size,
+        size_type=size_type,
+        fees=fees,
+        slippage=slippage,
+        sl_stop=sl,
+        tp_stop=tp,
+        stop_exit_price=StopExitPrice.StopMarket,
+        direction="longonly",
+        accumulate=False,
+        freq=FREQ,
+    )
+
+
+def prepare(key: str, df, workdir: str | None = None) -> Callable[[], Dict[str, Any]]:
+    """Untimed setup; returns the closure the harness times."""
+    p = WORKLOADS[key].params
+    close, open_, high, low = _series(df)
+
+    sizing = _sizing(key)
+    size, size_type = sizing["size"], sizing["size_type"]
+    fees, slippage = sizing["fees"], sizing["slippage"]
     wants_metrics = bool(p.get("metrics"))
     assets = int(p.get("assets", 1))
-    sl = p["sl_pct"] / 100.0 if "sl_pct" in p else None
-    tp = p["tp_pct"] / 100.0 if "tp_pct" in p else None
 
     if assets > 1:
+        index = pd.DatetimeIndex(df["timestamp"])
         # One book, not five. `from_signals` on a frame of columns builds five
         # independent portfolios unless it is told otherwise, and five separate
         # books is a different question from the one manifoldbt answers when it
@@ -165,25 +212,7 @@ def prepare(key: str, df, workdir: str | None = None) -> Callable[[], Dict[str, 
 
     def run() -> Dict[str, Any]:
         level = _level(key, indicators(key, close))
-        portfolio = vbt.Portfolio.from_signals(
-            close,
-            entries=level,
-            exits=~level,
-            open=open_,
-            high=high,
-            low=low,
-            init_cash=CAPITAL,
-            size=size,
-            size_type=size_type,
-            fees=fees,
-            slippage=slippage,
-            sl_stop=sl,
-            tp_stop=tp,
-            stop_exit_price=StopExitPrice.StopMarket,
-            direction="longonly",
-            accumulate=False,
-            freq=FREQ,
-        )
+        portfolio = _book(close, open_, high, low, level, **sizing)
         total_return = float(portfolio.total_return())
         trades = portfolio.trades
         out = {
@@ -231,3 +260,69 @@ def _summary(portfolio) -> Dict[str, Any]:
         "sortino": float(mean / downside * annualiser),
         "volatility": float(deviation * annualiser),
     }
+
+
+def diagnose(key: str, df, workdir: str | None = None) -> Dict[str, Any]:
+    """Untimed measurement of how far the bracket divergence goes.
+
+    The reference counts the round-trips it opens on an exit bar. raptorbt's
+    mirror image is a *missing* population — it does not re-arm, so its count is
+    the reference's minus that population exactly. vectorbt's is not missing, it
+    is *late*: one order per bar, so the re-entry the reference books at the
+    close of the exit bar lands on the bar after, and is lost only when the
+    entry level has gone false by the time vectorbt can act on it. Counting the
+    population here would say vectorbt diverges an order of magnitude less than
+    raptorbt, which is true of the count and false of the money.
+
+    So what is counted is the delay: round-trips entered exactly one bar after
+    the previous exit *while the entry level was already true at that exit bar*.
+    The qualifier is not decoration. Without it the count also picks up ordinary
+    re-entries, where the level went false on the exit bar and true again on the
+    next one and both engines enter on the same bar for the same reason — 33 of
+    them at 100,000 bars, and they are not divergence.
+
+    Two halves, so the claim is checkable by subtraction rather than on faith:
+    ``reentries_deferred`` plus the round-trip delta the harness already
+    computes is the reference's own ``reentries_on_exit_bar``. Measured over the
+    published matrix, exactly:
+
+        100,000 bars     831 +    94 =    925
+        1,000,000 bars  8,238 + 1,092 =  9,330
+        10,000,000 bars 83,124 + 10,171 = 93,295
+
+    The third row pairs a measured 83,124 with the reference count and delta from
+    the committed CI run; a different manifoldbt build reports 93,281 at that size
+    and the identity closes there too.
+
+    ``reentries_on_exit_bar`` is reported here too and is expected to be zero.
+    It is this workload's note — "vectorbt processes one order per bar and
+    re-enters on the next bar instead" — written as a measurement that can fail,
+    rather than as a sentence a reader has to believe.
+    """
+    note = WORKLOADS[key].notes.get(NAME)
+    if note is None or note.status != "documented":
+        return {}
+
+    close, open_, high, low = _series(df)
+    level = _level(key, indicators(key, close))
+    portfolio = _book(close, open_, high, low, level, **_sizing(key))
+
+    # Closed trades only, on both sides. A position still open on the last bar
+    # is not a round-trip: it is not counted in `round_trips`, the sentence in
+    # the report says "N of them" about that same closed population, and after
+    # the one-line repair in `engine_mbt.diagnose` the reference does not count
+    # its own unclosed final entry either. Counting it here instead made the
+    # rendered line claim 1018 of 2695 closed round-trips at 120,000 bars when
+    # only 1017 of them qualified.
+    closed = portfolio.trades.closed
+    entry_idx = np.asarray(closed.records["entry_idx"])
+    exit_idx = np.asarray(closed.records["exit_idx"])
+
+    total_return = float(portfolio.total_return())
+    out = {
+        "round_trips": int(closed.count()),
+        "final_equity": CAPITAL * (1.0 + total_return),
+    }
+    out.update(divergence.reentry_counts(entry_idx, exit_idx,
+                                         level.to_numpy(dtype=bool)))
+    return out
