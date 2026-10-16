@@ -470,14 +470,30 @@ def test_a_quoting_run_reports_its_queue_and_its_refusals():
 
 
 @needs_layer
-def test_a_quote_deeper_than_the_levels_read_is_refused_as_such():
+def test_a_quote_deeper_than_the_levels_read_is_refused_alone_and_the_run_goes_on():
     deep = bt.Strategy.create("profond").quote("buy", book.bid_price_at(1) - 3.0, 0.01)
     config = quote_config(execution={"fill_model": {"queue": {"depth_source": "book"}}})
-    with pytest.raises(Exception, match="levels read from the store") as err:
-        run_on(walk_market(), deep, config)
-    assert "ingest the book" not in str(err.value)
+    with pytest.warns(UserWarning, match="the stored book says nothing at") as seen:
+        res = run_on(walk_market(), deep, config)
+    # Told once for the run, with the words bt.sim uses: the price, the side,
+    # what to do about it.
+    told = [w for w in seen if "the stored book says nothing at" in str(w.message)]
+    assert len(told) == 1
+    assert "the run goes on" in str(told[0].message)
+    assert "fill_model.queue.assumed_queue" in str(told[0].message)
+    # The count is the result's, apart from the post-only refusals; each quote
+    # refused is an order that ended rejected.
+    activity = res.order_activity
+    statuses = res.orders_df(backend="dict")["status"]
+    assert activity["refused_beyond_levels"] == statuses.count("rejected") > 0
+    assert "post_only_rejected" not in activity
+    assert activity["orders_posted"] >= activity["refused_beyond_levels"]
+    assert any("refused_beyond_levels" in w for w in res.warnings)
+    assert res.fill_fragility["maker_fills"] == 0
+    # With the declared fallback it rests behind the assumed queue, no warning.
     res = run_on(walk_market(), deep, quote_config())
     assert res.fill_fragility["queue"]["book_unknown_at_post"] > 0
+    assert "refused_beyond_levels" not in res.order_activity
 
 
 # ---------------------------------------------------------------------------

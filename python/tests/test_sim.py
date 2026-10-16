@@ -329,6 +329,67 @@ def test_a_malformed_run_is_refused_before_it_starts():
         bt.sim.Market.from_ladders("X", 0.1, [_ladder(2 * MS, 1.0), _ladder(MS, 1.0)])
 
 
+def test_a_refusal_names_the_parameter_and_the_value(tmp_path):
+    market = _market([_ladder(MS, 5.0)])
+    nan, inf = float("nan"), float("inf")
+    for field, value in (
+        ("maker_fee_bps", nan),
+        ("taker_fee_bps", inf),
+        ("initial_cash", nan),
+    ):
+        config = bt.sim.Config(**{field: value})
+        with pytest.raises(ValueError, match=rf"Config\.{field} must be a finite number, got {value}"):
+            bt.sim.run(lambda s: None, config, markets=[market])
+    with pytest.raises(ValueError, match="assumed_queue.*finite number, got nan"):
+        bt.sim.run(
+            lambda s: None,
+            bt.sim.Config(queue={"model": "risk_adverse", "assumed_queue": nan}),
+            markets=[market],
+        )
+    with pytest.raises(TypeError, match="latency.feed takes a duration, got inf"):
+        bt.sim.run(lambda s: None, bt.sim.Config(latency={"feed": inf}), markets=[market])
+    with pytest.raises(ValueError, match="latency.entry must be a finite duration"):
+        bt.sim.run(
+            lambda s: None, bt.sim.Config(latency={"entry": bt.Interval.millis(nan)}), markets=[market]
+        )
+    with pytest.raises(ValueError, match=r"Config\.seed must be zero or more, got -1"):
+        bt.sim.run(lambda s: None, bt.sim.Config(seed=-1), markets=[market])
+
+    # An id no `post` returned is an order never sent, not an OverflowError.
+    def strategy(sim):
+        for call in (lambda: sim.cancel(-1), lambda: sim.replace(-1, price=100.0)):
+            with pytest.raises(ValueError, match="no order -1 was sent"):
+                call()
+        with pytest.raises(ValueError, match="no order 36893488147419103232 was sent"):
+            sim.cancel(2**65)
+        assert sim.order(-1) is None
+        with pytest.raises(ValueError, match="levels.*0 or more, got -1"):
+            sim.book("BTCUSDT").levels(-1)
+        assert sim.book("BTCUSDT").levels(0) == ([], [])
+
+    bt.sim.run(strategy, markets=[market])
+
+    # `levels` of a stored market is a number of levels, 1 or more.
+    store = bt.DataStore(
+        data_root=str(tmp_path / "data"), metadata_db=str(tmp_path / "meta.sqlite")
+    )
+    for levels in (-1, 0):
+        with pytest.raises(ValueError, match=rf"levels must be at least 1.*got {levels}"):
+            bt.sim.Market.from_store(store, "BTCUSDT", 0, MS, levels)
+
+
+def test_a_tick_finer_than_the_price_grid_is_refused_by_name():
+    # The venue compares prices on a grid of 1e-8: a tick of 1e-9 would make
+    # an order take a level beyond its limit.
+    state = (MS, [(9.0e-8, 5.0)], [(1.0e-7, 5.0), (1.1e-7, 5.0)])
+    for tick in (1e-9, 1.5e-8):
+        with pytest.raises(ValueError, match=r"tick size .*1e-8"):
+            bt.sim.Market.from_ladders("T", tick, [state])
+    # No tick, and ticks on the grid, stand.
+    for tick in (0.0, 1e-8, 0.07, 0.1, 1.0):
+        bt.sim.Market.from_ladders("T", tick, [_ladder(MS, 5.0)])
+
+
 # ---------------------------------------------------------------------------
 # A stored market
 # ---------------------------------------------------------------------------
@@ -356,3 +417,79 @@ def test_a_stored_day_runs_end_to_end():
     res = bt.sim.run(strategy, store=store, symbols=[int(sid)], start=day, end=nxt)
     assert posted, "the stored day never showed a book"
     assert res.metrics["orders"] == len(posted)
+
+
+# ---------------------------------------------------------------------------
+# An order past the levels read refuses itself, not the run
+# ---------------------------------------------------------------------------
+
+
+def test_an_order_past_the_levels_read_is_refused_alone_with_a_warning():
+    out = {}
+
+    def strategy(sim):
+        sim.elapse(POST - sim.now())
+        out["far"] = sim.post("BTCUSDT", "buy", 90.0, 1.0)      # 3 levels read: 99.0 is the last
+        out["near"] = sim.post("BTCUSDT", "buy", 100.0, 1.0)
+        out["again"] = sim.post("BTCUSDT", "buy", 80.0, 1.0)
+        sim.elapse(END - sim.now())
+        out["status"] = {k: sim.order(out[k]).status for k in ("far", "near", "again")}
+
+    with pytest.warns(UserWarning, match=r"90.*Bid.*beyond the 3 level.*assumed_queue") as seen:
+        res = bt.sim.run(strategy, markets=[_market([_ladder(MS, 5.0)])])
+    # Said once per run and market, for the first order refused.
+    assert len([w for w in seen if "beyond the 3 level" in str(w.message)]) == 1
+    assert out["status"] == {"far": "rejected", "near": "resting", "again": "rejected"}
+    events = res.events_df(backend="pandas")
+    assert list(events[events["order_id"] == out["far"]]["event"]) == ["sent", "rejected"]
+
+
+def test_a_replacement_past_the_levels_read_is_refused_and_the_order_stays():
+    out = {}
+
+    def strategy(sim):
+        sim.elapse(POST - sim.now())
+        out["id"] = sim.post("BTCUSDT", "buy", 100.0, 1.0)
+        sim.elapse(MS)
+        sim.replace(out["id"], price=90.0)
+        sim.elapse(END - sim.now())
+        out["order"] = sim.order(out["id"])
+
+    with pytest.warns(UserWarning, match="replacement of order"):
+        res = bt.sim.run(strategy, markets=[_market([_ladder(MS, 5.0)], [(6 * MS, 100.0, 20.0, "sell")])])
+    assert (out["order"].status, out["order"].price, round(out["order"].filled, 6)) == ("filled", 100.0, 1.0)
+    events = res.events_df(backend="pandas")
+    kinds = list(events[events["order_id"] == out["id"]]["event"])
+    assert "replace_rejected" in kinds and "replaced" not in kinds
+
+
+def test_an_order_past_the_levels_read_joins_the_assumed_queue_without_a_warning(recwarn):
+    def strategy(sim):
+        sim.elapse(POST - sim.now())
+        sim.post("BTCUSDT", "buy", 90.0, 1.0)
+        sim.elapse(END - sim.now())
+
+    cfg = bt.sim.Config(queue={"depth_source": "book", "assumed_queue": 2.0})
+    bt.sim.run(strategy, cfg, markets=[_market([_ladder(MS, 5.0)])])
+    assert not [w for w in recwarn if "beyond" in str(w.message)]
+
+
+def test_queue_ahead_is_that_of_the_last_answer_after_a_fill_and_after_a_replacement():
+    out = {}
+
+    def strategy(sim):
+        sim.elapse(POST - sim.now())
+        oid = sim.post("BTCUSDT", "buy", 100.0, 2.0)
+        sim.elapse(MS)
+        out["posted"] = sim.order(oid).queue_ahead
+        sim.elapse(3 * MS)                      # a print of 2 at 100.0 burns the queue to 3
+        sim.replace(oid, qty=1.5)               # smaller, same price: keeps its place
+        sim.elapse(MS)
+        out["replaced"] = sim.order(oid).queue_ahead
+        sim.elapse(END - sim.now())             # a print of 6 serves 1.0 of it
+        o = sim.order(oid)
+        out["filled"] = (round(o.filled, 6), o.queue_ahead)
+
+    trades = [(5 * MS, 100.0, 2.0, "sell"), (8 * MS, 100.0, 6.0, "sell")]
+    bt.sim.run(strategy, markets=[_market([_ladder(MS, 5.0)], trades)])
+    assert out == {"posted": 5.0, "replaced": 3.0, "filled": (1.5, 0.0)}

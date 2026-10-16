@@ -784,6 +784,10 @@ class FeeConfig:
     (named fee schedules) plus ``symbol_venue`` (which symbol trades where).
     Single-venue configs are unchanged — leaving ``per_venue``/``symbol_venue``
     empty serializes to the exact same JSON as before.
+
+    A negative ``maker_fee_bps`` / ``taker_fee_bps`` is a rebate: the fee of a
+    fill is negative and credits the cash. ``min_fee`` floors a commission (a
+    fee of zero or more) and never lifts a rebate.
     """
 
     maker_fee_bps: float = 0.0
@@ -1190,8 +1194,9 @@ class BacktestConfig:
     quotes, the fill marks, and the book a quoting strategy reads at each
     wake-up (``bt.book.bid_price_at(k)``, ``bt.book.bid_levels()``). Past it
     the run knows nothing, as past the depth stored: an order resting further
-    out joins a queue the book cannot measure (``assumed_queue`` then, or a
-    refusal by name), and a book column naming a deeper level is refused
+    out joins a queue the book cannot measure (``assumed_queue`` then, or, for a
+    quote, that quote refused alone and the run goes on, counted in
+    ``order_activity["refused_beyond_levels"]``), and a book column naming a deeper level is refused
     before anything is read. A bound is for speed: on a BTCUSDT day stored
     200 levels deep as whole ladders, a maker quoting three levels a side
     every 200 ms runs in 0.75 to 1.3 s reading every level and about 0.55 s

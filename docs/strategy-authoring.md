@@ -1089,7 +1089,9 @@ config.execution.fill_model = {
    update, on a side standing empty, or deeper than the deepest level stored or
    read (`book_levels` when it is set: see
    [How deep a run reads](#how-deep-a-run-reads)) — the queue is **unknown**: `assumed_queue` takes over as the declared fallback
-   when one was given, and the run is refused by name when none was. It is never
+   when one was given, and the run is refused by name when none was (a strategy
+   that quotes, like `mbt.sim`, refuses that one order instead and goes on: see
+   [Quoting in the DSL](#quoting-in-the-dsl)). It is never
    read as zero, which would put the order at the front of a queue nobody saw.
    **A level off the tick grid finds no depth in the book**, so it lands in this
    case every single time: set `execution.tick_size` (see
@@ -1122,6 +1124,14 @@ is a multiple of the order size rather than an absolute quantity because an
 absolute quantity has no scale from one symbol to the next: the same ten days
 measured a median queue of 62 times the quoted size on BTCUSDT and 7 times on
 XRPUSDT.
+
+An assumed queue is held to its size: under `depth_source="assumed"` the order
+waits behind `assumed_queue` times its own size, and no state of the book moves
+that, whatever the level shows. The bound that brings a queue down to the
+depth of its level (nobody can be ahead of us for more than the level holds)
+belongs to `depth_source="book"`; applied to an assumed queue it would make
+every `assumed_queue` above the displayed size the same queue, and the axis you
+are asked to sweep would stop moving the result.
 
 ### One decision per event
 
@@ -1158,31 +1168,63 @@ result.fill_fragility
 #  'would_fill_touch': 7432, 'would_fill_traverse': 1329}
 ```
 
-- `queue_decided_fills` — the volume ahead was consumed and the trade reached the
-  order. This is what modelling the queue bought.
-- `traverse_fills` — a print through the level, or the book crossing it, served
-  the order. This is what the `traverse` convention already gave for free.
-- `partial_fills` — orders whose life ended having filled part of their size.
-- `book_unknown_at_post` — orders posted behind an `assumed_queue` because the
+- `queue_decided_fills` counts **fills**: the volume ahead was consumed and the trade
+  reached the order. This is what modelling the queue bought.
+- `traverse_fills` counts **fills**: a print through the level, or the book crossing
+  it, served the order. This is what the `traverse` convention already gave for
+  free. It counts the `traverse` and the `book_cross` rows of a fill table
+  alike.
+- `partial_fills` counts **orders** whose life ended having filled part of their size.
+- `book_unknown_at_post` counts **orders** posted behind an `assumed_queue` because the
   stored book could not answer at their level and instant.
-- `fills_from_book_cross` — of `traverse_fills`, the ones decided by a **book
-  cross** rather than by a print through the level. Kept apart because an
-  archive can carry a transient crossing the live sequence never had: subtract
-  it if you do not believe yours.
+- `fills_from_book_cross` counts **fills**, a subset of `traverse_fills`: the ones
+  decided by a **book cross** rather than by a print through the level. Kept
+  apart because an archive can carry a transient crossing the live sequence never
+  had: subtract it if you do not believe yours.
 
-`would_fill_touch` and `would_fill_traverse` sit beside it: how many of the same
-order lives the `touch` and `traverse` conventions would have filled. They bound
-the queue result without a second run:
+`queue_decided_fills` and `traverse_fills` add up to `maker_fills`. An order
+served in three pieces is three fills, one order and one life.
+
+`would_fill_touch` and `would_fill_traverse` sit beside them in a third unit:
+**lives**. Each time an order stops resting at a level (filled, cancelled,
+expired, or requoted to another level), the run adds one to `would_fill_touch` if
+a print at or through that level was seen during the stay, and one to
+`would_fill_traverse` if a print strictly through it was. It is how many of the
+same order lives the `touch` and `traverse` conventions would have filled,
+whether or not the queue served them.
+
+Because the units differ, fills cannot be set against lives: one order served in
+two pieces is two fills and one life. Set the lives against the **orders
+served**, the orders with at least one maker fill, and they bound the queue
+result without a second run:
 
 ```
-would_fill_traverse  <=  queue_decided_fills + traverse_fills
+would_fill_traverse  <=  orders_served
                      <=  would_fill_touch + fills_from_book_cross
 ```
 
+with `orders_served <= queue_decided_fills + traverse_fills`, an equality when no
+order is served in pieces. On a `bt.sim` run:
+
+```python
+fills = res.fills_df()
+orders_served = fills.loc[fills["maker"], "order_id"].nunique()
+```
+
 Both halves are the service rule read backwards. A print through the level
-serves the queue whatever is ahead, so every traversal is a fill; and a queue
-fill needs a print AT the level, which `touch` would have taken — except the
-ones no print witnessed, which the book crossing decided.
+serves the rest of the order whatever is ahead, so every order a traversal
+reached is served; and an order served by the queue needs a print AT the level,
+which `touch` would have taken, except the ones no print witnessed, which the
+book crossing decided. On two hours of a real BTCUSDT day (a maker a tick behind
+the touch, `risk_adverse`), the envelope reads 862 <= 1,285 <= 1,308: 1,285
+orders were served, in 1,325 fills, and the fills cross the right-hand side where
+the orders do not.
+
+The envelope is for a market stored by price. A market stored order by order
+serves its orders from the order events, while these two counters are still
+counted off the prints, so the two can disagree, in either direction. A rule
+that declines fills (see [Execution Models](#execution-models)) moves the left
+side the same way.
 
 They are counted on the lives *this* run produced, so they are an envelope of
 this run and not of two other ones: `touch` fills sooner, so a touch run would
@@ -1465,9 +1507,9 @@ config.execution.fill_model = {
 `risk_adverse` refuses to move the volume ahead of an order when the level
 shrinks with no print at it: a level-2 archive never says whose order left, and
 assuming the cancellations were in front of us is assuming our own luck. Its one
-bound is the level itself: nobody can be ahead of us for more than the level
-holds, so a level shown below the volume ahead brings the queue down to what it
-shows. These two answer with a stated probability instead. When the depth at our own level
+bound, under `depth_source="book"`, is the level itself: nobody can be ahead of
+us for more than the level holds, so a level shown below the volume ahead brings
+the queue down to what it shows. These two answer with a stated probability instead. When the depth at our own level
 falls by `chg` units and no print explains it,
 
 ```
@@ -1480,9 +1522,18 @@ with `front` the volume ahead, `back = prev_depth - front` the volume behind,
 and `f(x) = x^n` (`power`) or `f(x) = log(1 + x)` (`log`). The depth is read
 just before each print: the state stamped at a print's own instant may already
 show it, and that print is counted once, as a trade, not a second time as a
-decrease with nothing to explain it. The formula is
+decrease with nothing to explain it: the prints at our level add up, however
+many there are and whatever else prints in between, and start again only when
+the depth read has moved and the formula has been given the change. The formula is
 `hftbacktest`'s `ProbQueueModel`, reproduced rather than approximated so the two
 engines can be compared fill by fill.
+
+The formula reads the market's volume. On an order-by-order run (`mbt.sim`) the
+strategy's own earlier orders at the level are in the volume ahead of an order
+and not in the depth the book shows, so they are set aside for the formula and
+put back after it: two orders of ours at one level are served in arrival order
+under these queues as under `risk_adverse`, and the second is never served by
+the volume that serves the first.
 
 `n` steers how sharply the model believes the queue: near zero it shares every
 cancellation half and half whatever the position; large, it gives almost all of
@@ -1491,7 +1542,8 @@ gentler curvature and no parameter.
 
 They need `depth_source="book"`. An assumed queue carries no depth at the level
 to watch, so a probabilistic queue on one would silently be the historical rule
-under another name; it is refused.
+under another name; it is refused, by `mbt.run` and by `mbt.sim` alike, before the
+first event.
 
 **The duel.** Three BTCUSDT days, the same 15 415, 16 745 and 17 232 quotes, the
 same one-bar life, the same size, fed to `hftbacktest` through its own converter
@@ -1502,12 +1554,12 @@ quote, at zero latency:
 |---|---|---|---|---|---|
 | 2025-08-13 | `risk_adverse` | 15 415 | 1 653 | 1 654 | 99.994 % |
 | 2025-08-13 | `power`, n=3 | 15 415 | 1 654 | 1 656 | 99.974 % |
-| 2025-08-13 | `log` | 15 415 | 1 657 | 1 658 | 99.955 % |
+| 2025-08-13 | `log` | 15 415 | 1 654 | 1 658 | 99.974 % |
 | 2025-08-23 | `risk_adverse` | 16 745 | 733 | 732 | 99.994 % |
-| 2025-08-23 | `power`, n=3 | 16 745 | 736 | 735 | 99.970 % |
-| 2025-08-23 | `log` | 16 745 | 738 | 736 | 99.964 % |
+| 2025-08-23 | `power`, n=3 | 16 745 | 734 | 735 | 99.982 % |
+| 2025-08-23 | `log` | 16 745 | 735 | 736 | 99.982 % |
 | 2025-08-30 | `risk_adverse` | 17 232 | 740 | 740 | 100 % |
-| 2025-08-30 | `power`, n=3 | 17 232 | 740 | 741 | 99.983 % |
+| 2025-08-30 | `power`, n=3 | 17 232 | 739 | 741 | 99.988 % |
 | 2025-08-30 | `log` | 17 232 | 740 | 741 | 99.994 % |
 
 Every `risk_adverse` disagreement was traced quote by quote on the raw event
@@ -1517,8 +1569,8 @@ the order's price by a buying aggressor serves it here and not in `hftbacktest`,
 which reads only selling prints against a bid: an offer stood under the bid while
 the order rested. A print stamped at the very instant the order leaves (the
 next bar's label) is counted by the harness that drives `hftbacktest`; here the
-order no longer rests at the next bar's open. The probabilistic rules keep three
-to six a day, not traced yet.
+order no longer rests at the next bar's open. The probabilistic rules keep one
+to four a day, not traced yet.
 
 ### Conditional adverse selection
 
@@ -2328,7 +2380,11 @@ levels per side of the stored book the venue and the strategy read: **every
 stored level by default**, at most `levels` when it is given (the stored depth
 when the book is shallower). Past it the book says nothing, as past the stored depth: `levels()`
 stops there, and an order resting further out joins a queue the book cannot
-measure (`assumed_queue`, or a refusal by name).
+measure (`assumed_queue`, or a refusal by name). That refusal is the order's
+alone, not the run's: a new order ends `rejected` (a `rejected` event in the
+journal), a replacement is answered `replace_rejected` and the order stays as
+it was, and the run goes on. The first order refused on each market is said in
+a Python `UserWarning` that names the price, the side and the levels read.
 
 ### The strategy's side
 
@@ -2405,13 +2461,24 @@ and the fills show it. Without it, a sell a hair under `116994.6` would read a
 print AT `116994.6` as one THROUGH its price and be served whole, ahead of the
 queue the same order posted at `116994.6` waits in. A symbol without a tick
 (`tick_size=0`) has its prices put on the stored book's own price grid, eight
-decimals, and nothing else moves.
+decimals, and nothing else moves. That grid, one hundred-millionth, is also the
+finest the venue compares prices on, so a market whose tick is finer than it
+(`tick_size=1e-9`) or falls between two of its points (`tick_size=1.5e-8`) is
+refused by name when it is built (`Market.from_ladders`, `Market.from_store`,
+and the quotes of `mbt.run`): two of its levels would be one point of the grid.
+A tick of `0`, or any multiple of `1e-8`, is accepted.
 
 **An order that would not execute on arrival rests.** Its queue is the size the
 book shows at its price, plus the strategy's own earlier orders at that price
-(first come, first served among them). Prints at its price burn that queue, and
-what they leave past it serves the order, in part or in full. The queue can
-never exceed the size the level shows. A print strictly through the order's
+(first come, first served among them). When one of those earlier orders leaves
+its place (it is cancelled, it expires, a replacement sends it to another price
+or, being larger, to the back) or weighs less (a smaller replacement keeps its
+place), the orders of ours behind it have exactly that much less ahead of them,
+whatever the book has shown in the meantime. Prints at its price burn that
+queue, and
+what they leave past it serves the order, in part or in full. A queue read off
+the book can never exceed the size the level shows; an assumed queue
+(`depth_source="assumed"`) is `assumed_queue` times the order and stays so. A print strictly through the order's
 price, whichever side crossed, or an opposite best price at or through it,
 serves the rest: the level was emptied.
 
@@ -2420,18 +2487,89 @@ level by level, within its limit, and the rest of it expires. The simulated
 fills take nothing out of the stored book, so a rest left there would be
 crossed at once by the very liquidity it just took. A `GTX` that would execute
 is rejected; a `FOK` that cannot fill whole takes nothing; a market order takes
-what the ladder offers.
+what the ladder offers. An order the size of the whole displayed ladder (the
+float sum of its levels, whichever side of it the last digit falls on) is
+served whole and ends `filled`: what it leaves is a rest only above a
+trillionth of its own size.
 
 **A replacement** at the same price with a smaller size keeps the order's place
 in the queue; any other change sends it to the back of the queue at its new
 price. A new price that would execute is refused, and the order stays as it
-was.
+was; so is a new price past the levels read with no `assumed_queue` (see
+`levels=` above and "What refuses, and why").
 
 **Fees** are the maker fee on a fill of a resting order and the taker fee on a
-fill at arrival (`maker_fee_bps`, `taker_fee_bps`).
+fill at arrival (`maker_fee_bps`, `taker_fee_bps`). A negative rate is a
+rebate: the fill's fee is negative and the cash is credited with it
+(`maker_fee_bps=-1` on a fill of 100.0 pays 0.01).
 
 The simulated orders do not move the market: the stored book and tape are
 replayed as they were.
+
+### At the edges
+
+What the venue does where the rules above meet each other, on a market stored by
+price.
+
+**A print at an order's price burns its queue only from the side that consumes
+it.** A selling aggressor for a bid, a buying one for an ask: rule 6 of
+[Queue Model](#queue-model). "Prints at its price burn that queue", above, means
+the prints of that side. A print at a resting bid's price whose aggressor is a
+buyer is the other side's trade: it neither burns the bid's queue nor serves it.
+A print strictly THROUGH the price serves the rest of the order whichever side
+crossed.
+
+**A cancellation can overtake its order.** An order sent at `t` reaches the venue
+at `t + entry`, a cancellation sent at `t'` at `t' + cancel`. When the
+cancellation gets there strictly first (a `cancel` latency shorter than `entry`),
+the venue has nothing to cancel and refuses it (`cancel_rejected` in the
+journal). The order then arrives, rests and can be served, though the strategy
+asked for the opposite. Cancelling an order still in flight works only if the
+cancellation does not reach the venue before the order does; at the same instant
+the order, sent first, goes first.
+
+**A replacement** at the same price keeps the order's place when its total size
+is smaller **or unchanged**; a larger size, or another price, sends it to the
+back. A new total size that does not exceed what the order has already filled
+cancels the rest: the order ends `cancelled` with what it filled, and its `qty`
+stays the size it was sent with, not the new one. That holds when the new size
+equals the filled part exactly: the order is not `filled`.
+
+**A GTD order** (`expire_at`, a venue instant in nanoseconds):
+
+- The market comes first at `expire_at` as at any instant: a print stamped
+  `expire_at` still serves the order, and the order expires after it.
+- An `expire_at` at or before the instant the order reaches the venue expires it
+  on arrival. It never rests, and it does not execute even when its price would;
+  one nanosecond later it does.
+- A cancellation and the expiry that land on the same instant: whichever the
+  venue booked first decides. The expiry is booked when the venue accepts the
+  order, a cancellation when the strategy sends it. So a cancellation sent before
+  the order reached the venue (the `cancel` shorter than `entry` case above) wins
+  and the order ends `cancelled`; one sent when or after the order reached it
+  comes second, the order ends `expired`, and the cancellation is refused.
+
+**Statuses of what did not execute.** A `FOK` that cannot fill whole ends
+`expired` with nothing filled; `rejected` is the post-only order that would
+execute. An `IOC`, a market order or an executable `GTC` whose size found only
+part of its liquidity ends `expired` too, and keeps the part that filled.
+
+**Case.** `side`, `tif` and the symbol are read without regard to case: `"BUY"`,
+`"gtc"` and a lower-case ticker are accepted, and the tables show `buy`, `GTC`
+and the symbol as the market names it.
+
+**The clock.** `sim.now()` starts at the first event, a book state or a print, of
+ANY market of the run, not only of the ones the strategy trades. A symbol that is
+in the run and idle but starts earlier moves the whole grid of `elapse(dt)`
+wake-ups of the others, and with it the orders and the fills.
+
+**The end of the data.** A `post` after `elapse` has returned `False` is accepted.
+The order reaches the venue only if the strategy moves the clock again; a
+function that returns right after it leaves the order `in_flight`.
+
+**The seed.** `Config.seed` changes nothing today: no queue model draws
+(`risk_adverse`, `power`, `log` and the exact queue are deterministic), so two
+seeds give the same run to the bit.
 
 ### What comes out
 
@@ -2441,9 +2579,9 @@ replayed as they were.
 | `res.fills_df()` | Every fill at the venue's instant, with its `channel`: `queue`, `traverse` (a print through the price), `book_cross`, `taker` |
 | `res.events_df()` | The order journal: what the strategy sent (local time) and what the venue did (venue time) |
 | `res.equity_df()` | Cash plus each position at its venue mid, at each wake-up |
-| `res.metrics` | Orders, fills, volume, fees, P&L, maximum drawdown, final position |
+| `res.metrics` | Orders, fills, volume, fees, P&L, maximum drawdown, final position. `orders_filled`, and the "N filled" of `res.summary()`, count the orders served at least in part, so an order filled in part and then cancelled or expired is counted: it can exceed the orders whose status is `filled` |
 | `res.fill_marks` | The markouts of [Marking a Fill](#marking-a-fill), with the horizons counted from the fill itself (`anchor == "fill"`) |
-| `res.fill_fragility` | What the queue decided for the orders that rested, in the shape of [Queue Model](#queue-model): `maker_fills`, and under `queue` the `queue_decided_fills`, `traverse_fills`, `fills_from_book_cross`, `partial_fills` and `book_unknown_at_post` (orders posted behind `assumed_queue`); `would_fill_touch` / `would_fill_traverse` count the lives of an order at one level that a print reached, or went through. `touch_only_fills` is a bar convention and stays `0` |
+| `res.fill_fragility` | What the queue decided for the orders that rested, in the shape of [Queue Model](#queue-model): `maker_fills`, and under `queue` the `queue_decided_fills`, `traverse_fills`, `fills_from_book_cross`, `partial_fills` and `book_unknown_at_post` (orders posted behind `assumed_queue`); `would_fill_touch` / `would_fill_traverse` count the lives of an order at one level that a print reached, or went through. The counters under `queue` count fills, except `partial_fills` and `book_unknown_at_post`, which count orders; `traverse_fills` counts the `traverse` and the `book_cross` fills. Read the units in [Queue Model](#queue-model), "What comes out", before setting one against another. `touch_only_fills` is a bar convention and stays `0` |
 | `res.levels_snapped` | Orders whose price was between two ticks and moved to the passive side |
 
 ### A market without a store
@@ -2460,6 +2598,18 @@ market = mbt.sim.Market.from_ladders(
 )
 res = mbt.sim.run(strategy, markets=[market])
 ```
+
+It refuses what it cannot read, by name: states or prints out of time order,
+levels out of price order, a price or a size that is not finite and positive. It
+does not check that the market makes sense, and accepts:
+
+- a **crossed or locked book**, a bid at or above the ask: an order that crosses
+  it executes at once against the displayed opposite side;
+- a market with **prints and no book state**: every book read is empty
+  (`best_bid` is `None`) and a market order expires;
+- a level **off the tick grid**: `book.levels()` shows it as written, while an
+  order priced there is put on the grid, on its passive side, so it does not
+  queue behind that level.
 
 ### Against another engine
 
@@ -2486,8 +2636,19 @@ differences come from two named rules:
 - Cancelling or replacing an order the strategy knows to be finished, or a
   market order's price: refused. Cancelling an order whose cancellation is
   already on its way does nothing.
-- A latency key other than the four, a negative latency, an unknown queue key:
-  refused before the run starts.
+- A latency key other than the four, a negative latency, an unknown queue key,
+  a latency, a fee, `initial_cash` or a queue number that is NaN or infinite, a
+  negative `seed`: refused before the run starts, naming the key and the value.
+- An order id that no `post` returned (`sim.cancel(-1)`, `sim.replace(-1, ...)`):
+  refused as an order never sent (`sim.order(-1)` is `None`). A `levels` below 1
+  when a market is read from a store, or `book.levels(n)` with a negative `n`:
+  refused, naming the parameter.
+- An order posted, or replaced to a price, past the levels read, with no
+  `assumed_queue` to stand in for the queue there: refused on its own, by
+  name, and the run goes on (`rejected`, or `replace_rejected` with the order
+  left as it was). The words are those of a `UserWarning`, given once per run
+  and market, with the price, the side, the number of levels read and the way
+  out: `levels=`, or `assumed_queue`.
 - A symbol with no stored book over the range: refused by name ("ingest it
   first"). A range with no prints is accepted: the book alone can cross an
   order.
@@ -2717,6 +2878,20 @@ counts no further, `bid_price_at(k)` past it is NaN as past the stored depth, a
 book column deeper than it is refused before the run, and an order resting
 further out joins a queue the venue cannot measure (`assumed_queue`).
 
+**A quote past the levels read is refused on its own.** Without
+`fill_model.queue.assumed_queue`, a quote at a price the stored book cannot
+measure (further out than the levels read, or at an instant the book does not
+cover) is refused on arrival and the run goes on: its order ends `rejected`
+(the `rejected` event of `res.sim`), frees its quote, and the next wake-up asks
+again. Each is counted in `res.order_activity["refused_beyond_levels"]`,
+apart from `post_only_rejected`, which counts the GTX quotes that would have
+crossed; the first one is said in a `UserWarning` (the price, the side, the
+levels read, the way out: `book_levels`, or `assumed_queue`), once per run, and
+in `res.warnings`. A sweep refuses it in the combinations that met it, each
+counted in its own `order_activity`, and says the first in a single
+`UserWarning` for the whole call. With an `assumed_queue` the quote rests behind
+it and nothing is refused (`book_unknown_at_post` counts them).
+
 At the wake-up these combine with arithmetic, comparisons, `&`, `|`, `~`,
 `mbt.when`, the element-wise functions of `manifoldbt.indicators` (`abs_val`,
 `min_val`, `max_val`, `sqrt`, `log`, `exp`, ...), `.round_to(step)` /
@@ -2855,7 +3030,7 @@ way, and the venue's own record beside it.
 | `res.metrics` | The metrics of every run, as returns on `initial_capital`, and what the run ended with in money: `final_equity` and `pnl`. On a run of one day, as above, the ones taken from daily returns (Sharpe, Sortino, volatility, CAGR, Calmar...) are NaN and `res.warnings` says why: see [Metrics Reference](#metrics-reference) |
 | `res.trades_df()` | One row per fill |
 | `res.equity_df()`, `res.positions_df()` | At `output_resolution` |
-| `res.order_activity` | `orders_posted`, `requotes` (a post that replaced a live order of the same quote), `expired_unfilled` (orders cancelled with nothing filled), with a latency `stale_fills` and `overlapping_live_orders`, and when they are not zero `post_only_rejected` (GTX quotes refused on arrival because they would have crossed) and `levels_snapped` (quotes between two ticks, posted on the passive side; `res.warnings` says so too) |
+| `res.order_activity` | `orders_posted`, `requotes` (a post that replaced a live order of the same quote), `expired_unfilled` (orders cancelled with nothing filled), with a latency `stale_fills` and `overlapping_live_orders`, and when they are not zero `post_only_rejected` (GTX quotes refused on arrival because they would have crossed), `refused_beyond_levels` (quotes refused for a price past the levels read, with no `assumed_queue`; the run goes on) and `levels_snapped` (quotes between two ticks, posted on the passive side; `res.warnings` says so too) |
 | `res.fill_fragility` | What the queue decided, as for a bar run under [Queue Model](#queue-model): `maker_fills`, `queue` (`queue_decided_fills`, `traverse_fills`, `fills_from_book_cross`, `partial_fills`, `book_unknown_at_post`: read it to know how many quotes stood behind `assumed_queue`), `would_fill_touch`, `would_fill_traverse` (per life of an order at one level). `touch_only_fills` is a bar convention and stays `0`. A sweep's `service_rate` and `queue_decided_fills` columns read it |
 | `res.fill_marks` | The markouts of [Marking a Fill](#marking-a-fill), counted from the fill itself (`anchor == "fill"`) |
 | `res.orders_df()`, `res.fills_df()`, `res.events_df()` | The tables of `mbt.sim`: every order, every fill with its `channel`, the order journal. They speak the venue's words, those of the order API: `qty`, `fee`, `price`, `side` as `"buy"` or `"sell"`; `res.trades_df()` keeps the trade log's own, the same for every run: `quantity`, `fees`, `fill_price`, `side` as 1 or 2 |
@@ -3042,7 +3217,9 @@ them).
 A busy stock's book goes thousands of levels deep, down to orders parked at a
 hundredth of a cent and at the price cap: it is read **1000 levels deep** unless
 `levels=` (or `BacktestConfig.book_levels`) says otherwise, as a book stored a
-thousand levels deep.
+thousand levels deep. A side that shows fewer levels than are read shows every
+level it has: an order resting past its last level, still within the levels
+read, joins an empty queue, whatever the market does after it.
 
 ### The exact queue
 
@@ -3073,7 +3250,10 @@ replacement going to the back.
 `queue_ahead` (`sim.order(id).queue_ahead`, `bt.queue_ahead(side)` in a
 quote) is the volume ahead of the order exactly, ours included, as the feed
 shows it at the strategy's clock: `feed` behind the venue, from the moment the
-acknowledgement has told the strategy which order is its own.
+acknowledgement has told the strategy which order is its own. Each answer
+about the order (a fill, a replacement that keeps its place) brings its own
+value as it arrives, and the feed never takes the reading back to an older one:
+it moves on again once it has caught up with that answer.
 
 ### Naming the queue
 
@@ -3166,6 +3346,11 @@ on AAPL, 63 ms later on QQQ), except on QQQ with 100 shares: a partial fill.
 
 - An order resting past the levels read, on a side that shows as many as it
   can: the volume there is not read. Read more levels, or quote within them.
+  The order alone is refused (`rejected`, or `replace_rejected` for a
+  replacement, which leaves its order as it was), with a `UserWarning` once per
+  run and market; the run goes on. A side that shows fewer levels than are read
+  shows every level it has: an order past its last one is not refused, it
+  joins an empty queue.
 - `"fifo"` named on a book stored by price, or in a run on bars or on the
   trade clock.
 - A range with no event of the symbol in it: ingest the day first.
@@ -3197,6 +3382,11 @@ mbt.FeeConfig(
     default_fill_type="Taker",
 )
 ```
+
+A negative `maker_fee_bps` or `taker_fee_bps` is a rebate (an exchange that pays
+its makers): the fee of a fill is negative and the cash is credited with it.
+`min_fee` is the floor of a commission, a fee of zero or more; it never lifts a
+rebate. A run whose fees are all zero or more is unchanged.
 
 ### Slippage
 

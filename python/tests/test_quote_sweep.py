@@ -13,6 +13,7 @@ file checks the Python door: the routing of ``run_sweep``, ``run_sweep_lite``,
 """
 import json
 import os
+import warnings
 
 import pytest
 
@@ -177,6 +178,49 @@ def test_a_batch_of_strategies_that_quote_is_each_run_alone():
         raw0, sim0 = _native.run_quotes(s.to_json(), config().to_json(), None, [market])
         assert journal(sim) == journal(sim0)
         assert json.dumps(l.metrics, sort_keys=True) == json.dumps(raw0.metrics, sort_keys=True)
+
+
+def deep_maker():
+    """One quote ``off`` below the best bid: readable at 0, past the levels
+    read once ``off`` is large enough."""
+    off = bt.param("off", default=0.0)
+    return bt.Strategy.create("deep").quote("buy", book.bid_price_at(1) - off, 0.01)
+
+
+@needs_layer
+@pytest.mark.parametrize("lite", [False, True])
+def test_a_sweep_refuses_a_deep_quote_alone_in_its_combination_and_says_it_once(lite):
+    market = walk_market(seed=11, n=1_500)
+    no_fallback = config(execution=bt.ExecutionConfig(
+        fill_model={"queue": {"depth_source": "book"}}))
+    grid = {"off": [{"Float64": v} for v in (0.0, 3.0, 5.0, 8.0)]}
+    fn = _native.run_quote_sweep_lite if lite else _native.run_quote_sweep
+    with pytest.warns(UserWarning, match="the stored book says nothing at") as seen:
+        out = fn(deep_maker().to_json(), json.dumps(grid), no_fallback.to_json(),
+                 None, [market], 2, "{}")
+    # One for the call, not one per combination.
+    told = [w for w in seen if "the stored book says nothing at" in str(w.message)]
+    assert len(told) == 1
+    assert len(out) == 4
+    if lite:
+        # The metrics are all a lite result keeps, and the warnings.
+        counts = [any("refused_beyond_levels" in w for w in r.warnings) for r in out]
+    else:
+        counts = [r[0].order_activity.get("refused_beyond_levels", 0) > 0 for r in out]
+    assert counts == [False, True, True, True]
+    if not lite:
+        # Each combination is the run alone, to the bit, refusals included.
+        for i, off in enumerate((0.0, 3.0, 5.0, 8.0)):
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                raw, sim = _native.run_quotes(
+                    deep_maker_at(off).to_json(), no_fallback.to_json(), None, [market])
+            assert raw.order_activity == out[i][0].order_activity
+            assert journal(sim) == journal(out[i][1])
+
+
+def deep_maker_at(off):
+    return bt.Strategy.create("deep").quote("buy", book.bid_price_at(1) - off, 0.01)
 
 
 @needs_layer

@@ -281,7 +281,12 @@ class Strategy:
         counted in ``order_activity["levels_snapped"]``.
 
         An order that has filled, been cancelled or been refused frees its
-        quote without a cancellation. The expressions may read the batch
+        quote without a cancellation. A quote at a price past the levels the
+        book was read to, with no ``fill_model.queue.assumed_queue``, is
+        refused on its own and the run goes on: it ends ``rejected``, is
+        counted in ``order_activity["refused_beyond_levels"]`` and the first
+        one is said in a ``UserWarning`` (once per run, and once per sweep
+        call). The expressions may read the batch
         (the book columns ``bt.book.*``, the strategy's own signals, params)
         and the state at the wake-up: ``position()``, ``cash()``,
         ``live_qty(side)``, ``order_age(side)``, ``order_price(side)``,

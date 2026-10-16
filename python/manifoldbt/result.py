@@ -447,8 +447,10 @@ class QuoteResult(Result):
     ``trades`` per fill, ``metrics`` (returns on the capital, and in money
     ``final_equity`` and ``pnl``), ``order_activity`` (orders posted,
     requotes, orders cancelled unfilled; under a latency ``stale_fills`` and
-    ``overlapping_live_orders``, counted per quote; ``post_only_rejected`` and
-    ``levels_snapped`` when not zero), ``fill_fragility`` (what the queue
+    ``overlapping_live_orders``, counted per quote; ``post_only_rejected``,
+    ``refused_beyond_levels`` (quotes refused alone for a price past the
+    levels read, with no ``assumed_queue``) and ``levels_snapped`` when not
+    zero), ``fill_fragility`` (what the queue
     decided: ``maker_fills`` and the ``queue`` counters, among them
     ``book_unknown_at_post``, the quotes posted behind ``assumed_queue``) and
     ``fill_marks`` (the markouts of every fill, counted from the fill itself).

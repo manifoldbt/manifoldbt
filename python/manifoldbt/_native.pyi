@@ -204,7 +204,22 @@ class Market:
         tick_size: float,
         states: List[Tuple[int, List[Tuple[float, float]], List[Tuple[float, float]]]],
         trades: Optional[List[Tuple[int, float, float, str]]] = None,
-    ) -> Market: ...
+    ) -> Market:
+        """A market written out by hand: ``states`` as ``(ts_ns, bids, asks)``
+        with each side a list of ``(price, size)`` from the best, ``trades`` as
+        ``(ts_ns, price, qty, "buy" | "sell")``.
+
+        Refused by name: states or prints out of time order, levels out of
+        price order, a price or a size that is not finite and positive, and a
+        ``tick_size`` that is neither ``0`` (no tick) nor a multiple of
+        ``1e-8``, the grid the venue compares prices on. Not
+        checked, and accepted: a crossed or locked book (an order that crosses
+        it executes at once against the displayed opposite side); prints and no
+        book state (every book read is empty and a market order expires); a
+        level off the tick grid (``Book.levels()`` shows it as written, while an
+        order priced there is put on the grid, on its passive side, and does not
+        queue behind that level)."""
+        ...
     @property
     def name(self) -> str: ...
     @property
@@ -281,9 +296,25 @@ class Sim:
     def post(
         self, symbol: Union[str, int], side: str, price: Optional[float], qty: float,
         tif: str = "GTC", expire_at: Optional[int] = None,
-    ) -> int: ...
-    def cancel(self, id: int) -> None: ...
-    def replace(self, id: int, price: Optional[float] = None, qty: Optional[float] = None) -> None: ...
+    ) -> int:
+        """Send an order and get its id. ``side``, ``tif`` and the symbol are
+        read without regard to case. ``price=None`` is a market order; a price
+        is put on the tick grid first. A GTD order whose ``expire_at`` is at or
+        before its arrival expires without executing. A post after the data is
+        over is accepted: the order reaches the venue only if the clock moves
+        again, and stays ``in_flight`` otherwise."""
+        ...
+    def cancel(self, id: int) -> None:
+        """Send a cancellation. A cancellation that reaches the venue before its
+        order (a cancel latency shorter than the entry latency) is refused, and
+        the order then rests and can be served."""
+        ...
+    def replace(self, id: int, price: Optional[float] = None, qty: Optional[float] = None) -> None:
+        """Change the price, the total size, or both. The same price with a size
+        smaller or unchanged keeps the order's place; anything else sends it to
+        the back. A total size that does not exceed what filled cancels the rest:
+        the order ends ``cancelled``, ``qty`` unchanged."""
+        ...
 
 class SimResult:
     symbols: List[str]
