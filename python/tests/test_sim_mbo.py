@@ -283,3 +283,45 @@ def test_a_real_day_quoted_in_its_exact_queue(tmp_path):
     fills = res.sim.fills_df(backend="pandas")
     assert len(fills) > 0
     assert res.sim.fill_fragility["queue"]["queue_decided_fills"] > 0
+
+
+def _three_bid_levels():
+    return [
+        add(0, 1, True, 100, 10.00),
+        add(0, 2, True, 100, 9.99),
+        add(0, 3, True, 100, 9.98),
+        add(0, 4, False, 100, 10.01),
+        add(20, 5, True, 100, 9.97),          # a fourth level, after the order
+        add(40, 6, False, 1, 10.02),
+    ]
+
+
+def _post_at(price, store, **kw):
+    out = {}
+
+    def strategy(sim):
+        sim.elapse(OPEN_UTC + 2 * MS - sim.now())
+        out["id"] = sim.post("XYZ", "buy", price, 5.0)
+        sim.elapse(OPEN_UTC + 10 * MS - sim.now())
+        out["order"] = sim.order(out["id"])
+
+    res = bt.sim.run(strategy, None, store, symbols=["XYZ"], start=OPEN_UTC,
+                     end=OPEN_UTC + 60 * 1_000 * MS, **kw)
+    return res, out
+
+
+def test_a_side_that_shows_fewer_levels_than_are_read_has_nothing_past_its_last_level(tmp_path):
+    store = _store(tmp_path, _three_bid_levels())
+    # 1000 levels are read and the bid side shows three: the fourth price is
+    # empty, whatever the market shows later.
+    _, out = _post_at(9.97, store)
+    assert (out["order"].status, out["order"].queue_ahead) == ("resting", 0.0)
+
+
+def test_an_order_past_the_levels_read_of_a_market_by_order_is_refused_alone(tmp_path):
+    store = _store(tmp_path, _three_bid_levels())
+    with pytest.warns(UserWarning, match=r"read 3 levels deep.*9.97"):
+        res, out = _post_at(9.97, store, levels=3)
+    assert out["order"].status == "rejected"
+    events = res.events_df(backend="pandas")
+    assert list(events[events["order_id"] == out["id"]]["event"]) == ["sent", "rejected"]

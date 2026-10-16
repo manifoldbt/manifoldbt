@@ -31,9 +31,22 @@ What the venue does:
   crossed at once by the very liquidity it just took;
 * an order that would not execute rests at the back of its level's queue,
   behind the size the book shows there and behind the strategy's own earlier
-  orders at that price;
+  orders at that price (one of them that leaves or shrinks moves the orders
+  behind it up by what it held);
+* a print at the price of a resting order burns its queue only from the side
+  that consumes it (a selling aggressor for a bid, a buying one for an ask);
+  a print strictly through the price serves the rest, whichever side crossed;
 * at one venue instant the market comes first: the prints, then the book state
-  that shows them, then the actions that arrive at that instant.
+  that shows them, then the actions that arrive at that instant. A print
+  stamped at a GTD order's ``expire_at`` still serves it;
+* a cancellation that reaches the venue before its order (a cancel latency
+  shorter than the entry latency) is refused, and the order then rests and
+  can be served;
+* a replacement at the same price keeps the order's place when its size is
+  smaller or unchanged; a total size that does not exceed what filled cancels
+  the rest (status ``cancelled``, ``qty`` unchanged);
+* a GTD order whose ``expire_at`` is at or before its arrival expires without
+  executing; a FOK that cannot fill whole ends ``expired``.
 
 A market stored order by order (``bt.ingest_mbo``) serves a resting order in
 its exact place in the queue instead: behind the orders that reached its level
@@ -44,6 +57,7 @@ Its book by price is read as any stored book.
 from __future__ import annotations
 
 import json
+import math
 import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -72,19 +86,33 @@ def _duration_ns(what: str, raw: Any) -> int:
             f"{what}: Interval.trades() is a simulation clock, not a duration; "
             "pass Interval.millis(n), Interval.seconds(n) or nanoseconds"
         )
-    nanos = _interval_to_nanos(raw)
+    try:
+        nanos = _interval_to_nanos(raw)
+    except (ValueError, OverflowError) as err:
+        raise ValueError(f"{what} must be a finite duration, got {raw!r} ({err})") from None
     if nanos is None and hasattr(raw, "total_seconds") and hasattr(raw, "microseconds"):
         nanos = (raw.days * 86_400 + raw.seconds) * 1_000_000_000 + raw.microseconds * 1_000
     if nanos is None:
         if isinstance(raw, bool) or not isinstance(raw, int):
             raise TypeError(
-                f"{what} takes a duration: Interval.millis(n), Interval.seconds(n), "
-                "a datetime.timedelta, or a number of nanoseconds"
+                f"{what} takes a duration, got {raw!r}: Interval.millis(n), "
+                "Interval.seconds(n), a datetime.timedelta, or a number of nanoseconds"
             )
         nanos = raw
     if nanos < 0:
         raise ValueError(f"{what} must be a duration of zero or more, got {nanos} ns")
     return int(nanos)
+
+
+def _finite(what: str, raw: Any) -> float:
+    """``raw`` as a float, refused by name when it is NaN or infinite."""
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        raise TypeError(f"{what} takes a number, got {raw!r}") from None
+    if not math.isfinite(value):
+        raise ValueError(f"{what} must be a finite number, got {raw!r}")
+    return value
 
 
 def _instant_ns(what: str, raw: Any) -> int:
@@ -128,11 +156,20 @@ class Config:
             stored by price). Left out: the exact queue on a market stored
             order by order, ``risk_adverse`` reading the stored book on the
             others. Named, it is the model of every market of the run.
+            ``depth_source="assumed"`` makes the queue ``assumed_queue``
+            times the order, whatever the book shows: it is not brought down
+            to the displayed size, which is the rule of ``"book"``. ``"power"``
+            and ``"log"`` read the depth at the order's level, so they need
+            ``depth_source="book"``: with ``"assumed"`` the run is refused by
+            name before it starts.
         maker_fee_bps: Fee on a fill of a resting order, in basis points of the
-            notional.
-        taker_fee_bps: Fee on a fill at arrival.
+            notional. Negative is a rebate: the fee is negative and credits the
+            cash.
+        taker_fee_bps: Fee on a fill at arrival; negative is a rebate too.
         initial_cash: Cash at the start.
-        seed: Seed of the draws a probabilistic queue model makes.
+        seed: Accepted and passed to the venue, but no queue model draws from
+            it: ``risk_adverse``, ``power``, ``log`` and the exact queue are
+            deterministic, so two seeds give the same run to the bit.
     """
 
     latency: Optional[Dict[str, Any]] = None
@@ -150,17 +187,23 @@ class Config:
                 f"unknown latency key(s) {sorted(unknown)}: bt.sim.Config.latency takes "
                 '"entry", "cancel", "response" and "feed"'
             )
+        if self.seed < 0:
+            raise ValueError(f"bt.sim.Config.seed must be zero or more, got {self.seed!r}")
         body = {
             "latency": {
                 k: _duration_ns(f"latency.{k}", latency[k]) for k in _LATENCY_KEYS if k in latency
             },
-            "maker_fee_bps": float(self.maker_fee_bps),
-            "taker_fee_bps": float(self.taker_fee_bps),
-            "initial_cash": float(self.initial_cash),
+            "maker_fee_bps": _finite("bt.sim.Config.maker_fee_bps", self.maker_fee_bps),
+            "taker_fee_bps": _finite("bt.sim.Config.taker_fee_bps", self.taker_fee_bps),
+            "initial_cash": _finite("bt.sim.Config.initial_cash", self.initial_cash),
             "seed": int(self.seed),
         }
         if self.queue is not None:
-            body["queue"] = dict(self.queue)
+            queue = dict(self.queue)
+            for key, value in queue.items():
+                if isinstance(value, float):
+                    _finite(f"bt.sim.Config.queue[{key!r}]", value)
+            body["queue"] = queue
         return json.dumps(body)
 
 
@@ -193,10 +236,18 @@ def run(
             already built, from :meth:`Market.from_store` or written out by
             hand with :meth:`Market.from_ladders`.
         levels: Levels per side of the stored book to load: every stored
-            level when left out; at most that many otherwise, all of them when
-            the book is stored shallower. A level past it reads as absent,
-            as past the stored depth, and an order resting there joins a queue
-            the venue cannot measure (``assumed_queue``).
+            level when left out (1000 for a market stored order by order); at
+            most that many otherwise, all of them when the book is stored
+            shallower. A level past it reads as absent, as past the stored
+            depth, and an order resting there joins a queue the venue cannot
+            measure (``assumed_queue``). Without ``assumed_queue``, that order
+            is refused on its own and the run goes on: a new order ends
+            ``rejected``, a replacement is answered ``replace_rejected`` and
+            the order stays as it was. The first order refused on each market
+            is said in a ``UserWarning`` (the price, the side, the levels
+            read). On a market stored order by order, a side that shows fewer
+            levels than are read shows every level it has: an order past its
+            last level joins an empty queue.
         by_day: Hold each market a UTC day at a time (``True``), whole
             (``False``), or day by day when ``[start, end)`` spans more than
             one day (``"auto"``, the default). Held day by day, the engine
@@ -355,7 +406,23 @@ class SimResult:
         the orders posted behind ``assumed_queue``), ``would_fill_touch`` and
         ``would_fill_traverse`` (per life of an order at one level, whether a
         print reached it or went through it). ``touch_only_fills`` is a bar
-        convention and stays 0."""
+        convention and stays 0.
+
+        Units differ. ``queue_decided_fills``, ``traverse_fills`` (the
+        ``traverse`` and the ``book_cross`` fills) and ``fills_from_book_cross``
+        count fills, and the first two add up to ``maker_fills``;
+        ``partial_fills`` and ``book_unknown_at_post`` count orders;
+        ``would_fill_touch`` and ``would_fill_traverse`` count lives. An order
+        served in several pieces is several fills but one life, so fills cannot
+        be set against lives. On a market stored by price, with
+        ``orders_served`` the orders that have a maker fill::
+
+            would_fill_traverse <= orders_served
+                               <= would_fill_touch + fills_from_book_cross
+
+        and ``orders_served <= queue_decided_fills + traverse_fills``. A market
+        stored order by order is served from its order events, not from the
+        prints these two counters read: no such envelope holds there."""
         return self._raw.fill_fragility
 
     @property
@@ -421,6 +488,10 @@ class SimResult:
         volume and notional traded, fees, final equity, P&L against the
         initial cash, and the deepest drawdown of the equity samples.
 
+        ``orders_filled`` counts the orders served at least in part, not the
+        orders whose status is ``filled``: one filled in part and then
+        cancelled or expired is counted.
+
         Counted in the engine, once: a new dict at each read, from totals kept
         after the first."""
         totals = self._totals
@@ -447,6 +518,8 @@ class SimResult:
         }
 
     def summary(self) -> str:
+        """One line: orders, the orders served at least in part ('N filled'),
+        fills, volume, P&L and fees."""
         m = self.metrics
         return (
             f"{m['orders']} orders, {m['orders_filled']} filled; {m['fills']} fills "
