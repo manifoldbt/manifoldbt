@@ -46,7 +46,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import data as data_mod  # noqa: E402
 import engines as engines_mod  # noqa: E402
 import parity as parity_mod  # noqa: E402
-from engines import CHALLENGERS, ENGINES, REFERENCE  # noqa: E402
+from engines import CHALLENGERS, ENGINES, REFERENCE, ceiling, sweep_ceiling  # noqa: E402
 from workloads import (  # noqa: E402
     DEFAULT_KEYS,
     SCOPE_PAIR,
@@ -73,6 +73,24 @@ def _in_range(key: str, bars: int) -> bool:
 # archived under results/ stay readable.
 SCHEMA_VERSION = 2
 NOISE_THRESHOLD = 0.15
+
+# `--engine-max-bars` overrides, engine name -> bars (0 lifts the ceiling). Module
+# level because every measuring function below needs it and none of them should
+# have to be told twice.
+CEILING_OVERRIDES: Dict[str, int] = {}
+SWEEP_CEILING_OVERRIDES: Dict[str, int] = {}
+
+
+def _within_ceiling(name: str, bars: int) -> bool:
+    """Is this engine run on a series this long?
+
+    The ceiling is a time budget (see ``engines.py``), not a validity limit like
+    a workload's ``max_bars``, and the two are kept apart on purpose: a workload
+    skipped everywhere says something about the workload, an engine skipped at
+    one size says something about what the job can afford.
+    """
+    limit = ceiling(name, CEILING_OVERRIDES)
+    return limit is None or bars <= limit
 
 
 # --------------------------------------------------------------------------- #
@@ -246,11 +264,11 @@ def _roll_up(verdicts: Dict[str, Dict[str, Any]]) -> str:
 
 
 def _prepare_all(key: str, frame, workdir: str, active: List[str]):
-    """Build one timed closure per engine that can run this workload."""
+    """Build one timed closure per engine that can run this workload, here."""
     return {
         name: engines_mod.adapter(name).prepare(key, frame, workdir)
         for name in active
-        if supported(key, name)
+        if supported(key, name) and _within_ceiling(name, len(frame))
     }
 
 
@@ -271,7 +289,8 @@ def _warm_and_gate(key: str, runners: Dict[str, Callable]) -> Dict[str, Any]:
     }
 
 
-def _entry(key: str, bars: int, frame, verdicts: Dict[str, Any], engines_run: List[str]):
+def _entry(key: str, bars: int, frame, verdicts: Dict[str, Any], engines_run: List[str],
+           active: List[str]):
     entry: Dict[str, Any] = {
         "workload": key,
         "title": WORKLOADS[key].title,
@@ -281,9 +300,23 @@ def _entry(key: str, bars: int, frame, verdicts: Dict[str, Any], engines_run: Li
         "parity": verdicts,
         "status": _roll_up(verdicts),
     }
-    skipped = unsupported_by(key)
+    skipped = dict(unsupported_by(key))
+    # An engine held back by its ceiling is not run on this row, and its reason
+    # goes where the other "not run" reasons go, which is the one place a reader
+    # (and the website) already looks for one. It is also kept apart, in
+    # `beyond_ceiling`, because "cannot express this workload" and "too slow to
+    # repeat at this length" are different facts.
+    held_back = {
+        name: ceiling(name, CEILING_OVERRIDES)
+        for name in active
+        if supported(key, name) and not _within_ceiling(name, bars)
+    }
+    for name, limit in held_back.items():
+        skipped.setdefault(name, ENGINES[name].ceiling_why.format(limit=limit))
     if skipped:
         entry["unsupported"] = skipped
+    if held_back:
+        entry["beyond_ceiling"] = held_back
     return entry
 
 
@@ -344,7 +377,7 @@ def measure_pair(keys: List[str], bars: int, reps: int, workdir: str,
     for key in keys:
         runners[key] = _prepare_all(key, frame, workdir, active)
         verdicts = _warm_and_gate(key, runners[key])
-        entries[key] = _entry(key, bars, frame, verdicts, list(runners[key]))
+        entries[key] = _entry(key, bars, frame, verdicts, list(runners[key]), active)
         entries[key]["paired_with"] = [k for k in keys if k != key]
 
     samples = {key: {name: [] for name in runners[key]} for key in keys}
@@ -364,7 +397,7 @@ def measure(key: str, bars: int, reps: int, workdir: str, active: List[str]) -> 
     frame = data_mod.make_ohlcv(bars)
     runners = _prepare_all(key, frame, workdir, active)
     verdicts = _warm_and_gate(key, runners)
-    entry = _entry(key, bars, frame, verdicts, list(runners))
+    entry = _entry(key, bars, frame, verdicts, list(runners), active)
 
     scales = {}
     for name, verdict in verdicts.items():
@@ -411,6 +444,23 @@ def _probe(mode: str, engine: str, workload: str, bars: int) -> Dict[str, Any]:
     raise RuntimeError("probe produced no result: " + out[-500:])
 
 
+def _probe_or_none(mode: str, name: str, workload: str, bars: int, failed: Dict[str, str]):
+    """One probe, where a challenger that dies costs its own cell and nothing else.
+
+    The reference is not forgiven: without it there is nothing to divide by, and
+    a run that quietly lost its baseline would publish a table of absolutes.
+    """
+    try:
+        return _probe(mode, ENGINES[name].code, workload, bars)
+    except Exception as exc:                       # noqa: BLE001 - recorded, not hidden
+        if name == REFERENCE:
+            raise
+        detail = getattr(exc, "stderr", None) or str(exc)
+        failed[name] = "{} probe died: {}".format(mode, str(detail)[-300:].strip())
+        print("  ! {} {} probe died; its column stays empty".format(name, mode))
+        return None
+
+
 def cold_start(workload: str, bars: int, reps: int, active: List[str]) -> Dict[str, Any]:
     """Time to a first backtest in a process that has never seen any engine.
 
@@ -419,14 +469,24 @@ def cold_start(workload: str, bars: int, reps: int, active: List[str]) -> Dict[s
     engines alternate here too, and the interpreter/numpy/pandas baseline is
     measured alongside so each engine's own share is visible.
     """
-    order = [name for name in active if supported(workload, name)]
+    order = [name for name in active
+             if supported(workload, name) and _within_ceiling(name, bars)]
     samples: Dict[str, List[float]] = {name: [] for name in order}
     samples["baseline"] = []
+    failed: Dict[str, str] = {}
     for _ in range(reps):
         for name in order:
-            samples[name].append(
-                _probe("coldstart", ENGINES[name].code, workload, bars)["seconds"])
+            if name in failed:
+                continue
+            result = _probe_or_none("coldstart", name, workload, bars, failed)
+            if result is not None:
+                samples[name].append(result["seconds"])
         samples["baseline"].append(_probe("baseline", "none", workload, bars)["seconds"])
+    # An engine that died on any repetition leaves the table: a median over the
+    # repetitions it survived would be a different measurement from the others.
+    for name in failed:
+        order.remove(name)
+        del samples[name]
     medians = {k: statistics.median(v) for k, v in samples.items()}
     base = medians["baseline"]
     reference = medians[REFERENCE]
@@ -434,6 +494,7 @@ def cold_start(workload: str, bars: int, reps: int, active: List[str]) -> Dict[s
         "workload": workload,
         "bars": bars,
         "engines": order,
+        **({"failed": failed} if failed else {}),
         "samples_s": samples,
         "median_s": medians,
         "engine_share_s": {name: medians[name] - base for name in order},
@@ -455,8 +516,21 @@ def memory(workload: str, bars: int, active: List[str]) -> Dict[str, Any]:
     """
     order = [name for name in active if supported(workload, name)]
     out: Dict[str, Any] = {"workload": workload, "bars": bars, "engines": order}
+    failed: Dict[str, str] = {}
     for name in order:
-        out[name] = _probe("memory", ENGINES[name].code, workload, bars)
+        # An engine past its ceiling is measured AT its ceiling, and its record
+        # carries the bar count it was measured at. Memory added by a run is not
+        # proportional to the series for an engine that streams (Nautilus adds a
+        # few MB at 100,000 and at 2,000,000 bars alike), so the figure is
+        # reported as measured, and the report prints the length beside it.
+        limit = ceiling(name, CEILING_OVERRIDES)
+        at = bars if limit is None else min(bars, limit)
+        result = _probe_or_none("memory", name, workload, at, failed)
+        if result is not None:
+            out[name] = result
+    out["engines"] = [name for name in order if name in out]
+    if failed:
+        out["failed"] = failed
     return out
 
 
@@ -464,23 +538,60 @@ SWEEP_CHILD = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sweep_ch
 
 
 def parse_point(spec: str) -> tuple:
-    """`bars:combos[:oos]`, e.g. `20000:5000` or `20000:100000:oos`.
+    """`bars:combos[:oos[=engine,engine]]`, e.g. `20000:5000` or `20000:20000:oos`.
 
-    The `oos` suffix declares the array-materialising engines out of scope for
-    that point: it is for grids whose vectorbt side needs tens of gigabytes,
-    where running it anyway would time the swap file rather than the engine.
+    The `oos` suffix declares engines out of scope for that point. Bare `oos`
+    means vectorbt, which is what it always meant: it is for grids whose
+    vectorbt side needs tens of gigabytes, where running it anyway would time the
+    swap file rather than the engine. `oos=vectorbt,raptorbt` names the engines
+    explicitly. An engine with no sweep API is also held back on its own, by its
+    sweep ceiling (see engines.py), with no marker needed.
+
+    Returns ``(bars, combos, out_of_scope)`` with ``out_of_scope`` a tuple of
+    engine names.
     """
     parts = spec.split(":")
     if len(parts) not in (2, 3) or not parts[1]:
         raise argparse.ArgumentTypeError(
-            f"expected bars:combos or bars:combos:oos, got {spec!r}")
-    mode = "run"
+            f"expected bars:combos or bars:combos:oos[=engines], got {spec!r}")
+    out_of_scope: tuple = ()
     if len(parts) == 3:
-        if parts[2] != "oos":
+        head, _, names = parts[2].partition("=")
+        if head != "oos":
             raise argparse.ArgumentTypeError(
-                f"third field must be 'oos', got {parts[2]!r}")
-        mode = "oos"
-    return int(parts[0]), int(parts[1]), mode
+                f"third field must be 'oos' or 'oos=engine,engine', got {parts[2]!r}")
+        out_of_scope = tuple(n for n in names.split(",") if n) or ("vectorbt",)
+        unknown = [n for n in out_of_scope if n not in ENGINES or n == REFERENCE]
+        if unknown:
+            raise argparse.ArgumentTypeError(
+                f"cannot declare {unknown} out of scope: pick from "
+                f"{sorted(CHALLENGERS)}")
+    return int(parts[0]), int(parts[1]), out_of_scope
+
+
+def _sweep_out_of_scope(combos: int, declared: tuple, active: List[str]) -> List[str]:
+    """Engines not run on a grid this size: declared (`:oos`) or held back.
+
+    An engine with no sweep API is held back on its own by its sweep ceiling: a
+    grid bigger than what a loop of full backtests can finish is not run whether
+    or not the point says so, so a recipe that only says `:oos` cannot send an
+    engine into hours of work.
+    """
+    out = []
+    for name in active:
+        limit = sweep_ceiling(name, SWEEP_CEILING_OVERRIDES)
+        if name in declared or (limit is not None and combos > limit):
+            out.append(name)
+    return out
+
+
+def _loop_limit_args(oos: List[str]) -> List[str]:
+    """Tell the child the sweep ceiling that held an engine back, to quote it."""
+    for name in oos:
+        limit = sweep_ceiling(name, SWEEP_CEILING_OVERRIDES)
+        if limit is not None:
+            return ["--loop-limit", str(limit)]
+    return []
 
 
 def sweep(points: List[tuple], reps: int, active: List[str]) -> List[Dict[str, Any]]:
@@ -493,12 +604,14 @@ def sweep(points: List[tuple], reps: int, active: List[str]) -> List[Dict[str, A
     it. A dead child is recorded as a crashed point and the run continues.
     """
     out: List[Dict[str, Any]] = []
-    challengers = [n for n in active if n != REFERENCE]
-    for bars, combos, mode in points:
+    for bars, combos, out_of_scope in points:
+        oos = _sweep_out_of_scope(combos, out_of_scope, active)
         proc = subprocess.run(
             [sys.executable, SWEEP_CHILD, "--bars", str(bars),
              "--combos", str(combos), "--reps", str(reps),
-             "--engines", *active, "--vectorbt", mode],
+             "--engines", *active,
+             *(["--out-of-scope", *oos] if oos else []),
+             *_loop_limit_args(oos)],
             capture_output=True, text=True,
         )
         payload = None
@@ -511,7 +624,7 @@ def sweep(points: List[tuple], reps: int, active: List[str]) -> List[Dict[str, A
             payload = {
                 "bars": bars,
                 "combos": combos,
-                "vectorbt_mode": mode,
+                "out_of_scope_engines": oos,
                 "status": "crashed",
                 "reason": (proc.stderr or proc.stdout or "no output")[-400:].strip(),
                 "exit_code": proc.returncode,
@@ -523,14 +636,19 @@ def sweep(points: List[tuple], reps: int, active: List[str]) -> List[Dict[str, A
         # engine's call is the whole process, the other engines' allocations
         # included. Measured both ways, manifoldbt read 6.7 GB interleaved
         # against 94 MB alone, at 5000 combinations.
-        payload["memory"] = _sweep_memory(bars, combos, mode, active)
+        payload["memory"] = _sweep_memory(bars, combos, oos, active)
         out.append(payload)
     return out
 
 
-def _sweep_memory(bars: int, combos: int, mode: str, active: List[str]) -> Dict[str, Any]:
-    """Peak each engine adds running the grid once, one engine per process."""
-    names = [REFERENCE] if mode == "oos" else list(active)
+def _sweep_memory(bars: int, combos: int, oos: List[str], active: List[str]) -> Dict[str, Any]:
+    """Peak each engine adds running the grid once, one engine per process.
+
+    An engine declared out of scope for the point is not run here either: the
+    reason it is out of scope (memory, or hours of wall time) applies to this
+    probe as much as to the timing.
+    """
+    names = [n for n in active if n not in oos]
     added: Dict[str, Any] = {name: None for name in active}
     for name in names:
         proc = subprocess.run(
@@ -591,6 +709,15 @@ def main() -> int:
                              "is the only shape whose wall time is the engine's "
                              "own rather than the slowest challenger's.")
     parser.add_argument("--reps", type=int, default=7)
+    parser.add_argument("--engine-max-bars", nargs="*", default=[], metavar="ENGINE=BARS",
+                        help="override an engine's default ceiling, e.g. "
+                             "nautilus_trader=1000000, or nautilus_trader=0 for none. "
+                             "A ceiling is a time budget (see engines.py): an "
+                             "event-driven engine is not run on a series it would "
+                             "need hours to repeat, and the report says so")
+    parser.add_argument("--engine-max-combos", nargs="*", default=[], metavar="ENGINE=COMBOS",
+                        help="override the largest grid an engine with no sweep API is "
+                             "looped over, e.g. nautilus_trader=500, or =0 for none")
     parser.add_argument("--out", default="results.json")
     parser.add_argument("--workdir", default=None, help="where the engine store is built")
     parser.add_argument("--cold-start-reps", type=int, default=3,
@@ -598,9 +725,11 @@ def main() -> int:
     parser.add_argument("--memory-bars", type=int, default=0,
                         help="bars for the memory probe; 0 disables it")
     parser.add_argument("--sweep", type=parse_point, nargs="*", default=[],
-                        metavar="BARS:COMBOS",
-                        help="parameter-grid points, e.g. 20000:5000. Needs a "
-                             "licence: sweep timings are published from a "
+                        metavar="BARS:COMBOS[:oos[=ENGINES]]",
+                        help="parameter-grid points, e.g. 20000:5000, with ':oos' "
+                             "to declare vectorbt out of scope or "
+                             "':oos=vectorbt,nautilus_trader' to name the engines. "
+                             "Needs a licence: sweep timings are published from a "
                              "licensed run only")
     parser.add_argument("--sweep-reps", type=int, default=3,
                         help="repetitions per sweep point; fewer than --reps "
@@ -610,6 +739,17 @@ def main() -> int:
                              "workstation can reproduce what a small cloud runner "
                              "sees; 0 leaves the machine alone")
     args = parser.parse_args()
+
+    for spec in args.engine_max_bars:
+        name, _, value = spec.partition("=")
+        if name not in ENGINES or not value.isdigit():
+            parser.error("--engine-max-bars wants ENGINE=BARS, got {!r}".format(spec))
+        CEILING_OVERRIDES[name] = int(value)
+    for spec in args.engine_max_combos:
+        name, _, value = spec.partition("=")
+        if name not in ENGINES or not value.isdigit():
+            parser.error("--engine-max-combos wants ENGINE=COMBOS, got {!r}".format(spec))
+        SWEEP_CEILING_OVERRIDES[name] = int(value)
 
     if not engines_mod.installed(REFERENCE):
         print("cannot run: the reference engine ({}) is not installed".format(REFERENCE))
@@ -638,6 +778,14 @@ def main() -> int:
     env = environment()
     env["pinned_cores"] = pinned
     env["engines"] = active
+    env["engine_max_bars"] = {
+        name: ceiling(name, CEILING_OVERRIDES)
+        for name in active if ceiling(name, CEILING_OVERRIDES) is not None
+    }
+    env["engine_max_sweep_combos"] = {
+        name: sweep_ceiling(name, SWEEP_CEILING_OVERRIDES)
+        for name in active if sweep_ceiling(name, SWEEP_CEILING_OVERRIDES) is not None
+    }
     versions = env["versions"]
     print(" vs ".join(
         "{} {}".format(name, versions[ENGINES[name].distribution]) for name in active))
