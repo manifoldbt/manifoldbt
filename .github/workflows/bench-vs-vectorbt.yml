@@ -311,6 +311,10 @@ jobs:
     if: github.event_name != 'workflow_dispatch' || inputs.manifoldbt_version == ''
     permissions:
       contents: write
+      # Read the run's own metadata for its start time (see "Resolve the
+      # run's start time" below). Without it the lookup is refused and the
+      # field is published empty.
+      actions: read
     steps:
       # The default branch explicitly: a release run is checked out at a tag,
       # and there is nothing to push a commit onto there.
