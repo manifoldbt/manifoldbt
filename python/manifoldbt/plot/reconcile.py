@@ -52,8 +52,8 @@ def reconcile(
     raw = getattr(reconciliation, "raw", reconciliation)
     if not isinstance(raw, dict) or "horizons" not in raw:
         raise ValueError(
-            "plot.reconcile takes what bt.reconcile returned, not a backtest "
-            "result: rec = bt.reconcile(result, live_fills, store=store)"
+            "plot.reconcile takes what mbt.reconcile returned, not a backtest "
+            "result: rec = mbt.reconcile(result, live_fills, store=store)"
         )
     if raw["live_fills"] == 0 and raw["sim_fills"] == 0:
         raise ValueError(

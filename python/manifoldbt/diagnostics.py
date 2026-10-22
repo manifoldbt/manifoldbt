@@ -476,7 +476,7 @@ def risk_check(
     individual check results and time-series data.
 
     Args:
-        result: BacktestResult from ``bt.run()``.
+        result: BacktestResult from ``mbt.run()``.
         max_utilization: Fail if peak utilization exceeds this (default 0.95).
         min_free_margin: Fail if free margin ratio drops below this (default 0.05).
         max_exposure_ratio: Fail if exposure / initial_capital exceeds this (default 3.0).
@@ -489,7 +489,7 @@ def risk_check(
 
     Example::
 
-        report = bt.diagnostics.risk_check(result)
+        report = mbt.diagnostics.risk_check(result)
         print(report)
         report.assert_clean()
     """
@@ -797,7 +797,7 @@ def check_exposure_stability(
 
     Example::
 
-        report = bt.diagnostics.check_exposure_stability(strategy, config, store)
+        report = mbt.diagnostics.check_exposure_stability(strategy, config, store)
         print(report)
         report.assert_clean()
     """

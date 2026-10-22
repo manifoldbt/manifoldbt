@@ -29,6 +29,19 @@ def new_figure(
     return fig
 
 
+def is_quote_run(result) -> bool:
+    """True for the result of a strategy that quotes with ``.quote``.
+
+    Such a run is a ``QuoteResult``. It describes its orders in ``orders_df()``
+    and ``fills_df()`` and does not carry the journal of resting orders that
+    ``resting_orders_df()`` returns for the limit-order strategies of the main
+    engine, so the charts that read the journal tell the two cases apart.
+    """
+    from manifoldbt.result import QuoteResult
+
+    return isinstance(result, QuoteResult)
+
+
 def _in_notebook() -> bool:
     """True inside a Jupyter/IPython kernel (not a plain terminal REPL)."""
     try:

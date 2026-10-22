@@ -4,6 +4,9 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import pyarrow as pa
 
 
+def calibrate_gpu_json() -> str: ...
+
+
 class DataStore:
     """Bar data store (Parquet, or Arrow IPC via ``arrow_dir``) with SQLite metadata.
 
@@ -58,6 +61,7 @@ class BacktestResult:
     def fill_marks(self) -> Optional[Dict[str, Any]]: ...
     def fill_marks_detail(self) -> Optional[Dict[str, List[Any]]]: ...
     def fill_marks_arrow(self) -> Optional[pa.RecordBatch]: ...
+    def resting_orders_detail(self) -> Optional[Dict[str, List[Any]]]: ...
 
 
 class AlignedData:

@@ -1473,8 +1473,8 @@ def order_price(side: str) -> Expr:
 
         from manifoldbt.indicators import abs_val
 
-        best = bt.book.bid_price_at(1)
-        left_behind = abs_val(bt.order_price("bid") - best) > 1e-6   # False without an order (NaN)
+        best = mbt.book.bid_price_at(1)
+        left_behind = abs_val(mbt.order_price("bid") - best) > 1e-6   # False without an order (NaN)
 
     Readable only in the expressions of a quote (``Strategy.quote``).
     """
@@ -1494,7 +1494,7 @@ def position_age() -> Expr:
     without crossing zero leaves the age as it is; a position within 1e-12
     of zero is flat. A maximum holding time is one comparison::
 
-        stale = bt.position_age() >= 2.0     # False while flat (NaN)
+        stale = mbt.position_age() >= 2.0     # False while flat (NaN)
 
     Readable only in the expressions of a quote (``Strategy.quote``).
     """
@@ -1539,7 +1539,7 @@ def last_cancel_age(side: str) -> Expr:
     ``.quote(..., cooldown=Interval.millis(500))``. Written with this age
     instead, it is the pause of the side::
 
-        paused = bt.last_cancel_age("bid") < 0.5
+        paused = mbt.last_cancel_age("bid") < 0.5
         .quote("buy", price, size, enabled=... & ~paused)
 
     Write it as ``~(age < d)``, not ``age >= d``: before the first
@@ -1770,7 +1770,7 @@ def choice(name: str, branches: "dict[str, Expr]", *, description: str = "") -> 
 def exo(name: str, column: Optional[str] = None) -> Expr:
     """Reference an exogenous data column.
 
-    Exogenous data is registered via ``bt.register_exo()`` and declared
+    Exogenous data is registered via ``mbt.register_exo()`` and declared
     in ``BacktestConfig(exo_data=[...])``.
 
     Args:
@@ -1829,9 +1829,9 @@ def asset(symbol: str) -> AssetRef:
 
     Usage::
 
-        btc_close = bt.asset("BTCUSDT").col("close")
+        btc_close = mbt.asset("BTCUSDT").col("close")
         # Then define as a signal and use in downstream expressions:
-        relative = bt.col("close") / bt.col("btc_close")
+        relative = mbt.col("close") / mbt.col("btc_close")
     """
     return AssetRef(symbol)
 
@@ -1883,7 +1883,7 @@ class TimeframeRef:
         This is what makes higher-timeframe INDICATORS correct. Periods
         inside *expr* count in THIS timeframe's bars::
 
-            h1 = bt.tf("1h")
+            h1 = mbt.tf("1h")
             band = h1.apply(sma(close, mbt.param("len")))   # len = HOURS
 
         is a true SMA of ``len`` hourly closes, sweepable like any param.
@@ -1906,7 +1906,7 @@ def tf(timeframe: str) -> TimeframeRef:
 
     Two different things, and the distinction matters::
 
-        h1 = bt.tf("1h")
+        h1 = mbt.tf("1h")
 
         h1.close                        # a COLUMN: the last closed hourly
                                         # close, held across the minute bars

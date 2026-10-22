@@ -8,7 +8,7 @@ Usage::
     from manifoldbt.helpers import date_to_ns, time_range, Slippage, Interval
 
     start, end = time_range("2022-01-01", "2024-01-01")
-    config = bt.BacktestConfig(
+    config = mbt.BacktestConfig(
         time_range_start=start,
         time_range_end=end,
         slippage=Slippage.fixed_bps(1.0),

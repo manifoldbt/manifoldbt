@@ -3,17 +3,17 @@
 A book enters the store through :func:`manifoldbt.ingest_book`. Once it is
 there, a strategy reads it like any bar column, by name::
 
-    import manifoldbt as bt
+    import manifoldbt as mbt
 
-    imb = bt.book.imbalance(5)            # col("book_imbalance_5")
+    imb = mbt.book.imbalance(5)            # col("book_imbalance_5")
     strat = (
-        bt.Strategy.create("imbalance")
-        .signal("long", bt.when(imb > 0.3, 1.0, 0.0))
-        .size(bt.col("long"))
+        mbt.Strategy.create("imbalance")
+        .signal("long", mbt.when(imb > 0.3, 1.0, 0.0))
+        .size(mbt.col("long"))
     )
 
 Every function of the table below returns ``col(<name>)``, so
-``bt.col("bid_size_3")`` is exactly ``bt.book.bid_size(3)``. The names:
+``mbt.col("bid_size_3")`` is exactly ``mbt.book.bid_size(3)``. The names:
 
 ====================  ====================================================
 ``bid_price_<k>``     price of bid level ``k``, 1 = best
@@ -31,7 +31,7 @@ no book for a symbol, or holds one shallower than the level asked.
 
 A run reads every stored level unless ``BacktestConfig.book_levels`` bounds
 it, and so do the queue, the fill marks and the book of a quote. Under a bound,
-a column deeper than it (``bt.book.bid_price(30)`` with ``book_levels=25``) is
+a column deeper than it (``mbt.book.bid_price(30)`` with ``book_levels=25``) is
 refused before anything is read, with the setting to raise.
 
 When each row reads the book:
@@ -60,7 +60,7 @@ The book at a wake-up
 :func:`bid_price_at`, :func:`ask_price_at`, :func:`bid_levels` and
 :func:`ask_levels` are not columns. They read the book the simulation holds at
 the instant the engine wakes up, at a level the expression itself may compute
-(``bt.book.bid_price_at(bt.round(bt.position() / 2) + 1)``), and exist only in
+(``mbt.book.bid_price_at(mbt.round(mbt.position() / 2) + 1)``), and exist only in
 the expressions of a quote, which the engine evaluates at each wake-up. A
 signal or a size refuses them by name, as it refuses ``position()``.
 """

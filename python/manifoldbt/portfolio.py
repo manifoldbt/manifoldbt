@@ -3,7 +3,7 @@
 Example::
 
     portfolio = (
-        bt.Portfolio()
+        mbt.Portfolio()
         .strategy(trend_strategy, weight=0.4)
         .strategy(mr_strategy, weight=0.3)
         .strategy(arb_strategy, weight=0.3)
@@ -12,7 +12,7 @@ Example::
         .rebalance_periodic(every_n_bars=30)
     )
 
-    result = bt.run_portfolio(portfolio, config, store)
+    result = mbt.run_portfolio(portfolio, config, store)
 """
 from __future__ import annotations
 

@@ -2,19 +2,19 @@
 
 Quickstart::
 
-    import manifoldbt as bt
+    import manifoldbt as mbt
     from manifoldbt.indicators import sma
 
-    store = bt.DataStore("data", "metadata/metadata.sqlite")  # backend auto-detected
-    pos = bt.when(sma(bt.col("close"), 20) > sma(bt.col("close"), 50),
-                  bt.lit(1.0), bt.lit(0.0))
-    strat = bt.Strategy.create("sma-cross").signal("position", pos).size(pos)
-    start, end = bt.time_range("2022-01-01", "2025-01-01")   # UNIX nanoseconds
-    cfg = bt.BacktestConfig(universe=["BTCUSDT"], time_range_start=start,
+    store = mbt.DataStore("data", "metadata/metadata.sqlite")  # backend auto-detected
+    pos = mbt.when(sma(mbt.col("close"), 20) > sma(mbt.col("close"), 50),
+                  mbt.lit(1.0), mbt.lit(0.0))
+    strat = mbt.Strategy.create("sma-cross").signal("position", pos).size(pos)
+    start, end = mbt.time_range("2022-01-01", "2025-01-01")   # UNIX nanoseconds
+    cfg = mbt.BacktestConfig(universe=["BTCUSDT"], time_range_start=start,
                             time_range_end=end,
-                            bar_interval=bt.Interval.hours(1),
+                            bar_interval=mbt.Interval.hours(1),
                             initial_capital=100_000.0)
-    result = bt.run(strat, cfg, store)
+    result = mbt.run(strat, cfg, store)
     print(result.summary())
     print(result.metrics["sharpe"])
 
@@ -36,6 +36,7 @@ from manifoldbt import _cuda_libs as _cuda_libs
 _cuda_libs.rendre_visible()
 
 from manifoldbt._native import (
+    calibrate_gpu_json as _calibrate_gpu_json,
     BacktestResult,
     BatchResultLite,
     DataStore,
@@ -891,20 +892,57 @@ def _resolve_store(config: BacktestConfig, store: DataStore) -> DataStore:
         return store
 
 
+_DAILY_OUTPUT_NOTICE = (
+    "Community tier: the equity curve and positions come back one row per day, "
+    "the last bar of each day. The metrics are still computed on every bar. "
+    "Sub-daily output is a Pro feature: www.manifoldbt.com"
+)
+
+# Once per process, by hand: the `warnings` registry keys on the caller's line,
+# so a notebook would repeat the notice in every cell that runs a backtest.
+_daily_output_noticed = False
+
+
+def _notice_daily_output() -> None:
+    """Say at run time that the curves come back daily.
+
+    The summary printed at exit is not enough on its own: a Jupyter kernel never
+    reaches it, and a script reads it after the numbers it qualifies.
+    """
+    global _daily_output_noticed
+    _warn_pro("output_resolution capped to daily")
+    if _daily_output_noticed:
+        return
+    _daily_output_noticed = True
+    import warnings
+
+    # user -> run() -> _cap_output_resolution -> here -> warn
+    warnings.warn(_DAILY_OUTPUT_NOTICE, UserWarning, stacklevel=4)
+
+
 def _cap_output_resolution(config: BacktestConfig) -> BacktestConfig:
     """Cap output_resolution to daily for Community users (Pro feature).
+
+    Both ways of reaching the cap are announced when the run starts: an explicit
+    sub-daily ``output_resolution``, and the default (``None``) on sub-daily bars,
+    which the engine resolves to the bar interval and then caps to daily itself.
 
     Per-event output (``Interval.trades()``) is left exactly as written: the
     engine answers it, either by refusing the shape or by refusing the clock it
     belongs to, and both answers are better than a silent downgrade.
     """
     if config.output_resolution is None:
+        # Same resolution the engine picks for `None`: resample_to, else the
+        # bar interval, whose own default is one minute.
+        native = config.resample_to or config.bar_interval or {"Minutes": 1}
+        if _is_sub_daily(native) and not _is_pro():
+            _notice_daily_output()
         return config
     if not _is_sub_daily(config.output_resolution):
         return config
     if _is_pro():
         return config
-    _warn_pro("output_resolution capped to daily")
+    _notice_daily_output()
     config = copy.deepcopy(config)
     config.output_resolution = None
     return config
@@ -940,7 +978,7 @@ def ingest(
 
     Example (single symbol)::
 
-        store = bt.ingest(
+        store = mbt.ingest(
             provider="binance",
             symbol="BTCUSDT",
             symbol_id=1,
@@ -950,7 +988,7 @@ def ingest(
 
     Example (multiple symbols)::
 
-        store = bt.ingest(
+        store = mbt.ingest(
             provider="binance",
             symbols=[("XMRUSDT", 26), ("VETUSDT", 27), ("ZECUSDT", 28)],
             start="2020-06-01T00:00:00Z",
@@ -959,7 +997,7 @@ def ingest(
 
     Example (stocks, ETFs, indices, FX and futures via Yahoo Finance)::
 
-        store = bt.ingest(
+        store = mbt.ingest(
             provider="yahoo",
             symbol="AAPL",
             symbol_id=1,
@@ -976,7 +1014,7 @@ def ingest(
     Example (FX, metals, indices and CFDs with BOTH sides of the book, free and
     without a key, from Dukascopy Bank)::
 
-        store = bt.ingest(
+        store = mbt.ingest(
             provider="dukascopy",
             symbol="EUR/USD",        # or "XAU/USD", "USA500.IDX/USD", "AAPL.US/USD"
             symbol_id=1,
@@ -1005,7 +1043,7 @@ def ingest(
 
     Example (a Deribit option, including one that has already expired)::
 
-        store = bt.ingest(
+        store = mbt.ingest(
             provider="deribit",
             symbol="BTC-27JUN25-100000-C",
             symbol_id=2,
@@ -1159,13 +1197,13 @@ def ingest_trades(
 
     Example::
 
-        store = bt.ingest_trades("bybit", "BTCUSDT", symbol_id=1,
+        store = mbt.ingest_trades("bybit", "BTCUSDT", symbol_id=1,
                                  start="2026-08-25", end="2026-08-25")
         # The perp's tape, beside its book:
-        bt.ingest_trades("bybit", "XRPUSDT", symbol_id=2,
+        mbt.ingest_trades("bybit", "XRPUSDT", symbol_id=2,
                          start="2023-03-01", end="2023-03-01",
                          category="linear")
-        bt.ingest_book("bybit", "XRPUSDT", symbol_id=2,
+        mbt.ingest_book("bybit", "XRPUSDT", symbol_id=2,
                        start="2023-03-01", end="2023-03-01",
                        category="linear")
     """
@@ -1254,8 +1292,8 @@ def ingest_book(
     unlock it, and the engine says so before touching the network.
 
     What reads the book: the strategy itself, level by level, on bars or on
-    the trade clock (:mod:`manifoldbt.book`: ``bt.book.imbalance(5)``,
-    ``bt.book.bid_size(3)``, ...); the quote columns of the trade clock; the
+    the trade clock (:mod:`manifoldbt.book`: ``mbt.book.imbalance(5)``,
+    ``mbt.book.bid_size(3)``, ...); the quote columns of the trade clock; the
     depth the queue finds in front of a resting order
     (``fill_model={"queue": ...}``); and the mid the fill marks measure
     against. See "Order Book Columns" and "Backtesting on the Tape" in the
@@ -1288,11 +1326,11 @@ def ingest_book(
 
     Example::
 
-        store = bt.ingest_book("bybit", "BTCUSDT", symbol_id=1,
+        store = mbt.ingest_book("bybit", "BTCUSDT", symbol_id=1,
                                start="2026-08-25", end="2026-08-25",
                                category="linear")
         # A day Bybit published 500 levels deep, all of it:
-        deep = bt.ingest_book("bybit", "BTCUSDT", symbol_id=1,
+        deep = mbt.ingest_book("bybit", "BTCUSDT", symbol_id=1,
                               start="2025-08-20", end="2025-08-20",
                               category="linear", levels=500,
                               data_root="data500",
@@ -1401,9 +1439,9 @@ def ingest_mbo(
 
     Example::
 
-        store = bt.ingest_mbo("S120925-v50.txt.gz", {"AAPL": 1, "QQQ": 2},
+        store = mbt.ingest_mbo("S120925-v50.txt.gz", {"AAPL": 1, "QQQ": 2},
                               date="2025-12-09")
-        res = bt.sim.run(maker, bt.sim.Config(), store, symbols=["AAPL"],
+        res = mbt.sim.run(maker, mbt.sim.Config(), store, symbols=["AAPL"],
                          start="2025-12-09", end="2025-12-10")
     """
     from manifoldbt._native import py_ingest_mbo as _native
@@ -1455,11 +1493,11 @@ def bars_from_trades(
 
     Example::
 
-        store = bt.ingest_trades("bybit", "BTCUSDT", symbol_id=1,
+        store = mbt.ingest_trades("bybit", "BTCUSDT", symbol_id=1,
                                  start="2026-08-25", end="2026-08-25")
-        bt.bars_from_trades(store, "BTCUSDT", "2026-08-25", "2026-08-26")
-        config = bt.BacktestConfig(..., bar_interval=Interval.seconds(1))
-        result = bt.run(strategy, config, store)
+        mbt.bars_from_trades(store, "BTCUSDT", "2026-08-25", "2026-08-26")
+        config = mbt.BacktestConfig(..., bar_interval=Interval.seconds(1))
+        result = mbt.run(strategy, config, store)
     """
     from manifoldbt.helpers import time_range as _time_range
 
@@ -1536,9 +1574,9 @@ def attach_quotes(
 
     Example::
 
-        store = bt.ingest(provider="bybit", symbol="BTCUSDT", symbol_id=1,
+        store = mbt.ingest(provider="bybit", symbol="BTCUSDT", symbol_id=1,
                           start="2026-07-01T00:00:00Z", end="2026-08-01T00:00:00Z")
-        bt.attach_quotes(store, 1, "2026-07-01", "2026-07-31")
+        mbt.attach_quotes(store, 1, "2026-07-01", "2026-07-31")
         # bars now carry real bid/ask: MidPrice execution and per-bar
         # spread costs read actual quotes instead of nulls.
     """
@@ -1611,15 +1649,15 @@ def import_csv(
 
     Auto-detects standard (``timestamp,open,high,low,close,volume``),
     MetaTrader 4, and MetaTrader 5 exports. Returns a :class:`DataStore` ready
-    for :func:`run` — the same store ``bt.ingest`` writes to.
+    for :func:`run` — the same store ``mbt.ingest`` writes to.
 
     Example::
 
-        store = bt.import_csv(
+        store = mbt.import_csv(
             "EURUSD_1m.csv", symbol="EURUSD", symbol_id=1,
             interval="1m", asset_class="forex",
         )
-        result = bt.run(strategy, config, store)
+        result = mbt.run(strategy, config, store)
 
     Args:
         path: Path to the CSV file (standard / MT4 / MT5 format).
@@ -1735,7 +1773,7 @@ def import_dataframe(
 
     The in-memory twin of :func:`import_csv`: edit your data as a DataFrame,
     then import it directly — no intermediate CSV. Returns a :class:`DataStore`
-    ready for :func:`run` (same store, metadata and versioning as ``bt.ingest``).
+    ready for :func:`run` (same store, metadata and versioning as ``mbt.ingest``).
     Reopen it later with ``DataStore(data_root, metadata_db)``: the Arrow IPC
     layout under ``<data_root>/mega`` is detected automatically.
 
@@ -1754,9 +1792,9 @@ def import_dataframe(
 
         df = pd.read_parquet("EURUSD_1m.parquet")
         df["close"] = df["close"].clip(upper=1.5)   # edit in memory
-        store = bt.import_dataframe(df, symbol="EURUSD", symbol_id=1,
+        store = mbt.import_dataframe(df, symbol="EURUSD", symbol_id=1,
                                     interval="1m", asset_class="forex")
-        result = bt.run(strategy, config, store)
+        result = mbt.run(strategy, config, store)
 
     Args:
         data: pandas/polars DataFrame or dict of columns.
@@ -2010,7 +2048,7 @@ def run(
     A strategy that quotes (``Strategy.quote``) runs on the order-level
     simulation instead: woken every ``bar_interval`` (``Interval.millis(n)``
     is accepted there and nowhere else), its quotes posted, kept, repriced
-    and withdrawn by the venue of ``bt.sim``, entirely in the engine. The
+    and withdrawn by the venue of ``mbt.sim``, entirely in the engine. The
     result is a :class:`QuoteResult`: this same result plus ``orders_df()``,
     ``fills_df()`` and ``events_df()``.
 
@@ -2283,6 +2321,33 @@ def reconcile(
     except (ValueError, RuntimeError) as exc:
         raise _classify_error(exc) from exc
     return Reconciliation(raw)
+
+
+def calibrate_gpu() -> dict:
+    """Measure this GPU's sweep costs and store them for the next runs.
+
+    The GPU sweep picks between its two execution paths from a handful of per-card
+    costs. They are measured once per card (about two seconds: the card is first
+    brought to its steady clocks) at the first GPU sweep and kept in a file shared
+    by every process; this runs the measurement again on demand, for instance after
+    a driver update, and returns the constants it measured.
+
+    ``MBT_GPU_CALIBRATION=manual`` turns the automatic measurement off (a card that
+    was never calibrated then keeps the default path); ``MBT_GPU_CALIBRATION_FILE``
+    moves the file; ``MBT_GPU_SCAN=0`` or ``1`` forces a path whatever the constants.
+
+    Returns:
+        A dict of the measured costs, in nanoseconds, for runs without a bracket
+        (``sans_bracket``), with one exit order (``un_ordre``) and with a stop and a
+        take-profit (``avec_bracket``), plus the duration of the measurement in
+        milliseconds (``mesure_ms``).
+
+    Raises:
+        RuntimeError: no usable GPU, or a build without CUDA.
+    """
+    import json
+
+    return json.loads(_calibrate_gpu_json())
 
 
 def run_sweep(
@@ -3084,10 +3149,10 @@ def register_exo(
     Example::
 
         # Legacy (non-symbol exo like hashrate)
-        bt.register_exo("hashrate", df)
+        mbt.register_exo("hashrate", df)
 
         # Unified layout (cross-exchange)
-        bt.register_exo("BTCUSDT", df, provider="binance", timeframe="1h")
+        mbt.register_exo("BTCUSDT", df, provider="binance", timeframe="1h")
     """
     import pyarrow as pa
     from pathlib import Path
@@ -3166,7 +3231,7 @@ def guide() -> None:
     """Print a compact API cheat sheet, written for coding agents and new users.
 
     Everything here is importable from the top-level module unless noted.
-    Call ``bt.guide()`` and read the output; it answers most of what a pile of
+    Call ``mbt.guide()`` and read the output; it answers most of what a pile of
     ``help()`` calls would, including whether the DSL can express a given
     strategy shape (see the worked recipes at the end -- it can).
 
@@ -3181,48 +3246,48 @@ manifoldbt cheat sheet
 
 Data
 ----
-store = bt.DataStore(data_root, metadata_db)   # backend auto-detected, incl. Arrow IPC
+store = mbt.DataStore(data_root, metadata_db)   # backend auto-detected, incl. Arrow IPC
 store.list_symbols()                           # [(id, ticker), ...]
-bt.import_dataframe(df, symbol="X", symbol_id=1, interval="1h",
+mbt.import_dataframe(df, symbol="X", symbol_id=1, interval="1h",
                     data_root=..., metadata_db=...)   # cols: timestamp/open/high/low/close/volume
-bt.ingest(provider="binance", symbol="BTCUSDT", symbol_id=1,
+mbt.ingest(provider="binance", symbol="BTCUSDT", symbol_id=1,
           start="2024-01-01", end="2024-06-01", interval="1m")
 
 Strategy (expression DSL -- no per-bar Python)
 ----------------------------------------------
 from manifoldbt.indicators import sma, ema, rsi   # 104 indicator functions
-sig  = bt.when(cond, then, otherwise)             # conditions combine with & | ~
-pos  = bt.when(z >= bt.lit(2.0), bt.lit(-1.0),
-       bt.when(z <= bt.lit(-2.0), bt.lit(1.0),
-       bt.when(abs(z) <= bt.lit(0.5), bt.lit(0.0), bt.hold())))  # hold() = keep the POSITION
+sig  = mbt.when(cond, then, otherwise)             # conditions combine with & | ~
+pos  = mbt.when(z >= mbt.lit(2.0), mbt.lit(-1.0),
+       mbt.when(z <= mbt.lit(-2.0), mbt.lit(1.0),
+       mbt.when(abs(z) <= mbt.lit(0.5), mbt.lit(0.0), mbt.hold())))  # hold() = keep the POSITION
                                                                  # under a filter, use .ffill() (see recipes)
-strat = (bt.Strategy.create("name")
+strat = (mbt.Strategy.create("name")
          .signal("position", pos)     # signals are named series
          .size(pos))                  # target fraction of equity; +long / -short
-other = bt.symbol_ref("ETHUSDT", "close")   # cross-asset reference; auto-wired by run()
-z     = (bt.col("close") / other).zscore(200)   # rolling ops are methods on expressions
+other = mbt.symbol_ref("ETHUSDT", "close")   # cross-asset reference; auto-wired by run()
+z     = (mbt.col("close") / other).zscore(200)   # rolling ops are methods on expressions
 
 Config
 ------
-start, end = bt.time_range("2022-01-01", "2025-01-01")   # UNIX NANOSECONDS -- never raw ints
-cfg = bt.BacktestConfig(
+start, end = mbt.time_range("2022-01-01", "2025-01-01")   # UNIX NANOSECONDS -- never raw ints
+cfg = mbt.BacktestConfig(
     universe=["BTCUSDT"],             # tickers, ids, or {"provider": [...]}
     time_range_start=start, time_range_end=end,
-    bar_interval=bt.Interval.hours(1),   # one minute if left out; down to seconds(1)
+    bar_interval=mbt.Interval.hours(1),   # one minute if left out; down to seconds(1)
                                          # on Pro, minutes(1) at the finest on Community
     initial_capital=100_000.0,
     warmup_bars=50,
-    execution=bt.ExecutionConfig(signal_delay=1,          # bars between signal and fill
+    execution=mbt.ExecutionConfig(signal_delay=1,          # bars between signal and fill
                                  execution_price="AtClose",
                                  allow_short=False, max_position_pct=1.0,
                                  position_sizing_mode="FractionOfEquity"),
-    fees=bt.FeeConfig(taker_fee_bps=5.0, maker_fee_bps=5.0),   # or FeeConfig.zero()
-    slippage=bt.Slippage.none(),      # or Slippage.fixed_bps(2)
+    fees=mbt.FeeConfig(taker_fee_bps=5.0, maker_fee_bps=5.0),   # or FeeConfig.zero()
+    slippage=mbt.Slippage.none(),      # or Slippage.fixed_bps(2)
 )
 
 Run and read results
 --------------------
-res = bt.run(strat, cfg, store)
+res = mbt.run(strat, cfg, store)
 res.metrics                     # dict: total_return, sharpe, sortino, max_drawdown,
                                 # cagr, calmar, volatility, ... and trade_stats
 res.metrics["trade_stats"]      # total_trades counts FILLS; round-trips are under
@@ -3231,29 +3296,29 @@ res.equity_df(); res.trades_df(); res.daily_returns_series(); res.summary()
 
 Research
 --------
-bt.run_sweep(strat, {"fast": [10, 20], "slow": [50, 100]}, cfg, store)
-bt.run_walk_forward(...)   # and run_stability, run_stochastic, run_portfolio
+mbt.run_sweep(strat, {"fast": [10, 20], "slow": [50, 100]}, cfg, store)
+mbt.run_walk_forward(...)   # and run_stability, run_stochastic, run_portfolio
 
 Quotes (order-level simulation, one symbol, book and tape in the store)
 ------------------------------------------------------------------------
 from manifoldbt import book
-maker = (bt.Strategy.create("maker")    # no .size(): each quote carries its own
-         .quote("buy", book.bid_price_at(1), 0.01, enabled=bt.position() < 0.05)
-         .quote("sell", book.ask_price_at(1), 0.01, enabled=bt.position() > -0.05))
-cfg = bt.BacktestConfig(..., bar_interval=bt.Interval.millis(100),   # the wake-up clock
-        execution=bt.ExecutionConfig(latency={"order": bt.Interval.millis(5),
-            "cancel": bt.Interval.millis(5), "response": bt.Interval.millis(5),
-            "feed": bt.Interval.millis(2)}))
-res = bt.run(maker, cfg, store)        # QuoteResult: + orders_df(), fills_df(), events_df()
+maker = (mbt.Strategy.create("maker")    # no .size(): each quote carries its own
+         .quote("buy", book.bid_price_at(1), 0.01, enabled=mbt.position() < 0.05)
+         .quote("sell", book.ask_price_at(1), 0.01, enabled=mbt.position() > -0.05))
+cfg = mbt.BacktestConfig(..., bar_interval=mbt.Interval.millis(100),   # the wake-up clock
+        execution=mbt.ExecutionConfig(latency={"order": mbt.Interval.millis(5),
+            "cancel": mbt.Interval.millis(5), "response": mbt.Interval.millis(5),
+            "feed": mbt.Interval.millis(2)}))
+res = mbt.run(maker, cfg, store)        # QuoteResult: + orders_df(), fills_df(), events_df()
 # a wake-up: NaN price/size or null enabled holds; enabled False or size <= 0
 # withdraws; same price keeps the queue; else cancel and repost.
-# .quote(..., cooldown=bt.Interval.millis(500)): no post for 500 ms after the
+# .quote(..., cooldown=mbt.Interval.millis(500)): no post for 500 ms after the
 # quote sent a cancellation (a requote then cancels now, posts after the pause).
-# state it reads: bt.position(), bt.cash(), bt.live_qty("bid"), bt.order_age("ask"),
-# bt.order_price("bid"), bt.last_fill_px("bid"), bt.queue_ahead("ask"),
-# bt.position_age(), bt.last_fill_age("bid"), bt.last_cancel_age("ask") (seconds,
+# state it reads: mbt.position(), mbt.cash(), mbt.live_qty("bid"), mbt.order_age("ask"),
+# mbt.order_price("bid"), mbt.last_fill_px("bid"), mbt.queue_ahead("ask"),
+# mbt.position_age(), mbt.last_fill_age("bid"), mbt.last_cancel_age("ask") (seconds,
 # NaN before the event), book.bid_price_at(k), book.bid_levels();
-# bt.round (half to even), bt.clip. Sweeps: run_sweep / run_sweep_lite / run_batch,
+# mbt.round (half to even), mbt.clip. Sweeps: run_sweep / run_sweep_lite / run_batch,
 # each combination exactly the run alone.
 
 Worked recipes -- yes, the DSL expresses these
@@ -3261,13 +3326,13 @@ Worked recipes -- yes, the DSL expresses these
 Stateful thresholds (hysteresis). hold() keeps the previous POSITION, so a band
 between entry and exit needs no Python loop:
 
-    z = (bt.col("close") / bt.symbol_ref("ETHUSDT", "close")).zscore(200)
-    pos = bt.when(z >= bt.lit(2.0), bt.lit(-1.0),          # short the spread
-          bt.when(z <= bt.lit(-2.0), bt.lit(1.0),          # long the spread
-          bt.when((z >= bt.lit(-0.5)) & (z <= bt.lit(0.5)), bt.lit(0.0),
-          bt.hold())))                                     # else: keep position
-    strat = bt.Strategy.create("pair").signal("pos", pos).size(bt.col("pos"))
-    cfg = bt.BacktestConfig(universe=["BTCUSDT"], ...)     # plain list is fine
+    z = (mbt.col("close") / mbt.symbol_ref("ETHUSDT", "close")).zscore(200)
+    pos = mbt.when(z >= mbt.lit(2.0), mbt.lit(-1.0),          # short the spread
+          mbt.when(z <= mbt.lit(-2.0), mbt.lit(1.0),          # long the spread
+          mbt.when((z >= mbt.lit(-0.5)) & (z <= mbt.lit(0.5)), mbt.lit(0.0),
+          mbt.hold())))                                     # else: keep position
+    strat = mbt.Strategy.create("pair").signal("pos", pos).size(mbt.col("pos"))
+    cfg = mbt.BacktestConfig(universe=["BTCUSDT"], ...)     # plain list is fine
 
 Persistent state UNDER a regime filter -- use .ffill(), not hold(). hold() holds
 the position, so a filter that writes 0.0 while it is closed is what hold() holds
@@ -3275,33 +3340,33 @@ when it reopens: exposure only returns on the next threshold crossing (measured:
 a filter open 55% of the time left 0.7% exposure, silently). .ffill() carries the
 last non-NaN value of the SERIES, so masking it does not destroy it:
 
-    state = bt.when(imb >= thr, bt.lit(1.0),
-            bt.when(imb <= -thr, bt.lit(-1.0))).ffill()   # omitted branch = NaN
-    pos   = bt.when(regime_open, state, bt.lit(0.0))      # back on the same bar
+    state = mbt.when(imb >= thr, mbt.lit(1.0),
+            mbt.when(imb <= -thr, mbt.lit(-1.0))).ffill()   # omitted branch = NaN
+    pos   = mbt.when(regime_open, state, mbt.lit(0.0))      # back on the same bar
 
     # want the other behaviour (exit, re-enter only on a NEW signal)? then keep
-    # hold() inside the when: bt.when(regime_open, <...hold()...>, bt.lit(0.0))
+    # hold() inside the when: mbt.when(regime_open, <...hold()...>, mbt.lit(0.0))
 
 Several legs against one anchor. Same expression, several traded symbols: each
 one gets its own state and its own position, equity is shared. The anchor is
 simply left out of the universe.
 
-    cfg = bt.BacktestConfig(universe=["SOLUSDT", "AVAXUSDT", "DOTUSDT"], ...)
+    cfg = mbt.BacktestConfig(universe=["SOLUSDT", "AVAXUSDT", "DOTUSDT"], ...)
     # each leg's z is computed against symbol_ref("ETHUSDT", ...); ETH is not traded
 
 Cross-sectional (rank/zscore across the universe at each bar). The op must be
 the WHOLE signal -- the engine refuses anything wrapped around it rather than
 silently ignoring it, and a cross-sectional signal cannot feed another signal:
 
-    strat = bt.Strategy.create("xs").signal("pos", bt.col("close").cs_zscore()).size(bt.col("pos"))
+    strat = mbt.Strategy.create("xs").signal("pos", mbt.col("close").cs_zscore()).size(mbt.col("pos"))
 
 Common errors
 -------------
 "empty bar dataset ... over time_range [a, b) ns"  -> the window is wrong, not the
-    data: time_range values are UNIX nanoseconds; build them with bt.time_range().
+    data: time_range values are UNIX nanoseconds; build them with mbt.time_range().
 "symbol not found"                                 -> store.list_symbols() shows what exists.
 "requires orchestrator-level multi-symbol handling" -> a symbol_ref() reached the
-    per-symbol evaluator; use bt.run() (it rewrites automatically) or qualify the
+    per-symbol evaluator; use mbt.run() (it rewrites automatically) or qualify the
     reference as "provider:TICKER" with a dict universe.
 "cross-sectional op ... must be the whole signal"  -> give the cs op its own
     signal; thresholding one is not supported (see the recipe above).
@@ -3312,6 +3377,7 @@ Common errors
 
 
 __all__ = [
+    "calibrate_gpu",
     "AccountPhase",
     "AccountRules",
     "account_sessions",
@@ -3394,9 +3460,8 @@ __all__ = [
     "run_sweep_2d",
     "run_stability",
     "replay",
-    # NOT exported: py_run_monte_carlo. It is the raw native binding under
-    # plot.monte_carlo's friendly layer (which warns before the native cap
-    # refuses); listing it in __all__ published an internal as API.
+    # NOT exported: py_run_monte_carlo, the raw native binding. Listing it in
+    # __all__ published an internal as API.
     # Stochastic simulation
     "run_stochastic",
     "StochasticModel",

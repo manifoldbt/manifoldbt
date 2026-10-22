@@ -23,19 +23,20 @@ This guide describes how to define trading strategies using the manifoldbt Pytho
 13. [A Service Rule of Your Own](#a-service-rule-of-your-own)
 14. [Marking a Fill](#marking-a-fill)
 15. [Calibrating Against Live Fills](#calibrating-against-live-fills)
-16. [Sweeping Execution Parameters](#sweeping-execution-parameters)
-17. [Orders, One by One](#orders-one-by-one)
-18. [Quoting in the DSL](#quoting-in-the-dsl)
-19. [A Market Stored Order by Order](#a-market-stored-order-by-order)
-20. [Fee & Slippage Models](#fee--slippage-models)
-21. [Orders (SL/TP/Trailing)](#orders-sltptrailing)
-22. [Entry Orders](#entry-orders)
-23. [Cross-Asset References](#cross-asset-references)
-24. [Dataset Auto-Resolution](#dataset-auto-resolution)
-25. [Diagnostics](#diagnostics)
-26. [Profiling](#profiling)
-27. [Complete Examples](#complete-examples)
-28. [Indicator Reference](#indicator-reference)
+16. [Reading a Maker's Day](#reading-a-makers-day)
+17. [Sweeping Execution Parameters](#sweeping-execution-parameters)
+18. [Orders, One by One](#orders-one-by-one)
+19. [Quoting in the DSL](#quoting-in-the-dsl)
+20. [A Market Stored Order by Order](#a-market-stored-order-by-order)
+21. [Fee & Slippage Models](#fee--slippage-models)
+22. [Orders (SL/TP/Trailing)](#orders-sltptrailing)
+23. [Entry Orders](#entry-orders)
+24. [Cross-Asset References](#cross-asset-references)
+25. [Dataset Auto-Resolution](#dataset-auto-resolution)
+26. [Diagnostics](#diagnostics)
+27. [Profiling](#profiling)
+28. [Complete Examples](#complete-examples)
+29. [Indicator Reference](#indicator-reference)
 
 ---
 
@@ -2217,6 +2218,109 @@ made in the open.
 
 ---
 
+## Reading a Maker's Day
+
+A maker's result is not read the way a directional strategy's is. Its equity
+curve says how much was lost and almost nothing about why: the loss is made of
+tens of thousands of fills, each of which earned a hundredth of a basis point
+and paid one, and no summary statistic separates the two.
+`mbt.plot` grows six charts for that, all on the same result object:
+
+```python
+result = mbt.run(strategy, config, store)
+mbt.plot.inventory(result, target=0.05)   # the position, and the market it grew in
+mbt.plot.pnl_attribution(result)          # where the P&L came from, term by term
+mbt.plot.hourly(result)                   # the day, hour of the UTC day by hour
+mbt.plot.order_life(result)               # what became of every quote posted
+mbt.plot.marks_by_channel(result)         # the same marks, split by what served
+mbt.plot.quotes(result)                   # a few minutes of quoting, order by order
+```
+
+They are meant to be read in that order, and each answers a question the one
+before raises.
+
+`order_life` (its two lower panels), `marks_by_channel` and `quotes` read the
+[journal of resting orders](#the-journal-of-resting-orders), which the
+limit-order strategies of the main engine (`.limit_entry`) keep. A strategy that
+quotes with [`.quote`](#quoting-in-the-dsl) does not carry it: its `QuoteResult`
+holds `orders_df()` (what became of every order) and `fills_df()` (every fill,
+with its `channel`) instead, and these charts say so rather than draw from them.
+
+**`inventory(result, target=)`** — the price on top with a marker per fill, the
+position underneath. A maker is paid for holding inventory it did not choose,
+so the question is when the book handed it some and at what level; an inventory
+that grows while the price falls is a maker buying a move all the way down, and
+neither panel says that on its own. `target=` draws the inventory the strategy
+was aiming for as a dotted line: the engine cannot infer it, and without it
+there is nothing to read a peak against. Under a cancel latency the peak is
+routinely a multiple of the target, and that overshoot is
+[what a stale quote buys](#latency).
+
+**`pnl_attribution(result, horizon=)`** — the four terms of the P&L, as a
+waterfall down to the run's own number. **Half-spread captured** is
+`side * (ref_at_fill - price) * qty` summed over the fills: what the quote
+earned against the mid at its own anchor, and negative as often as not, because
+a quote served by a print going through its level was filled on the wrong side
+of the mid. **Adverse selection** is `side * (mark_h - ref_at_fill) * qty`:
+where that mid went by the chosen horizon. **Fees** are the trade log's own,
+brackets included. **Inventory** is the remainder -- `total` minus the other
+three -- and the chart says so on its face: it holds what the position did
+after the horizon ran out and the path from a fill to the exit that closed it,
+and it is not a measurement. The total is the equity change, so the picture and
+`equity()` are the same number by construction. `mbt.plot.pnl_attribution`'s
+`attribution(result, horizon)` returns the same five numbers as a dict.
+
+**`hourly(result)`** — fills by side, exposure, markout and fees, on one axis of
+the hour of the UTC day. Nothing about a maker is stationary across a session,
+and this is what separates "my edge is too thin" from "my edge is fine except
+for three hours". A day of a liquid tape is a run of its own, so ten days are
+ten runs: pass the list and the hours are pooled. Do NOT stitch
+non-consecutive days into one long run to get the same picture -- the marks
+then measure the first fills of each day against the last mid of the previous
+one, which is a boundary artefact, not a market fact, and it is large enough to
+swamp every other hour.
+
+**`order_life(result)`** — every counter a run keeps about its quotes, on one
+picture, in the two units they are counted in: per quote posted on the left,
+per fill served on the right. The service rate under it is the first number
+that says whether modelling the queue bought anything. When the run kept a
+[journal](#the-journal-of-resting-orders) two more panels come below, and they
+are the ones a counter cannot give: **how long a quote stood** before it was
+served and before it expired, and **how much volume was in front of it** when
+it arrived, in multiples of its own size. The first says whether the
+time-in-force is doing anything; the second says whether the queue was ever
+going to reach the order at all.
+
+**`marks_by_channel(result)`** — the markouts of
+[`fill_marks`](#marking-a-fill), split by what served each fill. The average
+over every fill hides the finding, because the three channels are three
+different trades: a queue-decided fill means the flow that consumed the level
+stopped there, a traversal means the price went THROUGH it, and a book cross
+means the opposite best price came over with no print at all. The channel comes
+from the journal, joined on the instant the fill was booked; no heuristic
+reconstructs it, and a run without a journal is refused rather than guessed at.
+
+**`quotes(result, start=, end=)`** — a window of a few minutes with one segment
+per order, from the instant it reached the book to the instant its life ended,
+coloured by outcome, with the fills marked by channel at the end of their
+segment. It is the raw material the five charts above average, and it is what
+makes them believable: a wall of grey is a maker nobody is trading with. The
+default window is the busiest minute, because a window picked at random on a
+maker's day is a minute of nothing; a window much wider than a few minutes
+turns second-long quotes into dots, which is a property of the quotes rather
+than of the chart. The result does not carry the book, so what runs behind the
+segments is the close of each output row -- there is no reconstructed bid and
+ask here.
+
+
+Each chart takes `save=` (`.html` for an interactive page, `.png` through
+kaleido) and `show=` like every other one, and refuses by name when the run
+does not carry what it draws. `mbt.plot.tearsheet(result)` puts them all under
+the standard report, and leaves the report exactly as it was on a run that
+carries none of it.
+
+---
+
 ## Sweeping Execution Parameters
 
 **The execution parameters make the P&L. They are swept and published as a
@@ -3628,6 +3732,60 @@ result.order_activity
 
 It is `None` on paths that do not track it (the portfolio runner), like
 `fill_fragility`.
+
+### The journal of resting orders
+
+The counters above answer "how many". They cannot answer "how long did a quote
+stand", or "how much was in front of it when it arrived", because both are
+properties of an ORDER and a counter has already thrown the order away.
+`result.resting_orders_df()` keeps them: **one row per quote posted**, written
+wherever its life ends.
+
+```python
+result.resting_orders_df()
+#    symbol_id                   posted_at                  visible_at  side     level  ...
+# 0          1  2025-08-13 00:00:11.334+00:00  2025-08-13 00:00:11.354+00:00     1  120096.5
+# 1          1  2025-08-13 00:00:31.176+00:00  2025-08-13 00:00:31.196+00:00    -1  120087.2
+```
+
+The columns, in order:
+
+| Column | What it holds |
+|---|---|
+| `symbol_id`, `side` (`1` a bid, `-1` an ask), `level`, `size` | the quote |
+| `posted_at` | the event the strategy posted it on |
+| `visible_at` | the instant it reached the book: `posted_at` plus `execution.latency.order`, and equal to it without one |
+| `level_before_snap` | the level asked for when `tick_size` moved it onto the grid, `NaN` when it did not |
+| `queue_ahead_at_post` | units standing in front of it at its level when it arrived, `NaN` without `fill_model.queue` |
+| `book_known_at_post` | `False` when the stored ladder could not answer there, so the queue was assumed |
+| `outcome` | `filled`, `partial`, `expired`, `cancelled_requote`, `stale_filled`, `cancelled` |
+| `filled_at`, `filled_qty`, `fill_channel` | when the fill was booked, how much, and what served it (`queue`, `traverse`, `book_cross`) |
+| `cancel_decided_at`, `cancel_effective_at` | the two ends of `execution.latency.cancel` |
+
+Three things worth stating, because they are what makes the frame usable:
+
+- **The journal and the counter are the same population.** There are exactly
+  `order_activity["orders_posted"]` rows, written at a single point in the loop
+  so that no way out of the book forgets one. A share read off the frame and a
+  share read off the counters are the same share.
+- **`filled_at` is the instant `trades_df()` carries.** The two are written
+  from the same timestamp, so joining the journal to the trade log or to
+  `fill_marks_df()` on it is exact rather than nearest, and that join is how a
+  fill gets a channel: `fill_channel` lives here and nowhere else.
+- **The channel is the one that served the FIRST unit.** It says how the order
+  was reached, not how each of its partials was.
+
+The field is **absent** (`None`) when the run posted no resting order, which is
+every run of market orders and every path that does not track them. It costs a
+row per quote and nothing else: no counter, no branch and no read is added to
+the simulation, and a run that posts none is byte for byte the run it was.
+
+The two outcomes worth a word. `expired` is a quote whose time-in-force ran out
+with nothing served, and on a maker requoting on a duration it is most of them.
+`cancelled_requote` is narrower than `requotes` above and does not equal it: a
+requote counts the order that REPLACED one, and `cancelled_requote` counts the
+order that was replaced *while still standing*. A quote that expired a moment
+before its replacement went out is an `expired` here and a `requotes` there.
 
 ### Reading the position from a level
 
