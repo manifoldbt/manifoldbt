@@ -138,10 +138,11 @@ The self-contained and synthetic examples need none of this.
 | 27 | `27_bars_vs_tape.py` | the same bracket resolved on the candle and on the trades inside it | network, **Researcher** |
 | 28 | `28_trade_clock_market_maker.py` | a market maker on the trade clock: queue, latency, and what each fill cost | network, **Researcher** |
 | 29 | `29_reconcile_live_fills.py` | a broker's own fills against the backtest of the same days | network, **Researcher** |
+| 33 | `33_trade_clock_order_flow.py` | an order-flow taker on the trade clock, and the fee it has to beat | network, **Researcher** |
 
 ⚠ marks the two files whose fixture determines the outcome, as described above.
 
-**27, 28 and 29 need the Researcher plan.** Reading a stored tape or a stored
+**27, 28, 29 and 33 need the Researcher plan.** Reading a stored tape or a stored
 book is a Researcher feature, and a Pro licence does not unlock it. Without it
 they exit with the refusal message rather than a traceback.
 

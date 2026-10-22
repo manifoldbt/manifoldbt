@@ -53,11 +53,11 @@ the bar engine and questioned at tick resolution.
 
 Example::
 
-    import manifoldbt as bt
+    import manifoldbt as mbt
 
-    bt.ticks.generate_tape("tape.csv", n_ticks=200_000)
-    print(bt.ticks.tape_info("tape.csv"))
-    print(bt.ticks.run_orderflow("tape.csv", enter_thr=0.35))
+    mbt.ticks.generate_tape("tape.csv", n_ticks=200_000)
+    print(mbt.ticks.tape_info("tape.csv"))
+    print(mbt.ticks.run_orderflow("tape.csv", enter_thr=0.35))
 
 .. note::
    This layer is a Researcher feature: a Pro licence does not unlock it, and

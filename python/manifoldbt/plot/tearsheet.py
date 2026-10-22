@@ -175,6 +175,7 @@ def tearsheet(
         div_sharpe = _div(rolling_sharpe(result, show=False), height=300)
         div_vol = _div(rolling_volatility(result, show=False), height=300)
         div_var = _div(var_chart(result, show=False), height=340)
+        tape_html = _tape_section(result)
 
     # ── Metrics ───────────────────────────────────────────────────
     ret = metrics.get("total_return", 0)
@@ -281,7 +282,7 @@ def tearsheet(
 <div class="chart-grid">
   {div_var}
 </div>
-
+{tape_html}
 </div>
 </body>
 </html>"""
@@ -358,6 +359,66 @@ def research_report(
 
 
 # ── Internal ─────────────────────────────────────────────────────────────────
+
+
+def _tape_section(result) -> str:
+    """The charts a run on the tape earns, and nothing on a run without one.
+
+    Every panel here reads a field that only the tape layer fills in, so a
+    backtest on bars produces exactly the page it always did: each block asks
+    for its own field and returns nothing when it is absent. The order is the
+    order the questions get asked -- what did the P&L come from, what did the
+    quotes do, when in the day, and what served the fills.
+    """
+    from manifoldbt.plot.hourly import hourly
+    from manifoldbt.plot.inventory import inventory
+    from manifoldbt.plot.marks_by_channel import marks_by_channel
+    from manifoldbt.plot.order_life import order_life
+    from manifoldbt.plot.pnl_attribution import pnl_attribution
+
+    marks = getattr(result, "fill_marks", None)
+    activity = getattr(result, "order_activity", None) or {}
+    quoted = bool(activity.get("orders_posted"))
+    journal = getattr(result, "resting_orders_df", lambda: None)()
+    if not marks and not quoted:
+        return ""
+
+    full = '<div class="chart-grid" style="grid-template-columns:1fr;">'
+    blocks = []
+    # Side by side only where both are bar charts of the same shape. The two
+    # tall ones get a row each: `hourly` stacks four panels and `order_life`
+    # two, and squeezed into half a row their subplot titles land on the panel
+    # above.
+    if marks:
+        side = _panel(pnl_attribution, result, 420)
+        if journal is not None:
+            side += _panel(marks_by_channel, result, 420)
+        blocks.append('<div class="chart-grid">' + side + '</div>')
+    if quoted:
+        blocks.append(full + _panel(order_life, result, 640) + '</div>')
+    if marks:
+        blocks.append(full + _panel(hourly, result, 720) + '</div>')
+    if quoted:
+        blocks.append(full + _panel(inventory, result, 460) + '</div>')
+    blocks = [b for b in blocks if b and "chart-cell" in b]
+    if not blocks:
+        return ""
+    return ('\n<div class="section-label" style="margin:18px 0 8px 0;">'
+            'ON THE TAPE</div>\n' + "\n".join(blocks))
+
+
+def _panel(fn, result, height: int) -> str:
+    """One tape chart as a cell, or nothing when it declines to draw.
+
+    A chart in this family refuses by name when the field it reads is missing
+    or empty; a report is not the place for that refusal, so the cell is simply
+    left out. Nothing else is swallowed: the charts raise `ValueError` for that
+    one reason and any other exception is a bug that belongs on the surface.
+    """
+    try:
+        return _div(fn(result, show=False), height=height)
+    except ValueError:
+        return ""
 
 
 def _fmt_hold_time(seconds):

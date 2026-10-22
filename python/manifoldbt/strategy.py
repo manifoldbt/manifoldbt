@@ -287,14 +287,14 @@ class Strategy:
         counted in ``order_activity["refused_beyond_levels"]`` and the first
         one is said in a ``UserWarning`` (once per run, and once per sweep
         call). The expressions may read the batch
-        (the book columns ``bt.book.*``, the strategy's own signals, params)
+        (the book columns ``mbt.book.*``, the strategy's own signals, params)
         and the state at the wake-up: ``position()``, ``cash()``,
         ``live_qty(side)``, ``order_age(side)``, ``order_price(side)``,
         ``last_fill_px(side)``, ``queue_ahead(side)``, the ages
         ``position_age()``, ``last_fill_age(side)`` and
         ``last_cancel_age(side)`` (seconds, NaN before the event),
-        ``bt.book.bid_price_at(level)`` and
-        ``bt.book.bid_levels()`` and their ask twins, combined with
+        ``mbt.book.bid_price_at(level)`` and
+        ``mbt.book.bid_levels()`` and their ask twins, combined with
         arithmetic, comparisons, ``when``, ``round``, ``clip``, ``min_val`` /
         ``max_val``, ``abs_val`` and ``round_to`` / ``floor_to`` /
         ``ceil_to``. The state is what the strategy knows: fills and answers
@@ -331,7 +331,7 @@ class Strategy:
             clips = mbt.round(mbt.position() / 0.01)
             strategy = (
                 mbt.Strategy.create("maker")
-                .quote("buy", bt.book.bid_price_at(mbt.clip(clips, 0, 9) + 1), 0.01,
+                .quote("buy", mbt.book.bid_price_at(mbt.clip(clips, 0, 9) + 1), 0.01,
                        enabled=mbt.position() < 0.05)
             )
         """

@@ -1,25 +1,25 @@
 """Order-level simulation against a stored book and tape.
 
-``bt.sim.run`` hands a strategy function a simulated venue. The function moves
+``mbt.sim.run`` hands a strategy function a simulated venue. The function moves
 the clock, reads the book and the tape as they reach it, and posts, cancels and
 replaces its own orders, which reach the venue after their latency. Each order
-resting in the book is served by the same queue model as ``bt.run``'s
+resting in the book is served by the same queue model as ``mbt.run``'s
 ``fill_model={"queue": ...}``: a strategy that rests one order at a time gets
 the same fills through either door.
 
 Example::
 
-    import manifoldbt as bt
+    import manifoldbt as mbt
 
     def maker(sim):
-        while sim.elapse(bt.Interval.millis(100)):
+        while sim.elapse(mbt.Interval.millis(100)):
             book = sim.book("BTCUSDT")
             if book.best_bid is None:
                 continue
             if not sim.orders("BTCUSDT", side="buy", status="live"):
                 sim.post("BTCUSDT", "buy", book.best_bid, 0.01, tif="GTX")
 
-    res = bt.sim.run(maker, bt.sim.Config(latency={"entry": bt.Interval.millis(5)}),
+    res = mbt.sim.run(maker, mbt.sim.Config(latency={"entry": mbt.Interval.millis(5)}),
                      store, symbols=["BTCUSDT"], start="2025-08-13", end="2025-08-14")
     res.fills_df()
 
@@ -48,7 +48,7 @@ What the venue does:
 * a GTD order whose ``expire_at`` is at or before its arrival expires without
   executing; a FOK that cannot fill whole ends ``expired``.
 
-A market stored order by order (``bt.ingest_mbo``) serves a resting order in
+A market stored order by order (``mbt.ingest_mbo``) serves a resting order in
 its exact place in the queue instead: behind the orders that reached its level
 before it, served when the market executes an order that arrived after it, or
 goes through its level, or brings an order of the other side to its price.
@@ -184,25 +184,25 @@ class Config:
         unknown = set(latency) - set(_LATENCY_KEYS)
         if unknown:
             raise TypeError(
-                f"unknown latency key(s) {sorted(unknown)}: bt.sim.Config.latency takes "
+                f"unknown latency key(s) {sorted(unknown)}: mbt.sim.Config.latency takes "
                 '"entry", "cancel", "response" and "feed"'
             )
         if self.seed < 0:
-            raise ValueError(f"bt.sim.Config.seed must be zero or more, got {self.seed!r}")
+            raise ValueError(f"mbt.sim.Config.seed must be zero or more, got {self.seed!r}")
         body = {
             "latency": {
                 k: _duration_ns(f"latency.{k}", latency[k]) for k in _LATENCY_KEYS if k in latency
             },
-            "maker_fee_bps": _finite("bt.sim.Config.maker_fee_bps", self.maker_fee_bps),
-            "taker_fee_bps": _finite("bt.sim.Config.taker_fee_bps", self.taker_fee_bps),
-            "initial_cash": _finite("bt.sim.Config.initial_cash", self.initial_cash),
+            "maker_fee_bps": _finite("mbt.sim.Config.maker_fee_bps", self.maker_fee_bps),
+            "taker_fee_bps": _finite("mbt.sim.Config.taker_fee_bps", self.taker_fee_bps),
+            "initial_cash": _finite("mbt.sim.Config.initial_cash", self.initial_cash),
             "seed": int(self.seed),
         }
         if self.queue is not None:
             queue = dict(self.queue)
             for key, value in queue.items():
                 if isinstance(value, float):
-                    _finite(f"bt.sim.Config.queue[{key!r}]", value)
+                    _finite(f"mbt.sim.Config.queue[{key!r}]", value)
             body["queue"] = queue
         return json.dumps(body)
 
@@ -267,20 +267,20 @@ def run(
         fill.
     """
     if not callable(strategy):
-        raise TypeError("bt.sim.run: strategy is a function of one argument, the simulation")
+        raise TypeError("mbt.sim.run: strategy is a function of one argument, the simulation")
     config = config if config is not None else Config()
     if not isinstance(config, Config):
-        raise TypeError("bt.sim.run: config is a bt.sim.Config")
+        raise TypeError("mbt.sim.run: config is a mbt.sim.Config")
     if markets is not None:
         if store is not None or symbols is not None or start is not None or end is not None:
             raise TypeError(
-                "bt.sim.run: give either markets=, or store, symbols, start and end"
+                "mbt.sim.run: give either markets=, or store, symbols, start and end"
             )
         markets = list(markets)
     else:
         if store is None or symbols is None or start is None or end is None:
             raise TypeError(
-                "bt.sim.run needs a store, symbols, start and end (or markets=)"
+                "mbt.sim.run needs a store, symbols, start and end (or markets=)"
             )
         if isinstance(symbols, (str, int)):
             symbols = [symbols]
@@ -288,13 +288,13 @@ def run(
         if isinstance(by_day, str) and by_day == "auto":
             by_day = end_ns - start_ns > 86_400_000_000_000
         elif not isinstance(by_day, bool):
-            raise ValueError(f'bt.sim.run: by_day takes "auto", True or False, got {by_day!r}')
+            raise ValueError(f'mbt.sim.run: by_day takes "auto", True or False, got {by_day!r}')
         if device not in ("cpu", "cuda", "gpu"):
-            raise ValueError(f'bt.sim.run: device takes "cpu" or "cuda", got {device!r}')
+            raise ValueError(f'mbt.sim.run: device takes "cpu" or "cuda", got {device!r}')
         if device != "cpu":
             if not by_day:
                 raise ValueError(
-                    'bt.sim.run: device="cuda" prepares the days of markets held day by day; '
+                    'mbt.sim.run: device="cuda" prepares the days of markets held day by day; '
                     "leave by_day to \"auto\" or pass by_day=True"
                 )
             from manifoldbt import _require_grant_for_gpu
@@ -305,7 +305,7 @@ def run(
             for s in symbols
         ]
     if not markets:
-        raise ValueError("bt.sim.run: at least one market")
+        raise ValueError("mbt.sim.run: at least one market")
     raw = _sim_run(strategy, markets, config._to_json())
     return SimResult(raw, config)
 
@@ -393,14 +393,14 @@ class SimResult:
     def fill_marks(self) -> Dict[str, Any]:
         """What the market did after each fill, aggregated per horizon (100 ms,
         1 s, 10 s), the horizons counted from the fill itself
-        (``anchor == "fill"``). Same fields as ``bt.run``'s
+        (``anchor == "fill"``). Same fields as ``mbt.run``'s
         ``result.fill_marks``."""
         return self._raw.fill_marks
 
     @property
     def fill_fragility(self) -> Dict[str, Any]:
         """What the queue decided for the orders that rested, in the shape of
-        ``bt.run``'s ``result.fill_fragility`` under a queue: ``maker_fills``,
+        ``mbt.run``'s ``result.fill_fragility`` under a queue: ``maker_fills``,
         ``queue`` (``queue_decided_fills``, ``traverse_fills``,
         ``fills_from_book_cross``, ``partial_fills``, ``book_unknown_at_post``:
         the orders posted behind ``assumed_queue``), ``would_fill_touch`` and
@@ -451,7 +451,7 @@ class SimResult:
 
         The columns are the venue's, as in :meth:`orders_df` and
         :meth:`events_df` (``qty``, ``fee``, ``side`` as ``"buy"`` or
-        ``"sell"``). The trade log of ``bt.run``, ``trades_df``, names them
+        ``"sell"``). The trade log of ``mbt.run``, ``trades_df``, names them
         in its own words: ``quantity``, ``fill_price``, ``fees``,
         ``execution_timestamp``, ``side`` as 1 or 2."""
         return _frame(self._raw.fills_arrow, self._raw.fills_columns, ["timestamp"], backend)

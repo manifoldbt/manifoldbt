@@ -565,7 +565,7 @@ def walk_forward(
         mode: ``"auto"`` (equity curves if available, bars otherwise),
               ``"equity"`` (force equity curves), ``"bars"`` (force bar chart),
               ``"stitched"`` (stitched OOS vs full backtest).
-        full_result: BacktestResult from ``bt.run()`` on the full period
+        full_result: BacktestResult from ``mbt.run()`` on the full period
               (no WFO). Used by ``"stitched"`` mode as the baseline.
               If not provided, stitched mode only shows the OOS curve.
     """
@@ -1008,7 +1008,7 @@ def monte_carlo(
     """Monte Carlo fan chart with percentile bands, sample paths, and risk stats.
 
     Args:
-        result: BacktestResult from ``bt.run()``.
+        result: BacktestResult from ``mbt.run()``.
         n_simulations: Number of simulated paths.
         method: ``"bootstrap"`` (sample with replacement, default) for tail risk
             estimation, or ``"permutation"`` (shuffle without replacement) for
@@ -1017,11 +1017,12 @@ def monte_carlo(
         n_sample_paths: Number of individual paths to draw (faded). 0 to disable.
         seed: Random seed for reproducibility.
     """
-    # Cap to 1000 sims for Community
+    # Same ceiling as the engine's Monte Carlo, asked of the same flag rather
+    # than inferred from the tier name, so the chart follows the licence the
+    # day the flag moves.
     try:
-        from manifoldbt import _license_info, _warn_pro
-        tier, _ = _license_info()
-        if tier != "Pro" and n_simulations > 1000:
+        from manifoldbt import _grant_couvre, _warn_pro
+        if n_simulations > 1000 and not _grant_couvre("monte_carlo_unlimited"):
             _warn_pro(f"Monte Carlo capped to 1,000 sims (requested {n_simulations:,})")
             n_simulations = 1000
     except Exception:

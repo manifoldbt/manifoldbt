@@ -15,7 +15,7 @@ class Result:
 
     Example::
 
-        result = bt.run(strategy, config, store)
+        result = mbt.run(strategy, config, store)
         print(result.summary())
         df = result.trades_df()
         result.plot()
@@ -148,6 +148,74 @@ class Result:
             df = pl.DataFrame(cols)
             return df.with_columns(
                 pl.col(c).cast(pl.Datetime("ns", "UTC")) for c in ("timestamp", "anchor")
+            )
+        return cols
+
+    def resting_orders_df(self, backend: str = "auto") -> Any:
+        """Every quote the run posted, one row per resting order.
+
+        ``None`` when the run posted none, which is every run of market
+        orders. The rows are in the order the orders' lives ended, and there
+        are exactly ``result.order_activity["orders_posted"]`` of them:
+        ``order_activity`` counts what this journal describes.
+
+        Columns:
+
+        - ``symbol_id``, ``side`` (1 a bid, -1 an ask), ``level``, ``size``;
+        - ``posted_at``, the event the strategy posted the order on, and
+          ``visible_at``, the instant it reached the book -- the two are the
+          same without ``execution.latency``;
+        - ``level_before_snap``, the level asked for when ``tick_size`` moved
+          it onto the grid, ``NaN`` when it did not;
+        - ``queue_ahead_at_post``, the units standing in front of the order at
+          its level when it arrived (``NaN`` without ``fill_model.queue``), and
+          ``book_known_at_post``, ``False`` when the stored book could not
+          answer there so the queue was assumed;
+        - ``outcome``: ``"filled"``, ``"partial"``, ``"expired"`` (the
+          time-in-force ran out with nothing served), ``"cancelled_requote"``
+          (the target moved), ``"stale_filled"`` (served after its cancellation
+          was decided, which only a cancel latency produces), or ``"cancelled"``
+          (withdrawn for another reason, or still standing when the run ended);
+        - ``filled_at``, ``filled_qty`` and ``fill_channel`` (``"queue"``,
+          ``"traverse"``, ``"book_cross"``, or nothing when nothing was
+          served). ``filled_at`` is the instant the fill was booked at, so it
+          joins ``trades_df()["execution_timestamp"]`` exactly;
+        - ``cancel_decided_at`` and ``cancel_effective_at``, whose distance is
+          ``execution.latency.cancel``.
+
+        The channel is the one that served the FIRST unit: it says how the
+        order was reached, not how each of its partials was.
+
+        Args:
+            backend: ``"pandas"``, ``"polars"``, or ``"auto"``.
+        """
+        cols = self._raw.resting_orders_detail()
+        if cols is None:
+            return None
+
+        from manifoldbt.dataframe import _resolve_backend
+
+        stamps = ("posted_at", "visible_at", "filled_at",
+                  "cancel_decided_at", "cancel_effective_at")
+        backend = _resolve_backend(backend)
+        if backend == "pandas":
+            import pandas as pd
+            df = pd.DataFrame(cols)
+            for c in stamps:
+                # Through a nullable Int64 rather than the float64 a list with
+                # a None in it infers: a nanosecond stamp is ~1.7e18 and f64
+                # runs out of mantissa at 9e15, so the naive path rounded
+                # ...685000000 to ...684999936 and no join to `trades_df`
+                # matched any more.
+                df[c] = pd.to_datetime(
+                    pd.array(cols[c], dtype="Int64"), unit="ns", utc=True
+                )
+            return df
+        if backend == "polars":
+            import polars as pl
+            df = pl.DataFrame(cols)
+            return df.with_columns(
+                pl.col(c).cast(pl.Datetime("ns", "UTC")) for c in stamps
             )
         return cols
 
@@ -457,7 +525,7 @@ class QuoteResult(Result):
     Every quote price is put on the symbol's tick grid before it is compared
     or posted: a few ulps off a tick is that tick, between two ticks a bid
     goes down and an ask up. Beside it, the venue's own
-    record, in the columns of ``bt.sim.SimResult``: :meth:`orders_df`,
+    record, in the columns of ``mbt.sim.SimResult``: :meth:`orders_df`,
     :meth:`fills_df`, :meth:`events_df`, and the whole record as :attr:`sim`.
 
     ``mbt.run_sweep`` and ``mbt.run_batch`` of strategies that quote return
@@ -473,7 +541,7 @@ class QuoteResult(Result):
 
     @property
     def sim(self) -> Any:
-        """The venue's record, as ``bt.sim.run`` returns it: every order,
+        """The venue's record, as ``mbt.sim.run`` returns it: every order,
         fill and order event, and the equity at each wake-up."""
         return self._sim
 

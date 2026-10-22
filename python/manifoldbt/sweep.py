@@ -20,7 +20,7 @@ class SweepResult:
 
     Example::
 
-        sweep = bt.run_sweep(strategy, {"fast": [10, 20, 30]}, config, store)
+        sweep = mbt.run_sweep(strategy, {"fast": [10, 20, 30]}, config, store)
         print(len(sweep))              # 3
         df = sweep.to_df()             # DataFrame with metrics per combo
         best = sweep.best("sharpe")    # Result with highest Sharpe
@@ -131,7 +131,7 @@ class SweepResult:
     def plot_metric(self, metric: str = "sharpe", **kwargs: Any) -> Any:
         """Plot a metric across sweep results (plotly).
 
-        For 2-parameter sweeps, delegates to ``bt.plot.heatmap_2d``.
+        For 2-parameter sweeps, delegates to ``mbt.plot.heatmap_2d``.
         For 1-parameter sweeps, produces a bar chart.
 
         Args:

@@ -32,9 +32,9 @@ strategy once, in a fluent Python DSL, and hand it to the engine: the whole
 backtest then runs in Rust, signals, fills, fees, slippage, funding and equity
 included. Python stays out of the hot loop.
 
-- **Fast.** 10 million bars with a full performance summary in **337 ms**,
-  where vectorbt takes 85.6 s. 10,000 parameter sets over 200,000 bars in
-  **9.3 s inside 104 MB**. Measured on a standard 4-vCPU GitHub runner,
+- **Fast.** 10 million bars with a full performance summary in **236 ms**,
+  where vectorbt takes 98.4 s. 10,000 parameter sets over 200,000 bars in
+  **3.5 s inside 323 MB**. Measured on a standard 4-vCPU GitHub runner,
   [every run linked](#performance).
 - **Checked.** Entry price, exit price and exit reason are asserted against
   vectorbt in CI, on the wheel published to PyPI. A benchmark workload the
@@ -142,29 +142,32 @@ and only then reports how long each took.
 
 ```text
 SMA crossover with drawdown, Sharpe, Sortino and volatility, 10M bars
-  Manifold-BT  ▎                                                  0.34 s
-  raptorbt     ▍                                                  0.74 s
-  vectorbt     ████████████████████████████████████████████████   85.6 s
+  Manifold-BT  ▏                                                  0.24 s
+  raptorbt     ▍                                                  0.90 s
+  vectorbt     ████████████████████████████████████████████████   98.4 s
 
 Parameter sweep, 10,000 combinations over 200,000 bars
-  Manifold-BT  ███                                                 9.3 s
-  raptorbt     ████████████████████████████████████████████████  146.4 s
+  Manifold-BT  █▋                                                  3.5 s
+  raptorbt     ████████████████████████████████████████████████  102.2 s
   vectorbt     not run: it materialises every combination, this grid needs tens of GB
 ```
 
-**[Run 35590549822](https://github.com/manifoldbt/manifoldbt/actions/runs/35590549822)**:
-Linux x86_64, 4 vCPU, Python 3.12, manifoldbt 0.26.0, vectorbt 0.28.4,
+**[Run 38319867927](https://github.com/manifoldbt/manifoldbt/actions/runs/38319867927)**:
+Linux x86_64, 4 vCPU, Python 3.12, manifoldbt 0.27.1, vectorbt 0.28.4,
 raptorbt 0.9.0. Seven interleaved repetitions (two for sweeps), medians
 reported; the ratio is the median of the per-repetition ratios. All five rows
-below agree with vectorbt exactly (relative tolerance 1e-9).
+below agree with vectorbt exactly (relative tolerance 1e-9). The figures here
+are copied from that run; the newest published run is always the one on
+[manifoldbt.com/benchmarks](https://www.manifoldbt.com/benchmarks), read from
+[`results/latest.json`](https://github.com/manifoldbt/manifoldbt/blob/master/benchmarks/vs_vectorbt/results/latest.json).
 
 | Workload | Bars | Manifold-BT | vectorbt | raptorbt |
 |---|---:|---:|---:|---:|
-| SMA 30/150 crossover | 10M | **341 ms** | 22.0 s (×64.5) | 759 ms (×2.2) |
-| ...plus drawdown, Sharpe, Sortino, volatility | 10M | **337 ms** | 85.6 s (**×250**) | 743 ms (×2.2) |
-| ...with a 5 bps fee and 2 bps slippage | 10M | **335 ms** | 21.4 s (×63.7) | not supported |
-| EMA 12/26 + RSI(14) filter, 5 bps fee | 1M | **52 ms** | 1.64 s (×31.5) | not supported |
-| Five assets in one book, 5 bps fee | 1M | **161 ms** | 2.06 s (×12.4) | not supported |
+| SMA 30/150 crossover | 10M | **237 ms** | 25.4 s (×106.5) | 895 ms (×3.8) |
+| ...plus drawdown, Sharpe, Sortino, volatility | 10M | **236 ms** | 98.4 s (**×415**) | 897 ms (×3.8) |
+| ...with a 5 bps fee and 2 bps slippage | 10M | **245 ms** | 25.3 s (×103.4) | not supported |
+| EMA 12/26 + RSI(14) filter, 5 bps fee | 1M | **45 ms** | 2.22 s (×49.3) | not supported |
+| Five assets in one book, 5 bps fee | 1M | **153 ms** | 2.48 s (×15.8) | not supported |
 
 The second row is the one worth reading twice. A performance summary costs
 Manifold-BT nothing measurable, because it computes one during the run whether
@@ -178,9 +181,9 @@ of an empty cell.
 
 | Bars | Combinations | Manifold-BT | vectorbt | raptorbt |
 |---:|---:|---:|---:|---:|
-| 20,000 | 5,000 | **0.47 s**, 23 MB | 5.23 s, 2.5 GB | 6.65 s, 36 MB |
-| 20,000 | 20,000 | **1.84 s**, 65 MB | not run | 26.8 s |
-| 200,000 | 10,000 | **9.31 s**, 104 MB | not run | 146.4 s |
+| 20,000 | 5,000 | **0.20 s**, 30 MB | 8.86 s, 2.5 GB | 4.20 s, 36 MB |
+| 20,000 | 20,000 | **0.81 s**, 66 MB | not run | 17.0 s |
+| 200,000 | 10,000 | **3.49 s**, 323 MB | not run | 102.2 s |
 
 Past a certain grid the question stops being speed. vectorbt materialises the
 simulation per combination, 1.57 MB of it at 20,000 bars, so the larger grids
@@ -192,13 +195,16 @@ at 256 combinations.
 
 ### Where it does not win
 
-- **Against raptorbt the gap is about 2×, not orders of magnitude.** Both are
-  compiled engines; the large ratios in the tables are against vectorbt.
-- **Multi-asset is the smallest lead over vectorbt (×12.4).** Broadcasting a
+- **On a single backtest, the gap to raptorbt is about 4×, not orders of
+  magnitude.** Both are compiled engines; the large ratios in the first table
+  are against vectorbt. The ×21 to ×29 on sweeps is a different story: raptorbt
+  has no fan-out API, so its sweep is a Python loop paying a full backtest per
+  combination.
+- **Multi-asset is the smallest lead over vectorbt (×15.8).** Broadcasting a
   column per asset is close to free for vectorbt, while walking five books is
   not free for anything.
-- **On a stop-loss/take-profit bracket, raptorbt is level** (×1.0 at 1M bars,
-  ×1.15 at 10M). Deciding which side triggers first inside a bar is a
+- **On a stop-loss/take-profit bracket, raptorbt comes closest** (×1.5 at 1M
+  bars, ×1.8 at 10M). Deciding which side triggers first inside a bar is a
   sequential walk in both engines. That workload is also not in the table
   above: the engines disagree on whether to re-enter on the bar a bracket
   closes, so its timing sits in the benchmark's annex with the cause written
@@ -296,9 +302,11 @@ this project can receive.
 
 ## Look-ahead
 
-`mbt.detect_lookahead` re-runs a strategy over different windows and compares
-the trades they have in common. That isolates bias coming from the engine or
-from a strategy's own use of time.
+`mbt.detect_lookahead` (Pro) re-runs a strategy over different windows and
+compares the trades they have in common. That isolates bias coming from the
+engine or from a strategy's own use of time. It is a check on one strategy, not
+a proof: the regression tests in [Correctness](#correctness) cover the engine,
+and the rest of this section is what the comparison cannot see.
 
 One shape of leak is invisible to that comparison by construction: a signal
 that reads a fixed number of bars ahead (`close.lead(1)`, or a column

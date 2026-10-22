@@ -37,7 +37,7 @@ def main() -> None:
     ing.add_argument("--exchange", default=None, help="Exchange name for metadata")
     ing.add_argument("--asset-class", default="crypto_spot",
                      help="crypto_spot | crypto_perp | equity | future | option | forex | index")
-    ing.add_argument("--license-key", default=None, help="Pro license key (or set via bt.activate())")
+    ing.add_argument("--license-key", default=None, help="Pro license key (or set via mbt.activate())")
 
     # ── activate ──────────────────────────────────────────────────────────
     act = sub.add_parser("activate", help="Activate a Pro license key")

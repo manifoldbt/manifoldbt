@@ -106,7 +106,7 @@ def _load_bars(
     """Load the stored bars of one symbol and resample them to the chart's interval.
 
     The lookup mirrors the engine's own: the provider layout written by
-    ``bt.ingest`` / ``bt.import_dataframe`` / ``bt.import_csv``
+    ``mbt.ingest`` / ``mbt.import_dataframe`` / ``mbt.import_csv``
     (``{root}/{provider}/{tf}/{ticker}.arrow``, a ticker with a slash nesting
     one level down), then the legacy ``{root}/bars_{tf}/{symbol_id}.arrow``,
     at the coarsest stored resolution that still divides the chart interval,

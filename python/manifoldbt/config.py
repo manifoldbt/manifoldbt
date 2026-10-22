@@ -160,7 +160,7 @@ def latency(value: Any) -> Any:
     - ``feed``: the book and the prints reach the strategy that much later,
       so a wake-up at ``t`` reads the book as it stood at ``t - feed``.
 
-    For a quoting strategy ``cancel`` left out is zero, as for ``bt.run``.
+    For a quoting strategy ``cancel`` left out is zero, as for ``mbt.run``.
     """
     if value is None:
         return None
@@ -546,8 +546,8 @@ class ExecutionConfig:
       probabilistic queues, which take a share of every cancellation from IN
       FRONT of the order). An offer resting at the order's own price serves it
       under every rule. "fifo" is the exact queue of a market stored order by
-      order (bt.ingest_mbo): only the order-level simulation serves it
-      (bt.sim.run, Strategy.quote), where it is the default on such a market;
+      order (mbt.ingest_mbo): only the order-level simulation serves it
+      (mbt.sim.run, Strategy.quote), where it is the default on such a market;
       a run on bars or on the trade clock refuses it by name.
     adverse: adverse selection put INTO the fill decision, as
       {"model": "conditional", "horizon": Interval.millis(100), "slope": k} or
@@ -898,7 +898,7 @@ def account_sessions(start, end, tz: str = "UTC", hour: int = 0) -> List[int]:
         rules = AccountRules(
             phases=[AccountPhase(profit_target=0.10, max_daily_loss=0.05,
                                  max_total_loss=0.10, min_trading_days=4)],
-            sessions=bt.account_sessions("2024-01-01", "2025-01-01",
+            sessions=mbt.account_sessions("2024-01-01", "2025-01-01",
                                          tz="Europe/Prague"),
         )
 
@@ -1006,20 +1006,20 @@ class AccountRules:
     because the Challenge ended at +10%. Each phase therefore measures its
     limits from the equity that phase started at.
 
-        import manifoldbt as bt
-        cfg.account_rules = bt.AccountRules(
+        import manifoldbt as mbt
+        cfg.account_rules = mbt.AccountRules(
             phases=[
-                bt.AccountPhase(name="Challenge", profit_target=0.10,
+                mbt.AccountPhase(name="Challenge", profit_target=0.10,
                                 max_daily_loss=0.05, max_total_loss=0.10,
                                 min_trading_days=4),
-                bt.AccountPhase(name="Verification", profit_target=0.05,
+                mbt.AccountPhase(name="Verification", profit_target=0.05,
                                 max_daily_loss=0.05, max_total_loss=0.10,
                                 min_trading_days=4),
             ],
-            sessions=bt.account_sessions(start, end, tz="Europe/Prague"),
+            sessions=mbt.account_sessions(start, end, tz="Europe/Prague"),
             consistency=0.50,
         )
-        res = bt.run(strategy, cfg, store)
+        res = mbt.run(strategy, cfg, store)
         res.account   # None while it lives, else how it ended
 
     ``res.account`` reports ``equity`` and ``floor`` **on the phase's own
@@ -1111,7 +1111,7 @@ class BacktestConfig:
     ``features/{set_name}/{symbol_id}/`` are injected into signal env."""
     symbol_names: Dict[str, int] = field(default_factory=dict)
     """Mapping of human-readable symbol names to SymbolId integers.
-    Required when using ``bt.asset()`` or ``symbol_ref()`` cross-asset references.
+    Required when using ``mbt.asset()`` or ``symbol_ref()`` cross-asset references.
     Example: ``{"BTCUSDT": 1, "ETHUSDT": 2}``"""
     warmup_bars: int = 0
     """Number of bars to skip before acting on signals.
@@ -1130,7 +1130,7 @@ class BacktestConfig:
     exo_data: List[str] = field(default_factory=list)
     """Exogenous data series names to inject into signal evaluation.
     Each name corresponds to an ``exo/{name}/`` directory in the data store
-    (written via ``bt.register_exo()``). Columns are ASOF-joined onto
+    (written via ``mbt.register_exo()``). Columns are ASOF-joined onto
     bar timestamps and accessible as ``col("exo.{name}.{column}")``.
     Example: ``["hashrate", "fear_greed"]``"""
     signal_source: Any = None
@@ -1190,9 +1190,9 @@ class BacktestConfig:
 
     Every reader of the book sees that depth and no more: the queue ahead of
     a resting order (``fill_model={"queue": {"depth_source": "book"}}``), the
-    book columns (``bt.book.bid_price(k)`` and the rest), the trade clock's
+    book columns (``mbt.book.bid_price(k)`` and the rest), the trade clock's
     quotes, the fill marks, and the book a quoting strategy reads at each
-    wake-up (``bt.book.bid_price_at(k)``, ``bt.book.bid_levels()``). Past it
+    wake-up (``mbt.book.bid_price_at(k)``, ``mbt.book.bid_levels()``). Past it
     the run knows nothing, as past the depth stored: an order resting further
     out joins a queue the book cannot measure (``assumed_queue`` then, or, for a
     quote, that quote refused alone and the run goes on, counted in

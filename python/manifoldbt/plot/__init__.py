@@ -6,15 +6,21 @@ Install with::
 
 Quick start::
 
-    import manifoldbt as bt
+    import manifoldbt as mbt
 
-    result = bt.run(strategy, config, store)
-    bt.plot.tearsheet(result)              # full-page dashboard
-    bt.plot.equity(result)                 # single chart, opens on its own
-    bt.plot.trades(result)                 # round trips on the price
-    bt.plot.trade_pnl(result)              # PnL of every round trip
-    bt.plot.fill_marks(result)             # adverse selection after each fill
-    bt.plot.reconcile(rec)                 # real fills against the backtest
+    result = mbt.run(strategy, config, store)
+    mbt.plot.tearsheet(result)              # full-page dashboard
+    mbt.plot.equity(result)                 # single chart, opens on its own
+    mbt.plot.trades(result)                 # round trips on the price
+    mbt.plot.trade_pnl(result)              # PnL of every round trip
+    mbt.plot.fill_marks(result)             # adverse selection after each fill
+    mbt.plot.inventory(result)              # the position, and the market it grew in
+    mbt.plot.pnl_attribution(result)        # where the P&L came from, term by term
+    mbt.plot.hourly(result)                 # the day, hour of the UTC day by hour
+    mbt.plot.order_life(result)             # what became of every quote posted
+    mbt.plot.marks_by_channel(result)       # the same marks, split by what served
+    mbt.plot.quotes(result)                 # a few minutes of quoting, order by order
+    mbt.plot.reconcile(rec)                 # real fills against the backtest
 
 Every chart is interactive (crosshair, hover, zoom) and **shows itself by
 default**: plotting is what you asked for, so no ``show=`` is needed. Charts
@@ -65,6 +71,14 @@ from manifoldbt.plot.fill_marks import fill_marks
 from manifoldbt.plot.reconcile import reconcile
 from manifoldbt.plot.trades import trade_pnl, trades
 
+# Tape-level charts: what a maker's quotes did, and what being quoted cost
+from manifoldbt.plot.hourly import hourly
+from manifoldbt.plot.inventory import inventory
+from manifoldbt.plot.marks_by_channel import marks_by_channel
+from manifoldbt.plot.order_life import order_life
+from manifoldbt.plot.pnl_attribution import pnl_attribution
+from manifoldbt.plot.quotes import quotes
+
 # Research charts
 from manifoldbt.plot.research import (
     correlation_matrix,
@@ -102,6 +116,13 @@ __all__ = [
     "trade_pnl",
     "fill_marks",
     "reconcile",
+    # Tape plots
+    "inventory",
+    "pnl_attribution",
+    "hourly",
+    "order_life",
+    "marks_by_channel",
+    "quotes",
     # Research plots
     "heatmap_2d",
     "surface_3d",

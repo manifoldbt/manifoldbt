@@ -1,4 +1,4 @@
-"""``bt.reconcile``: a broker's fills against the backtest of the same days.
+"""``mbt.reconcile``: a broker's fills against the backtest of the same days.
 
 A queue depth, a latency, a cancellation rate: each of them makes the P&L of a
 maker, and none of them is knowable from a backtest alone. The one thing that
