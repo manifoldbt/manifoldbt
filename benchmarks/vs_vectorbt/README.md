@@ -1,4 +1,4 @@
-# manifoldbt vs vectorbt vs raptorbt
+# manifoldbt vs vectorbt vs raptorbt vs NautilusTrader
 
 An engine-to-engine benchmark you can re-run yourself. It installs every engine
 from PyPI, generates its own data, checks that they produced the **same
@@ -19,12 +19,13 @@ behind it.
 whose maximum supported CPython is 3.12: no release up to 0.9.0 publishes a
 cp313 wheel, and a source build refuses outright. Comparing engines means
 running them in one environment, and the environment has to be one all of them
-support. Add or drop a challenger with `--engines`; an engine that is not
+support. NautilusTrader asks for 3.12 or later, so it does not move the
+interpreter. Add or drop a challenger with `--engines`; an engine that is not
 installed is skipped with a printed line rather than crashing the run.
 
 **manifoldbt is the reference.** Every parity check and every ratio is a
-challenger against it, never two challengers against each other: three engines
-make three pairs, and a table of pairs is a matrix, not a benchmark. The
+challenger against it, never two challengers against each other: four engines
+make six pairs, and a table of pairs is a matrix, not a benchmark. The
 reference gets no advantage from the position, it is simply the one every
 timing is divided by.
 
@@ -50,6 +51,13 @@ means an engine cannot express the workload at all: it is not run, and the
 report prints the reason instead of an empty cell. A blank in a speed table
 reads as a defeat, and "this engine has no fixed-quantity sizing" is not a
 defeat, it is a different fact.
+
+A fifth, `not run above N bars`, is a time budget rather than a verdict, and it
+applies to one engine only: an event-driven engine replays every bar through a
+simulated exchange and costs seconds where the others cost milliseconds, so it
+is not repeated on series it would need hours for. It is printed with its
+reason, like `unsupported`, and the ceiling is a command-line option (see
+[NautilusTrader is a different kind of engine](#nautilustrader-is-a-different-kind-of-engine)).
 
 The `failed` path is not decoration. It is the reason the other numbers can be
 trusted, and it makes the benchmark fail loudly if a future release of either
@@ -80,17 +88,24 @@ simulation plus reading the headline metrics, nothing else.
 
 **Only public APIs.** manifoldbt is driven through `bt.run(strategy, config,
 store)`, the documented entry point, not through an internal fast path.
+NautilusTrader is driven through its low-level `BacktestEngine`, a `Strategy`
+subclass and its own indicators, which is what its documentation shows a user
+writing.
 
 ## What is compared
 
-| Workload | What it exercises | vectorbt | raptorbt |
-|---|---|---|---|
-| `sma_cross` | SMA 30/150 crossover, long-only, no cost | exact | exact |
-| `sma_cross_metrics` | the same simulation, plus max drawdown, Sharpe, Sortino and volatility | exact | exact |
-| `sma_cross_costs` | the same signal with a 5 bps fee and 2 bps of slippage | exact | unsupported |
-| `multi_asset` | five assets in one shared book, capped at 1M bars | exact | unsupported |
-| `ema_rsi_fees` | EMA 12/26 with an RSI(14) filter and a 5 bps taker fee, capped at 1M bars | exact | unsupported |
-| `bracket_sl_tp` | the same entry with a 15 bps stop and a 30 bps target | documented | documented |
+| Workload | What it exercises | vectorbt | raptorbt | NautilusTrader |
+|---|---|---|---|---|
+| `sma_cross` | SMA 30/150 crossover, long-only, no cost | exact | exact | exact |
+| `sma_cross_metrics` | the same simulation, plus max drawdown, Sharpe, Sortino and volatility | exact | exact | exact, on money and round-trips |
+| `sma_cross_costs` | the same signal with a 5 bps fee and 2 bps of slippage | exact | unsupported | exact |
+| `multi_asset` | five assets in one shared book, capped at 1M bars | exact | unsupported | exact |
+| `ema_rsi_fees` | EMA 12/26 with an RSI(14) filter and a 5 bps taker fee, capped at 1M bars | exact | unsupported | exact |
+| `bracket_sl_tp` | the same entry with a 15 bps stop and a 30 bps target | documented | documented | documented |
+
+NautilusTrader is run up to 100,000 bars (see below), and on the summary
+workload it is gated on total return and round-trips only, because it has no
+drawdown statistic to compare.
 
 ### Costs live in their own workload, and not by preference
 
@@ -262,12 +277,170 @@ of which 82 re-enter on the exit bar, and raptorbt books exactly 214 - 82 = 132.
 The report states the count and the share, so the size of the difference is
 measured instead of asserted.
 
+## NautilusTrader is a different kind of engine
+
+The other three engines are whole-series loops: vectorised, or compiled, or
+both. NautilusTrader is event-driven. It replays the bars one at a time through
+a simulated exchange with an order matching engine, and calls a Python strategy
+on each of them, which is what lets the same strategy run unchanged against a
+live venue. That design is the point of the engine, and it is also why it spends
+seconds where the others spend milliseconds on a workload like this one: a
+moving-average crossover is exactly the case a vectorised engine was built for.
+The comparison below is what this workload costs on each design, and says
+nothing about what each is for.
+
+### What is timed
+
+Everything that can be prepared once is prepared before timing, as for the other
+engines: the instrument, the `Bar` objects (`BarDataWrangler`), the venue, the
+account, the strategy, and the `add_data` call that hands the bars to the
+engine. The timed closure is what a user repeats, `engine.reset()`,
+`engine.run()` and reading the result. A replay is checked rather than assumed:
+the first call is the one the parity gate reads, and every later call must
+return exactly what it returned, or the run stops.
+
+### Why it stops at 100,000 bars
+
+Measured locally, pinned to four logical cores of a 13th-generation Core i5 (a
+hosted runner is slower): one `sma_cross` call costs 3.4 s at 100,000 bars,
+which is about 29,000 bars per second, and the cost is linear in the series. At
+10,000,000 bars one call would take about six minutes, and the eight calls of
+one workload (the gated call and seven repetitions) close to an hour, before the
+other five workloads. The ceiling is therefore 100,000 bars, it is a time budget
+and not a verdict, and each row beyond it says so instead of leaving a blank.
+`bench.py --engine-max-bars nautilus_trader=1000000` lifts it for a local run.
+
+The cost is not only the bars. Every fill is an order that goes through the risk
+engine, the matching engine and the account, and costs on the order of a
+millisecond (from the table: about 0.8 ms per extra fill between `sma_cross` and
+`ema_rsi_fees`): `ema_rsi_fees`, which trades about 6,400 times per 100,000
+bars, takes 7.6 s where `sma_cross` takes 3.4 s, and the five-asset
+`multi_asset` takes 27 s because it replays five series.
+
+### How each workload is expressed
+
+- **Fill at the close of the signal bar.** The strategy submits a market order
+  from `on_bar`. The simulated exchange has already moved the market to that
+  bar's close, and the order is matched before the next bar arrives, so the fill
+  lands on the same bar at the close. That is `signal_delay=0` with
+  `execution_price="AtClose"`, and it needs no setting.
+- **No volume-limited fills.** Nautilus builds its order book from a bar by
+  splitting the bar's volume over four synthetic updates (open, high, low,
+  close) and treats that quantity as the liquidity available. A market order
+  larger than a quarter of the bar's volume is partially filled, and the
+  remainder is booked one tick worse. The generated volumes are random between
+  100 and 10,000 units, and full-equity sizing is about 1,000 units, so that
+  rule fires on about four full-equity orders in ten. None of the other engines
+  has a volume constraint, so the venue is given a fill model that answers
+  market orders from a book of effectively unlimited depth at the close. It is
+  the mechanism Nautilus ships for this (`BestPriceFillModel`), written out only
+  because the bracket workload needs stop and limit orders left on the standard
+  logic. `BestPriceFillModel` prices every order from the best bid and ask,
+  stops and limits included, and with it `bracket_sl_tp` ends 6.2e-3 of capital
+  away from the run that fills them at their own levels.
+- **Slippage in basis points** is not a Nautilus setting: `prob_slippage` moves
+  a fill by one *tick*, at random. The same fill model shifts the book instead,
+  asks 2 bps above the close and bids 2 bps below, which is the documented
+  extension point for custom slippage and gives what `Slippage.fixed_bps` gives.
+- **Fees** are the instrument's taker fee, charged on notional by the venue's
+  default fee model. A market order always takes.
+- **Account and sizing.** A margin account with leverage 1, in a quote currency
+  with eight decimals (USDT). Not USD, which has two: Nautilus rounds each
+  realised PnL to the currency's precision, and measured with a USD quote,
+  `sma_cross` ends 2.8e-7 of capital from the reference at 20,000 bars and
+  2.1e-7 at 100,000, over two hundred times the gate. `FractionOfEquity` is the
+  cash balance at the signal bar divided by the close, rounded *down* to the
+  quantity precision; units sizing is the fixed quantity.
+- **Indicators** are Nautilus's own `SimpleMovingAverage`,
+  `ExponentialMovingAverage` and `RelativeStrengthIndex` (Wilder), registered on
+  the bar type so the engine updates them before `on_bar` runs.
+- **Brackets** are Nautilus's native contingent orders (`OrderFactory.bracket`):
+  a stop-market and a limit, one-cancels-other, armed when the market entry
+  fills, at levels computed from the signal bar's close. The venue's standard
+  logic decides the fills: a stop the bar trades through fills at its trigger
+  price, a limit the bar reaches fills at its limit price.
+
+### Fixed-point rounding
+
+Prices and quantities in Nautilus are fixed-point integers. The Windows wheel
+carries 9 decimals and the Linux wheel 16, and the adapter uses 9 on both so
+that the platform changes almost nothing: the parity results on the two agree to
+at most 2e-16 of capital. Rounding the generated float64 prices to 9 decimals
+moves the final equity by 3e-13 to 6e-11 of capital across the five workloads
+that agree, at 100,000 bars, and up to 1.5e-10 on a 20,000-bar grid whose short windows trade
+every few bars. The error grows with the square root of the number of fills. The
+gate is 1e-9, and the number is printed in every run, not hidden.
+
+### The RSI seed
+
+manifoldbt seeds Wilder's RSI with the simple average of the first `period`
+deltas and emits from bar `period`. Nautilus seeds it on the first observation
+and reports it as initialised after `period` updates. Same recursion, different
+seed, so the two series differ at the start and converge geometrically: on the
+benchmark data the largest gap is 4.5e-2 (on a 0-1 scale) in the first 50 bars,
+1.2e-4 between bars 100 and 200, and 2e-16 from bar 800 on. Whether that moves a
+decision is what the gate answers, and on this data it does not: the entry
+signals are identical, `ema_rsi_fees` comes back with the reference's
+round-trips and fees. That is a property of this dataset, which is why the
+difference is written down here rather than left for the gate to hide. The
+adapter uses the engine's own indicator and its own `initialized` flag; the EMA
+is identical to the reference to the last bit and the SMA to about 1e-13.
+
+### The documented divergence on `bracket_sl_tp`
+
+Entries, exits and fill prices are the same trades as the reference, round-trip
+for round-trip (448 against 448 at 20,000 bars, 2,309 against 2,309 at 100,000).
+Because the simulated exchange runs before the strategy sees the bar, a position
+stopped out intrabar is entered again at that bar's close when the signal still
+holds, exactly as the reference does, and not on the next bar as in vectorbt or
+never as in raptorbt.
+
+What differs is the quantity of that re-entry. The reference sizes it from the
+equity at the close, counting the position it has just closed at the close
+price, so it buys back the quantity it held. Nautilus sizes it from the cash
+balance after the stop or target has been booked at its own price. Neither is
+wrong, the two quantities differ by the gap between the exit price and the close
+(a median of 2.7e-04 in relative terms, at most 1.1e-03), and the difference is
+carried into every later trade: final equity ends 7.1e-06 of capital apart at
+100,000 bars. The harness counts the affected re-entries and reports their
+quantity gaps instead of asserting any of this.
+
+Nautilus also books a stop in two pieces when a quarter of the bar's volume is
+smaller than the position (a partial fill, then the remainder one tick worse, by
+the engine's documented rule), so its fill count is higher than its round-trip
+count implies. Fills are not gated, and the extra tick on the remainder is 1e-9.
+
+### No drawdown, and ratios on their own basis
+
+Nautilus's portfolio analyser reports volatility, Sharpe and Sortino and no
+maximum drawdown. The harness does not rebuild one from an equity curve for it,
+as it does not rebuild raptorbt's missing volatility: that column shows what the
+engine hands a user. `sma_cross_metrics` is therefore gated on total return and
+round-trips for Nautilus, which is said in the report. Its ratios are on their
+own basis (labelled 252 days, built from the returns of closed positions), not
+over 365 days from a daily equity curve, so they are recorded and not compared.
+
+### Cold start and memory
+
+Importing NautilusTrader and building an engine costs 1.2 s over the bare
+interpreter (against 0.15 s for manifoldbt in the same run). Memory is measured
+the same way as for the others, as what the run adds on top of data the process
+already holds, and for Nautilus that is a few megabytes at any length: 0.4 MB at
+100,000 bars and 2.6 MB at 2,000,000 (a one-off measurement, not part of the
+run, since 2,000,000 bars take minutes). The probe measures it at its ceiling,
+and the report prints the length beside the figure. What the exclusion hides is
+the cost of holding the data: the `Bar` objects an engine keeps in memory take
+230 to 280 MB per million bars (measured on the loaded engine), against 48 MB
+for the same bars as a float64 frame. Building each engine's data representation
+is a different question and is excluded on every side, but a reader sizing a job
+for a long series should know the number.
+
 ## Alignment choices, and why each one exists
 
 Engines only produce identical numbers if they are told to do the same thing.
 These are the conventions the harness sets, all of them visible in
-[engine_mbt.py](engine_mbt.py), [engine_vbt.py](engine_vbt.py) and
-[engine_rbt.py](engine_rbt.py):
+[engine_mbt.py](engine_mbt.py), [engine_vbt.py](engine_vbt.py),
+[engine_rbt.py](engine_rbt.py) and [engine_nt.py](engine_nt.py):
 
 - `signal_delay=0` with `execution_price="AtClose"`, matching what
   `Portfolio.from_signals` does by default: a signal fills at the close of the
@@ -316,6 +489,19 @@ On the raptorbt side specifically:
   handicap the harness imposed, it is the only spelling available, and the
   moving averages are hoisted out of the loop so it gets the same courtesy
   vectorbt gets on its own grid path.
+- NautilusTrader has no fan-out API either, and its loop is the expensive kind:
+  each cell is a full event-driven replay. It is looped the way the engine
+  documents repeat runs (one engine, data loaded once, `reset()` and `run()` per
+  cell). The moving averages cannot be hoisted out of the loop for it, because a
+  Nautilus indicator lives inside the event loop; each cell computes its own,
+  which is what a Nautilus strategy does.
+- A simple signal strategy on bars is the cheapest thing an event-driven engine
+  can be asked to do, and it is also the case a vectorised engine was designed
+  around. What NautilusTrader buys, and these workloads do not use, is the
+  matching engine, order types and contingency, order book and tick data, and the
+  same strategy code in live trading. This benchmark measures bar-replay
+  throughput of one simple strategy on each design; it does not measure what
+  either is for.
 
 ## Files
 
@@ -323,14 +509,17 @@ On the raptorbt side specifically:
 - `probe_child.py` - the cold-start and memory probes, each in a fresh process
 - `workloads.py` - the parameters every engine reads, and the per-engine notes
 - `engines.py` - the registry: who is in the comparison, and who is the reference
-- `engine_mbt.py` / `engine_vbt.py` / `engine_rbt.py` - one adapter per engine
+- `engine_mbt.py` / `engine_vbt.py` / `engine_rbt.py` / `engine_nt.py` - one
+  adapter per engine
 - `parity.py` - the gate
 - `bench.py` - the runner
 - `sweep_child.py` - one parameter-grid point, in its own process
 - `report.py` - JSON to Markdown, and to the GitHub job summary
 - `ci_activate.py` - activates the licence the sweep job needs, and refuses to
   continue without one
-- `ci/bench-vs-vectorbt.yml` - the workflow, deployed to the public repository
+- `test_report.py` / `test_harness.py` - guards for the report, the gate, the
+  ceilings and the sweep plumbing; they need no engine installed
+- `.github/workflows/bench-vs-vectorbt.yml` - the workflow
 
 ## Parameter sweeps
 
@@ -357,6 +546,37 @@ short series instead of the reverse: 20,000 combinations on 20,000 bars costs it
 minutes.
 
 Sweep ratios depend on the machine far more than single-backtest ratios do,
-because manifoldbt is the only one of the three that fans out across cores. The
+because manifoldbt is the only one of the four that fans out across cores. The
 same point measured x13 on a four-vCPU cloud runner and x32 on two fast desktop
 cores; the CI numbers are the conservative ones, and they are the ones published.
+
+### NautilusTrader and the grid
+
+A grid on NautilusTrader is a loop of full replays, so its cost is the number of
+combinations times one backtest, and a backtest is seconds: 0.75 s on average
+across the 20,000-bar grid above, 7.8 s at 200,000 bars, and more where the
+windows are short enough to trade every few bars. Locally, the three points
+above would cost it 63 minutes for 5,000 combinations at 20,000 bars, 4.7 hours
+for 20,000, and 21.6 hours for 10,000 combinations at 200,000 bars, against
+under three seconds for manifoldbt in each case. That is not a comparison a job
+can repeat, so it is out of scope on all three, and the reason printed beside
+each point carries the per-backtest time measured on 16 cells spread across that
+point's own grid, and what that makes of the whole grid. Those 16 cells are also
+run on manifoldbt and compared cell by cell, so the point still carries a
+cross-engine check of the same code path.
+
+The engine is held back by a sweep ceiling of 64 combinations, applied on its
+own so that a point never needs to say so, and `--engine-max-combos
+nautilus_trader=N` lifts it. Below the ceiling it runs, and the grid is checked
+cell by cell like the others. A grid it can hold, run locally on the pinned
+workstation:
+
+```bash
+python bench.py --workloads sma_cross --bars 100000 --reps 1 --cold-start-reps 0 \
+    --sweep 20000:36 --sweep-reps 2
+```
+
+On 36 combinations at 20,000 bars that loop takes 41 s, against 11 ms for
+manifoldbt's single fan-out call, 79 ms for vectorbt and 45 ms for raptorbt, and
+the 36 cells agree with the reference to 1.2e-10 of capital. It adds 6 MB of
+memory.

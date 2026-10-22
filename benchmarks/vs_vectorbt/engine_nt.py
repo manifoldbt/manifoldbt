@@ -37,13 +37,15 @@ Execution conventions, chosen to line up with the reference
   quantity as the liquidity available. A market order larger than a quarter of the
   bar's volume is *partially* filled and the remainder is booked one tick worse.
   The generated bars carry a random volume between 100 and 10,000 units, so with
-  full-equity sizing (about 1,000 units) that rule fires on a large share of
-  fills. The other three engines have no volume constraint at all, so the venue is
+  full-equity sizing (about 1,000 units) that rule fires on about four
+  full-equity orders in ten. The other three engines have no volume constraint at all, so the venue is
   given a fill model (``_BenchFillModel``) that answers every market order from a
   book with effectively unlimited depth at the bar's close. That is the same
   mechanism Nautilus ships for it (``BestPriceFillModel``), written out here
   because the bracket workload needs stop and limit orders left on the standard
-  logic, which ``BestPriceFillModel`` does not do.
+  logic. ``BestPriceFillModel`` prices every order from the best bid and ask,
+  stops and limits included, and with it ``bracket_sl_tp`` ends 6.2e-3 of capital
+  away from the run that fills them at their own levels (measured at 20,000 bars).
 * **Slippage** in basis points is not a Nautilus setting (``prob_slippage`` moves a
   fill by one *tick*, at random). The fill model shifts the book instead: asks sit
   ``slippage_bps`` above the close and bids ``slippage_bps`` below it, which is the
@@ -53,9 +55,9 @@ Execution conventions, chosen to line up with the reference
   notional by the venue's default ``MakerTakerFeeModel``.
 * **Account and sizing.** A margin account with leverage 1 in a high-precision
   quote currency (USDT, 8 decimals). Not USD: USD carries 2 decimals, and Nautilus
-  rounds each realised PnL to the currency's precision, so a cent of rounding per
-  trade would put the final equity ~1e-6 of capital away from a float64 engine
-  after a few thousand trades. Prices and quantities are fixed point with 9
+  rounds each realised PnL to the currency's precision. Measured with a USD quote,
+  ``sma_cross`` ends 2.8e-7 of capital from the reference at 20,000 bars and
+  2.1e-7 at 100,000, against a gate of 1e-9. Prices and quantities are fixed point with 9
   decimals on both platforms (the standard-precision Windows wheel allows 9, the
   Linux wheel 16, and using the same on both keeps the results identical to the
   digit); the rounding that introduces is 1e-12 to 2e-10 of capital depending on
