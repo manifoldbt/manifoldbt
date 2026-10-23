@@ -68,13 +68,12 @@ that disagree on one fill part ways from there on. The report therefore gives, f
 each closed-loop workload, the wake-up where the actions first differ, and the
 open-loop probe gives the verdict-level agreement without that feedback.
 
-Three statuses come out, as in the other benchmark of this repository:
-
-| Verdict | Meaning | What gets published |
-|---|---|---|
-| `exact` | identical actions and verdicts | the timing, in the headline table |
-| `documented` | the engines differ, the cause is written down and its size measured | the timing, with the cause next to it |
-| `failed` | they differ and nobody predicted it | nothing. The run exits non-zero |
+Parity is reported, not enforced. The vectorbt benchmark withholds a timing when two
+engines disagree; here two engines are expected to differ, and the differences are
+conventions of their models, named in "Why the engines differ". So the report prints
+the counts of the three layers beside every timing and withholds nothing. What the
+run does enforce is that every engine finished every workload: `--fail-on-blocked`
+exits non-zero otherwise, and nothing partial is published.
 
 ## Data
 
@@ -166,8 +165,8 @@ NautilusTrader 1.231.0 unless a line says otherwise.
   counts twice (`micro_scenarios_l3.py` shows it on a five-order book). Against the
   exact replay, 1,468 of the 6,245 quotes it serves in the 0.28.0 run (1,454 of 6,226
   in the 0.28.1 run) are quotes the replay has not served.
-* **Market orders.** The taker's decisions and orders are identical in the three
-  engines. The fill price is the price of the first print at or after the order's
+* **Market orders.** On the pinned day the taker's decisions and orders are identical in
+  the three engines. The fill price is the price of the first print at or after the order's
   arrival in manifoldbt's trade-clock engine, and the book at the arrival in the
   other two. The report gives the gap of the executed notional (-0.034 bp for
   hftbacktest and +0.006 bp for NautilusTrader on 13 August 2025). The execution time
@@ -231,8 +230,9 @@ The grids are nested (4, 16, 64, 256 combinations of order size, inventory bound
 and the extra levels back of each side), plus a latency family (order delay x
 inventory bound x levels back) and a taker family (flow threshold x order size).
 NautilusTrader runs a bounded number of combinations per grid and the rest is
-projected from them; the result says which. The combinations are compared across
-engines on a sample, with the same caveats as the single runs.
+projected from them; the result says which. The first combinations of each engine are
+recorded in the result (`sample`), so that they can be compared across engines, with the
+same caveats as the single runs.
 
 ## Reading the numbers honestly
 
