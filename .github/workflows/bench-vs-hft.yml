@@ -329,6 +329,7 @@ jobs:
             --window 36000 43200 \
             --grids 16 \
             --workers 4 \
+            --identity 8 \
             --out "results-sweeps-mbt-latency.json"
           python sweep.py --family taker \
             --day "${{ inputs.day || '2025-08-13' }}" \
