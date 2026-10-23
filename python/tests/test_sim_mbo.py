@@ -70,6 +70,12 @@ def cancel(ms, ref, qty):
     return _frame(_head(b"X", ms) + struct.pack(">QI", ref, qty))
 
 
+def execute_at(ms, ref, qty, px):
+    """An execution at a price other than the one the order is shown at (C)."""
+    return _frame(_head(b"C", ms) + struct.pack(">QIQ", ref, qty, ref) + b"Y"
+                  + struct.pack(">I", int(round(px * 10_000))))
+
+
 def _store(tmp_path, msgs):
     path = tmp_path / "day.itch"
     path.write_bytes(b"".join(msgs))
@@ -153,6 +159,29 @@ def test_the_queue_a_run_names_is_the_one_served(tmp_path):
     assert list(named.fills_df(backend="pandas")["qty"]) == [10.0]
     level2, _ = _run_queue(store, bt.sim.Config(queue={"model": "risk_adverse"}))
     assert len(level2.fills_df(backend="pandas")) == 0
+
+
+def test_an_execution_at_another_price_is_read_where_it_traded(tmp_path):
+    # Order 3 enters at 10.00 behind ours, shown at 10.00, and executes at
+    # 10.01: a price ahead of the whole level. It did not wait in the queue of
+    # 10.00, so its execution does not reach our order, and the 100 shown ahead
+    # of ours are still there. Traded at 9.99 instead, it went through our level.
+    for traded, served in ((10.01, []), (9.99, [50.0])):
+        msgs = [
+            add(0, 1, True, 100, 10.00),
+            add(0, 2, False, 100, 10.01),
+            add(3, 3, True, 40, 10.00),
+            execute_at(4, 3, 40, traded),
+            add(20, 4, True, 10, 9.98),
+        ]
+        day = tmp_path / f"at_{traded}"
+        day.mkdir()
+        res, seen = _run_queue(_store(day, msgs))
+        assert seen[4] == 100.0, traded
+        fills = res.fills_df(backend="pandas")
+        assert list(fills["qty"]) == served, traded
+        if served:
+            assert set(fills["channel"]) == {"traverse"}
 
 
 def test_the_exact_queue_is_refused_on_a_book_stored_by_price():

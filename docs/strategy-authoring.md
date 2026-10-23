@@ -3288,7 +3288,7 @@ row per event of one order:
 |---|---|
 | `A` | it entered the book (the new order of a replacement too, flagged) |
 | `E` | it executed, at its own price |
-| `C` | it executed at another price (a cross), printed or not |
+| `C` | it executed at another price than the one it is shown at (`exec_price`), printed or not |
 | `X` | part of it was cancelled |
 | `D` | it left the book: what was left of it |
 | `U` | it was replaced: it left the book, and the order replacing it follows at the same instant, at the back of its queue |
@@ -3343,6 +3343,15 @@ after. Then, event by event:
    have met ours first: ours is served, as much as it brings, best price
    then first come among our orders it crosses (`book_cross`).
 
+An execution at another price than the one the order is shown at (`C`) is read
+where it traded: that order did not wait in the queue of the level it is shown
+at (older orders there are often still resting when it executes, a tick away
+from their price), so it serves none of ours there. It is rule 2 for the
+orders of ours standing at the price it traded at, that it entered after, and
+rule 3 for those standing at a worse price. Leaving the level it is shown at,
+it takes its size out of the volume ahead of the orders of ours that it was
+shown ahead of.
+
 Our fills take nothing out of the market's book: its events are replayed as
 they were. Prints against orders the book does not show (`P`) and crosses
 serve nothing: they are not in the displayed queue. Everything else is the
@@ -3386,6 +3395,12 @@ On the day of 2025-12-09 (AAPL, SPY, QQQ, NVDA, TSLA):
   book on arrival; with rule 4 added to it, the only differences left are the
   orders that crossed the spread when they arrived (0.2 to 1.7 % of them),
   which the venue executes as takers;
+- on the half session of 2025-11-28 (AAPL), every one of the 5,170 quotes a
+  maker joining the best price had served is backed by the messages of the
+  day: an execution behind it, one at a worse price, or an order of the
+  other side at its price. The 727 executions at another price (`C`) all
+  traded one cent better than the price they are shown at, and 78 % of them
+  with older orders still resting at that shown price;
 - a maker quoting one unit at the best bid and ask every 100 ms, moved when
   the best moves, inventory within five units, gives the same posts,
   cancellations, fills, inventory and cash as the same maker in that replay,
@@ -3423,6 +3438,12 @@ later, when an order entering the other side crosses it (a median of 58 µs
 later on AAPL, 47 µs on QQQ; 1.3 ms and 0.6 ms at the 90th percentile), or not
 at all when none does before the quote is cancelled. The aggressor that paid a
 worse price than ours met ours first: this venue serves it at that execution.
+
+These figures were taken before an execution at another price (`C`) was read
+where it traded. Handed to hftbacktest as a fill of the order, such an
+execution serves the orders behind the level it is shown at, as it served them
+here; it no longer does here, so a quote served only there can now be one of
+these.
 
 With 100 shares a quote, the same quotes are served at the same instants, and
 1,704 of them on AAPL, 5,425 on QQQ, for another size: an execution behind
