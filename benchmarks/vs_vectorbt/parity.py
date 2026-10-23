@@ -71,14 +71,24 @@ def compare(ref: Dict[str, Any], other: Dict[str, Any], key: str, engine: str) -
     # buckets its daily returns slightly differently from vectorbt, a difference
     # worth stating rather than hiding, and worth nothing at all as an argument
     # about speed.
-    if other.get("max_drawdown") is not None and ref.get("max_drawdown") is not None:
-        diffs["max_drawdown_rel"] = _rel(ref["max_drawdown"], other["max_drawdown"])
-        agrees = agrees and diffs["max_drawdown_rel"] <= REL_TOL
+    #
+    # An engine with no drawdown statistic of its own (NautilusTrader reports
+    # volatility, Sharpe and Sortino and stops there) hands over ``None``. The
+    # harness does not rebuild one from an equity curve for it: the summary
+    # column is meant to show what the engine gives a user, and that gate then
+    # runs on money and round-trips only, which is said out loud in the report.
+    if ref.get("max_drawdown") is not None and "max_drawdown" in other:
+        same_basis = ENGINES[engine].ratio_basis == ENGINES[REFERENCE].ratio_basis
+        if other["max_drawdown"] is not None:
+            diffs["max_drawdown_rel"] = _rel(ref["max_drawdown"], other["max_drawdown"])
+            agrees = agrees and diffs["max_drawdown_rel"] <= REL_TOL
+        else:
+            diffs["max_drawdown_absent"] = True
         # Only between engines that annualise the same way. raptorbt returns its
         # ratios on its own basis, and subtracting those from the reference's
         # would publish a units mismatch as a disagreement (measured: Sharpe
         # 0.21 against 8.14 on a run whose equity curve is bit-identical).
-        if ENGINES[engine].ratio_basis == ENGINES[REFERENCE].ratio_basis:
+        if same_basis:
             diffs["advisory_ratio_rel"] = {
                 name: _rel(ref[name], other[name])
                 for name in ("sharpe", "sortino", "volatility")
