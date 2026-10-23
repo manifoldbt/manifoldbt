@@ -1,0 +1,10 @@
+# NautilusTrader, installed on its own and with --no-deps, after
+# requirements-lock.txt:
+#
+#   pip install -r requirements-lock.txt
+#   pip install --no-deps -r requirements-nautilus.txt
+#
+# 1.231.0 asks for exactly fsspec 2026.2.0, inside the range of
+# GHSA-27vj-qcqg-25rc, and pip would refuse the patched fsspec pinned in the
+# lock. Every runtime dependency it needs is pinned there instead.
+nautilus_trader==1.231.0

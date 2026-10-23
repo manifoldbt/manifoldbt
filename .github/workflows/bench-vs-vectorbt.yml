@@ -156,6 +156,7 @@ jobs:
           # The lock adds NautilusTrader: a 189 MB wheel (manylinux_2_35) that
           # unpacks to about 610 MB, and 6 s to install on a fast connection.
           pip install -r benchmarks/vs_vectorbt/requirements-lock.txt
+          pip install --no-deps -r benchmarks/vs_vectorbt/requirements-nautilus.txt
 
       - name: Record the resolved environment
         shell: bash
@@ -254,6 +255,7 @@ jobs:
             pip install manifoldbt
           fi
           pip install -r benchmarks/vs_vectorbt/requirements-lock.txt
+          pip install --no-deps -r benchmarks/vs_vectorbt/requirements-nautilus.txt
 
       # Sweep timings are published from a licensed run only. This step exits
       # non-zero without a licence, and the harness refuses again on its own if
