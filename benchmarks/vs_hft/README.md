@@ -123,13 +123,14 @@ so an engine that serves fewer quotes reads as doing less, not as doing the same
 work faster. Figures are from manifoldbt 0.28.0, hftbacktest 2.4.4 and
 NautilusTrader 1.231.0 unless a line says otherwise.
 
-* **Tape or book (level 2).** manifoldbt reads a trade that prints through a resting
-  quote off the trade tape and serves the quote there; hftbacktest waits for the book
-  to show the level crossed. When the tape shows the crossing before the next book
-  snapshot, only manifoldbt has served the quote. On the one-hour probe (71,994
-  quotes, zero latency) manifoldbt serves 1,606 quotes and hftbacktest 1,590. The 16
-  that only manifoldbt serves are all prints through the level, and none goes the
-  other way.
+* **Tape or book (level 2).** manifoldbt serves a quote when a trade prints through its
+  level, which it reads off the trade tape; hftbacktest serves it when its book shows
+  the level crossed. When the tape shows the crossing before the next book snapshot,
+  only manifoldbt has served the quote. On the one-hour probe (71,994 quotes, zero
+  latency) manifoldbt serves 1,606 quotes and hftbacktest 1,590. The 16 that only
+  manifoldbt serves are all prints through the level, and none goes the other way. For
+  15 of them the next snapshot of the book comes about 200 ms after the quote was
+  posted, and the probe cancels the quote at 100 ms.
 * **Partial fills (closed loop).** manifoldbt serves an order in pieces, as the
   prints that reach it arrive. The benchmark runs hftbacktest with
   `no_partial_fill_exchange()`, which serves the order whole at its first piece. A
