@@ -1,14 +1,14 @@
 {
   "repo": "manifoldbt/manifoldbt",
-  "run_id": "39953716390",
-  "run_url": "https://github.com/manifoldbt/manifoldbt/actions/runs/39953716390",
-  "commit": "df166ae172fcb9516d13fe760cb45aaf0645225b",
-  "run_started_at": "2026-10-23T12:29:37Z",
+  "run_id": "39971035390",
+  "run_url": "https://github.com/manifoldbt/manifoldbt/actions/runs/39971035390",
+  "commit": "665023e7bc70cad74c15f71b9b4bf259ebf754c0",
+  "run_started_at": "2026-10-23T14:36:12Z",
   "conclusion": "success",
-  "synced_at": "2026-10-23T12:58:41.610211+00:00",
+  "synced_at": "2026-10-23T15:00:31.672088+00:00",
   "backtests": {
     "schema_version": 2,
-    "generated_at": "2026-10-23T12:58:30.697914+00:00",
+    "generated_at": "2026-10-23T15:00:19.222518+00:00",
     "environment": {
       "os": "Linux",
       "os_release": "6.17.0-1022-azure",
@@ -21,28 +21,37 @@
         "manifoldbt": "0.28.1",
         "vectorbt": "0.28.4",
         "raptorbt": "0.9.0",
+        "nautilus_trader": "1.231.0",
         "numpy": "2.4.3",
         "numba": "0.64.0",
         "pandas": "2.3.3"
       },
-      "runner": "GitHub Actions 1000000931",
+      "runner": "GitHub Actions 1000000966",
       "ci": true,
-      "run_url": "https://github.com/manifoldbt/manifoldbt/actions/runs/39953716390",
-      "commit": "df166ae172fcb9516d13fe760cb45aaf0645225b",
+      "run_url": "https://github.com/manifoldbt/manifoldbt/actions/runs/39971035390",
+      "commit": "665023e7bc70cad74c15f71b9b4bf259ebf754c0",
       "pinned_cores": null,
       "engines": [
         "manifoldbt",
         "vectorbt",
-        "raptorbt"
-      ]
+        "raptorbt",
+        "nautilus_trader"
+      ],
+      "engine_max_bars": {
+        "nautilus_trader": 100000
+      },
+      "engine_max_sweep_combos": {
+        "nautilus_trader": 64
+      }
     },
     "reference": "manifoldbt",
     "engines": [
       "manifoldbt",
       "vectorbt",
-      "raptorbt"
+      "raptorbt",
+      "nautilus_trader"
     ],
-    "reps": 7,
+    "reps": 3,
     "results": [
       {
         "workload": "sma_cross",
@@ -52,7 +61,8 @@
         "engines": [
           "manifoldbt",
           "vectorbt",
-          "raptorbt"
+          "raptorbt",
+          "nautilus_trader"
         ],
         "parity": {
           "vectorbt": {
@@ -108,6 +118,33 @@
               }
             },
             "note": ""
+          },
+          "nautilus_trader": {
+            "status": "exact",
+            "expected": "exact",
+            "publishable": true,
+            "diffs": {
+              "final_equity_vs_capital": 5.593479727394879e-11,
+              "round_trips_delta": 0,
+              "total_fees_vs_capital": 0.0
+            },
+            "metrics": {
+              "manifoldbt": {
+                "total_return": 0.06675521397166517,
+                "final_equity": 106675.52139716652,
+                "round_trips": 450,
+                "fills": 900,
+                "total_fees": 0.0
+              },
+              "nautilus_trader": {
+                "total_return": 0.06675521402759999,
+                "final_equity": 106675.52140276,
+                "round_trips": 450,
+                "fills": 900,
+                "total_fees": 0.0
+              }
+            },
+            "note": ""
           }
         },
         "status": "exact",
@@ -117,70 +154,76 @@
         "timings": {
           "manifoldbt": {
             "samples_s": [
-              0.004813617999985809,
-              0.005047374000014315,
-              0.0049692679999964184,
-              0.004833905999987564,
-              0.004780756999991809,
-              0.0025636459999986982,
-              0.002477787000003673
+              0.0049129980000088835,
+              0.005460413999998082,
+              0.005462429999994356
             ],
-            "min_s": 0.002477787000003673,
-            "median_s": 0.004813617999985809,
-            "max_s": 0.005047374000014315,
-            "iqr_s": 0.00240562199999772,
-            "iqr_over_median": 0.4997534079365692
+            "min_s": 0.0049129980000088835,
+            "median_s": 0.005460413999998082,
+            "max_s": 0.005462429999994356,
+            "iqr_s": 0.0005494319999854724,
+            "iqr_over_median": 0.10062094192595386
           },
           "vectorbt": {
             "samples_s": [
-              0.3422188019999908,
-              0.18575790700000994,
-              0.17876246400001605,
-              0.1812640449999776,
-              0.18326969599999643,
-              0.18278612599999633,
-              0.18348843399999737
+              0.19100243100001535,
+              0.18958835899999826,
+              0.18812173800000664
             ],
-            "min_s": 0.17876246400001605,
-            "median_s": 0.18326969599999643,
-            "max_s": 0.3422188019999908,
-            "iqr_s": 0.004493862000032323,
-            "iqr_over_median": 0.024520485918372508
+            "min_s": 0.18812173800000664,
+            "median_s": 0.18958835899999826,
+            "max_s": 0.19100243100001535,
+            "iqr_s": 0.002880693000008705,
+            "iqr_over_median": 0.015194461385726384
           },
           "raptorbt": {
             "samples_s": [
-              0.009126283000000512,
-              0.009746338000013566,
-              0.008379682000025923,
-              0.007587715999989086,
-              0.007692311999988988,
-              0.00994022899999436,
-              0.00767785499999718
+              0.010147952000011173,
+              0.00945423100000653,
+              0.00863286599999924
             ],
-            "min_s": 0.007587715999989086,
-            "median_s": 0.008379682000025923,
-            "max_s": 0.00994022899999436,
-            "iqr_s": 0.0020684830000163856,
-            "iqr_over_median": 0.24684504734308374
+            "min_s": 0.00863286599999924,
+            "median_s": 0.00945423100000653,
+            "max_s": 0.010147952000011173,
+            "iqr_s": 0.0015150860000119337,
+            "iqr_over_median": 0.1602548107837525
+          },
+          "nautilus_trader": {
+            "samples_s": [
+              6.7509463770000195,
+              6.6670482739999954,
+              6.8969683429999975
+            ],
+            "min_s": 6.6670482739999954,
+            "median_s": 6.7509463770000195,
+            "max_s": 6.8969683429999975,
+            "iqr_s": 0.22992006900000206,
+            "iqr_over_median": 0.034057457452679955
           }
         },
         "speedup": {
           "vectorbt": {
-            "median_of_ratios": 38.33486956151723,
-            "min": 35.97360094085183,
-            "max": 74.0533524470527
+            "median_of_ratios": 34.720510019948094,
+            "min": 34.439203431476656,
+            "max": 38.876960869853804
           },
           "raptorbt": {
-            "median_of_ratios": 1.8959300468020974,
-            "min": 1.569686295101437,
-            "max": 3.877379716232041
+            "median_of_ratios": 1.7314128562431075,
+            "min": 1.5804076207856503,
+            "max": 2.0655314738562534
+          },
+          "nautilus_trader": {
+            "median_of_ratios": 1262.6190803373452,
+            "min": 1220.9785327636948,
+            "max": 1374.0991502516006
           }
         },
         "noisy": true,
         "cpu_over_wall": {
           "manifoldbt": null,
-          "vectorbt": 1.0017060487005616,
-          "raptorbt": null
+          "vectorbt": 1.0022638361854057,
+          "raptorbt": null,
+          "nautilus_trader": 1.0002479456153321
         }
       },
       {
@@ -191,7 +234,8 @@
         "engines": [
           "manifoldbt",
           "vectorbt",
-          "raptorbt"
+          "raptorbt",
+          "nautilus_trader"
         ],
         "parity": {
           "vectorbt": {
@@ -271,6 +315,43 @@
               }
             },
             "note": ""
+          },
+          "nautilus_trader": {
+            "status": "exact",
+            "expected": "exact",
+            "publishable": true,
+            "diffs": {
+              "final_equity_vs_capital": 5.593479727394879e-11,
+              "round_trips_delta": 0,
+              "total_fees_vs_capital": 0.0,
+              "max_drawdown_absent": true,
+              "ratio_basis": "native"
+            },
+            "metrics": {
+              "manifoldbt": {
+                "total_return": 0.06675521397166517,
+                "final_equity": 106675.52139716652,
+                "round_trips": 450,
+                "fills": 900,
+                "total_fees": 0.0,
+                "max_drawdown": -0.07910540917093023,
+                "sharpe": 2.0737338994486025,
+                "sortino": 3.9123948298469102,
+                "volatility": 0.16947108402059763
+              },
+              "nautilus_trader": {
+                "total_return": 0.06675521402759999,
+                "final_equity": 106675.52140276,
+                "round_trips": 450,
+                "fills": 900,
+                "total_fees": 0.0,
+                "max_drawdown": null,
+                "sharpe": 1.8073037844666644,
+                "sortino": 3.1983278806115383,
+                "volatility": 0.1483467646183893
+              }
+            },
+            "note": ""
           }
         },
         "status": "exact",
@@ -280,70 +361,76 @@
         "timings": {
           "manifoldbt": {
             "samples_s": [
-              0.002755233000016233,
-              0.002586227999984203,
-              0.0025553709999996954,
-              0.0025507120000156647,
-              0.002584033999994517,
-              0.004893097000007174,
-              0.0047817790000124205
+              0.00513459499998703,
+              0.005277456999976948,
+              0.005213673000014296
             ],
-            "min_s": 0.0025507120000156647,
-            "median_s": 0.002586227999984203,
-            "max_s": 0.004893097000007174,
-            "iqr_s": 0.002226408000012725,
-            "iqr_over_median": 0.8608707353049786
+            "min_s": 0.00513459499998703,
+            "median_s": 0.005213673000014296,
+            "max_s": 0.005277456999976948,
+            "iqr_s": 0.00014286199998991833,
+            "iqr_over_median": 0.027401411632361025
           },
           "vectorbt": {
             "samples_s": [
-              0.6912906610000107,
-              0.8387401779999948,
-              0.8429201540000122,
-              0.8396160399999815,
-              0.7008860900000116,
-              0.8357180940000148,
-              0.8392567559999975
+              0.8891324389999795,
+              0.9032635690000177,
+              0.7234873169999787
             ],
-            "min_s": 0.6912906610000107,
-            "median_s": 0.8387401779999948,
-            "max_s": 0.8429201540000122,
-            "iqr_s": 0.1387299499999699,
-            "iqr_over_median": 0.16540277148851545
+            "min_s": 0.7234873169999787,
+            "median_s": 0.8891324389999795,
+            "max_s": 0.9032635690000177,
+            "iqr_s": 0.179776252000039,
+            "iqr_over_median": 0.20219288388829454
           },
           "raptorbt": {
             "samples_s": [
-              0.010565523999986226,
-              0.008218220999992809,
-              0.007934261999992032,
-              0.007593407000001662,
-              0.009608150000019577,
-              0.007586814000006825,
-              0.007590701999987459
+              0.00806641200000513,
+              0.007813297000012653,
+              0.010744780999999648
             ],
-            "min_s": 0.007586814000006825,
-            "median_s": 0.007934261999992032,
-            "max_s": 0.010565523999986226,
-            "iqr_s": 0.002017448000032118,
-            "iqr_over_median": 0.2542704034772414
+            "min_s": 0.007813297000012653,
+            "median_s": 0.00806641200000513,
+            "max_s": 0.010744780999999648,
+            "iqr_s": 0.0029314839999869946,
+            "iqr_over_median": 0.36341858065086813
+          },
+          "nautilus_trader": {
+            "samples_s": [
+              6.707446388000022,
+              6.704643343999976,
+              6.840591395999979
+            ],
+            "min_s": 6.704643343999976,
+            "median_s": 6.707446388000022,
+            "max_s": 6.840591395999979,
+            "iqr_s": 0.13594805200000337,
+            "iqr_over_median": 0.020268227897165404
           }
         },
         "speedup": {
           "vectorbt": {
-            "median_of_ratios": 271.237177994368,
-            "min": 170.79532533256332,
-            "max": 329.8621429139302
+            "median_of_ratios": 171.1550788578596,
+            "min": 138.76729840900933,
+            "max": 173.16505761451984
           },
           "raptorbt": {
-            "median_of_ratios": 3.1049354477267594,
-            "min": 1.5505137135020421,
-            "max": 3.8347116196430493
+            "median_of_ratios": 1.5709928436469685,
+            "min": 1.4805041519138444,
+            "max": 2.0608850996159878
+          },
+          "nautilus_trader": {
+            "median_of_ratios": 1306.3243328864235,
+            "min": 1270.4306911509202,
+            "max": 1312.0484150005614
           }
         },
         "noisy": true,
         "cpu_over_wall": {
           "manifoldbt": null,
-          "vectorbt": 1.0002813003956703,
-          "raptorbt": null
+          "vectorbt": 1.0056110213298672,
+          "raptorbt": null,
+          "nautilus_trader": 1.0003613779308405
         }
       },
       {
@@ -413,76 +500,70 @@
           }
         },
         "status": "exact",
+        "unsupported": {
+          "nautilus_trader": "Not run above 100,000 bars. NautilusTrader is event-driven: every bar goes through a simulated exchange and a Python strategy callback, so one call costs seconds per 100,000 bars and grows linearly with the series. Repeated and interleaved, a longer series does not fit the time budget of the job. The measured time at the ceiling is in the table, and `bench.py --engine-max-bars nautilus_trader=N` lifts the ceiling for a local run."
+        },
+        "beyond_ceiling": {
+          "nautilus_trader": 100000
+        },
         "paired_with": [
           "sma_cross_metrics"
         ],
         "timings": {
           "manifoldbt": {
             "samples_s": [
-              0.030895309000015914,
-              0.027310284999998657,
-              0.027135246999989704,
-              0.0278860550000104,
-              0.027126582999983384,
-              0.027196951999997054,
-              0.027455047999978888
+              0.02930831099999409,
+              0.02786333800000307,
+              0.026986781000005067
             ],
-            "min_s": 0.027126582999983384,
-            "median_s": 0.027310284999998657,
-            "max_s": 0.030895309000015914,
-            "iqr_s": 0.0007508080000206974,
-            "iqr_over_median": 0.02749176729648681
+            "min_s": 0.026986781000005067,
+            "median_s": 0.02786333800000307,
+            "max_s": 0.02930831099999409,
+            "iqr_s": 0.002321529999989025,
+            "iqr_over_median": 0.0833184451909089
           },
           "vectorbt": {
             "samples_s": [
-              2.179630938999992,
-              2.0438074549999783,
-              2.1540167399999746,
-              2.2860958520000167,
-              2.012616655000045,
-              2.2579694699999777,
-              2.0143255899999986
+              2.3125871169999925,
+              2.0367222940000147,
+              2.348297701000007
             ],
-            "min_s": 2.012616655000045,
-            "median_s": 2.1540167399999746,
-            "max_s": 2.2860958520000167,
-            "iqr_s": 0.24364387999997916,
-            "iqr_over_median": 0.11311141435232394
+            "min_s": 2.0367222940000147,
+            "median_s": 2.3125871169999925,
+            "max_s": 2.348297701000007,
+            "iqr_s": 0.3115754069999923,
+            "iqr_over_median": 0.1347302355485678
           },
           "raptorbt": {
             "samples_s": [
-              0.08467005900001823,
-              0.08523800399996162,
-              0.08466457899999114,
-              0.08501605399999335,
-              0.07712397000000237,
-              0.08613966199999368,
-              0.07874569699998801
+              0.08003603599999565,
+              0.07893809600000168,
+              0.08009472899999537
             ],
-            "min_s": 0.07712397000000237,
-            "median_s": 0.08467005900001823,
-            "max_s": 0.08613966199999368,
-            "iqr_s": 0.006492306999973607,
-            "iqr_over_median": 0.07667771909751722
+            "min_s": 0.07893809600000168,
+            "median_s": 0.08003603599999565,
+            "max_s": 0.08009472899999537,
+            "iqr_s": 0.0011566329999936897,
+            "iqr_over_median": 0.014451402865501143
           }
         },
         "speedup": {
           "vectorbt": {
-            "median_of_ratios": 74.83654802577412,
-            "min": 70.54892828548402,
-            "max": 83.02288690292288
+            "median_of_ratios": 78.90550625726807,
+            "min": 73.09685199956266,
+            "max": 87.01659160459212
           },
           "raptorbt": {
-            "median_of_ratios": 3.048694195000391,
-            "min": 2.7405474080215417,
-            "max": 3.167254257021265
+            "median_of_ratios": 2.8330452008295985,
+            "min": 2.7308307189729146,
+            "max": 2.967924518303251
           }
         },
         "noisy": false,
         "cpu_over_wall": {
           "manifoldbt": null,
-          "vectorbt": 1.0001028399395155,
-          "raptorbt": 1.0144463609553278
+          "vectorbt": 1.000357275062569,
+          "raptorbt": null
         }
       },
       {
@@ -576,76 +657,70 @@
           }
         },
         "status": "exact",
+        "unsupported": {
+          "nautilus_trader": "Not run above 100,000 bars. NautilusTrader is event-driven: every bar goes through a simulated exchange and a Python strategy callback, so one call costs seconds per 100,000 bars and grows linearly with the series. Repeated and interleaved, a longer series does not fit the time budget of the job. The measured time at the ceiling is in the table, and `bench.py --engine-max-bars nautilus_trader=N` lifts the ceiling for a local run."
+        },
+        "beyond_ceiling": {
+          "nautilus_trader": 100000
+        },
         "paired_with": [
           "sma_cross"
         ],
         "timings": {
           "manifoldbt": {
             "samples_s": [
-              0.027150822000010066,
-              0.02758502300002874,
-              0.027146474000005583,
-              0.027468660000010914,
-              0.027801199000009547,
-              0.02749225299999125,
-              0.027507012999990366
+              0.028149244999980283,
+              0.02859036299997797,
+              0.026799353000001247
             ],
-            "min_s": 0.027146474000005583,
-            "median_s": 0.02749225299999125,
-            "max_s": 0.027801199000009547,
-            "iqr_s": 0.0004342010000186747,
-            "iqr_over_median": 0.015793576467480232
+            "min_s": 0.026799353000001247,
+            "median_s": 0.028149244999980283,
+            "max_s": 0.02859036299997797,
+            "iqr_s": 0.0017910099999767226,
+            "iqr_over_median": 0.06362550753947316
           },
           "vectorbt": {
             "samples_s": [
-              8.216679387999989,
-              8.16494195599995,
-              8.191661943000042,
-              8.337004367999953,
-              8.301973290999968,
-              8.286200853000025,
-              8.257792676000008
+              8.589835797000006,
+              8.572624073000014,
+              8.593852751000014
             ],
-            "min_s": 8.16494195599995,
-            "median_s": 8.257792676000008,
-            "max_s": 8.337004367999953,
-            "iqr_s": 0.11031134799992515,
-            "iqr_over_median": 0.01335845453235075
+            "min_s": 8.572624073000014,
+            "median_s": 8.589835797000006,
+            "max_s": 8.593852751000014,
+            "iqr_s": 0.021228677999999945,
+            "iqr_over_median": 0.0024713718051995875
           },
           "raptorbt": {
             "samples_s": [
-              0.08609712500003752,
-              0.08455187900000283,
-              0.08575787400002355,
-              0.08592017500001248,
-              0.08586024100003442,
-              0.08510874200004537,
-              0.08473470000001271
+              0.08689334700000018,
+              0.09053714300000593,
+              0.08931820300000481
             ],
-            "min_s": 0.08455187900000283,
-            "median_s": 0.08575787400002355,
-            "max_s": 0.08609712500003752,
-            "iqr_s": 0.0011854749999997694,
-            "iqr_over_median": 0.0138235119961048
+            "min_s": 0.08689334700000018,
+            "median_s": 0.08931820300000481,
+            "max_s": 0.09053714300000593,
+            "iqr_s": 0.00364379600000575,
+            "iqr_over_median": 0.040795670732488354
           }
         },
         "speedup": {
           "vectorbt": {
-            "median_of_ratios": 301.40130214146734,
-            "min": 295.99184876486936,
-            "max": 303.50968587461637
+            "median_of_ratios": 305.1533281623014,
+            "min": 299.8431350104446,
+            "max": 320.6738890673821
           },
           "raptorbt": {
-            "median_of_ratios": 3.0957354422743184,
-            "min": 3.0651371579394633,
-            "max": 3.171068816995876
+            "median_of_ratios": 3.1667014161406657,
+            "min": 3.086880198742845,
+            "max": 3.332849229606426
           }
         },
         "noisy": false,
         "cpu_over_wall": {
           "manifoldbt": null,
-          "vectorbt": 1.0000648505522751,
-          "raptorbt": 1.0032929143626164
+          "vectorbt": 1.0001431640877414,
+          "raptorbt": null
         }
       },
       {
@@ -715,76 +790,70 @@
           }
         },
         "status": "exact",
+        "unsupported": {
+          "nautilus_trader": "Not run above 100,000 bars. NautilusTrader is event-driven: every bar goes through a simulated exchange and a Python strategy callback, so one call costs seconds per 100,000 bars and grows linearly with the series. Repeated and interleaved, a longer series does not fit the time budget of the job. The measured time at the ceiling is in the table, and `bench.py --engine-max-bars nautilus_trader=N` lifts the ceiling for a local run."
+        },
+        "beyond_ceiling": {
+          "nautilus_trader": 100000
+        },
         "paired_with": [
           "sma_cross_metrics"
         ],
         "timings": {
           "manifoldbt": {
             "samples_s": [
-              0.23509599100003697,
-              0.23428211299994928,
-              0.2345225850000361,
-              0.23408639299998413,
-              0.23343297300004906,
-              0.23324647699996603,
-              0.2485439800000222
+              0.23302756500004307,
+              0.23603869199996552,
+              0.24001135899993642
             ],
-            "min_s": 0.23324647699996603,
-            "median_s": 0.23428211299994928,
-            "max_s": 0.2485439800000222,
-            "iqr_s": 0.0016630179999879147,
-            "iqr_over_median": 0.0070983566721898005
+            "min_s": 0.23302756500004307,
+            "median_s": 0.23603869199996552,
+            "max_s": 0.24001135899993642,
+            "iqr_s": 0.006983793999893351,
+            "iqr_over_median": 0.02958749661218412
           },
           "vectorbt": {
             "samples_s": [
-              24.945453398999973,
-              24.849521113000037,
-              25.239085156999977,
-              24.566623126999957,
-              25.331763621999926,
-              24.493463152999993,
-              25.258312378000028
+              24.965410206,
+              25.515395463000004,
+              25.159790122999993
             ],
-            "min_s": 24.493463152999993,
-            "median_s": 24.945453398999973,
-            "max_s": 25.331763621999926,
-            "iqr_s": 0.6916892510000707,
-            "iqr_over_median": 0.027728068916470346
+            "min_s": 24.965410206,
+            "median_s": 25.159790122999993,
+            "max_s": 25.515395463000004,
+            "iqr_s": 0.549985257000003,
+            "iqr_over_median": 0.021859691766555327
           },
           "raptorbt": {
             "samples_s": [
-              0.8933307030000037,
-              0.8960595480000393,
-              0.8941669739999725,
-              0.894513886000027,
-              0.8928444639999498,
-              0.8995827169999302,
-              0.8938403459999336
+              0.8783135840000114,
+              0.890122331999919,
+              0.8881668889999901
             ],
-            "min_s": 0.8928444639999498,
-            "median_s": 0.8941669739999725,
-            "max_s": 0.8995827169999302,
-            "iqr_s": 0.0027288450000355624,
-            "iqr_over_median": 0.00305182933320421
+            "min_s": 0.8783135840000114,
+            "median_s": 0.8881668889999901,
+            "max_s": 0.890122331999919,
+            "iqr_s": 0.01180874799990761,
+            "iqr_over_median": 0.013295640882541098
           }
         },
         "speedup": {
           "vectorbt": {
-            "median_of_ratios": 106.06665952771826,
-            "min": 101.62512235459403,
-            "max": 108.51836095149507
+            "median_of_ratios": 107.13500871021584,
+            "min": 104.82749744776312,
+            "max": 108.09835983586848
           },
           "raptorbt": {
-            "median_of_ratios": 3.821298088010129,
-            "min": 3.5963065611158784,
-            "max": 3.8567901585071365
+            "median_of_ratios": 3.7691402903336737,
+            "min": 3.700520228295634,
+            "max": 3.7710865301695917
           }
         },
         "noisy": false,
         "cpu_over_wall": {
-          "manifoldbt": 1.1129859062980678,
-          "vectorbt": 0.9998040925012119,
-          "raptorbt": 1.000903744565406
+          "manifoldbt": 1.1282262786871227,
+          "vectorbt": 0.9998599192419236,
+          "raptorbt": 1.0012787741523324
         }
       },
       {
@@ -878,76 +947,70 @@
           }
         },
         "status": "exact",
+        "unsupported": {
+          "nautilus_trader": "Not run above 100,000 bars. NautilusTrader is event-driven: every bar goes through a simulated exchange and a Python strategy callback, so one call costs seconds per 100,000 bars and grows linearly with the series. Repeated and interleaved, a longer series does not fit the time budget of the job. The measured time at the ceiling is in the table, and `bench.py --engine-max-bars nautilus_trader=N` lifts the ceiling for a local run."
+        },
+        "beyond_ceiling": {
+          "nautilus_trader": 100000
+        },
         "paired_with": [
           "sma_cross"
         ],
         "timings": {
           "manifoldbt": {
             "samples_s": [
-              0.23400008700002672,
-              0.23556797699995968,
-              0.23322292699992886,
-              0.23486619400000563,
-              0.23307872899999893,
-              0.23449235799989765,
-              0.2349111879998418
+              0.2308562349999761,
+              0.2334827449999466,
+              0.23548766600004
             ],
-            "min_s": 0.23307872899999893,
-            "median_s": 0.23449235799989765,
-            "max_s": 0.23556797699995968,
-            "iqr_s": 0.0016882609999129272,
-            "iqr_over_median": 0.007199641874528227
+            "min_s": 0.2308562349999761,
+            "median_s": 0.2334827449999466,
+            "max_s": 0.23548766600004,
+            "iqr_s": 0.0046314310000639125,
+            "iqr_over_median": 0.01983628811655856
           },
           "vectorbt": {
             "samples_s": [
-              96.13378628399994,
-              96.42796092100002,
-              96.80347243200004,
-              97.40906811299999,
-              96.65378972799999,
-              97.26419843899998,
-              96.75135307400001
+              100.24632598699998,
+              99.98072737299992,
+              99.992798601
             ],
-            "min_s": 96.13378628399994,
-            "median_s": 96.75135307400001,
-            "max_s": 97.40906811299999,
-            "iqr_s": 0.8362375179999617,
-            "iqr_over_median": 0.00864316096293111
+            "min_s": 99.98072737299992,
+            "median_s": 99.992798601,
+            "max_s": 100.24632598699998,
+            "iqr_s": 0.265598614000055,
+            "iqr_over_median": 0.0026561774219348517
           },
           "raptorbt": {
             "samples_s": [
-              0.8945224110000254,
-              0.8980448659999638,
-              0.896303307999915,
-              0.8938186860000314,
-              0.8944173079999018,
-              0.8995438480001212,
-              0.8967557060000217
+              0.904415350000022,
+              0.8926298269999506,
+              0.8843206249999866
             ],
-            "min_s": 0.8938186860000314,
-            "median_s": 0.896303307999915,
-            "max_s": 0.8995438480001212,
-            "iqr_s": 0.003627558000061981,
-            "iqr_over_median": 0.004047243793127142
+            "min_s": 0.8843206249999866,
+            "median_s": 0.8926298269999506,
+            "max_s": 0.904415350000022,
+            "iqr_s": 0.020094725000035396,
+            "iqr_over_median": 0.02251182336979706
           }
         },
         "speedup": {
           "vectorbt": {
-            "median_of_ratios": 414.68301351514765,
-            "min": 409.34239937466765,
-            "max": 415.06842263423596
+            "median_of_ratios": 428.2146304773948,
+            "min": 424.6201098319222,
+            "max": 434.23703062215475
           },
           "raptorbt": {
-            "median_of_ratios": 3.8227439248769306,
-            "min": 3.8056506591153343,
-            "max": 3.8431183397341906
+            "median_of_ratios": 3.823108328626832,
+            "min": 3.7552736413797416,
+            "max": 3.917656155139651
           }
         },
         "noisy": false,
         "cpu_over_wall": {
-          "manifoldbt": 1.1157587782203542,
-          "vectorbt": 0.9998765521034942,
-          "raptorbt": 1.0058331735941088
+          "manifoldbt": 1.1002724809081117,
+          "vectorbt": 0.9999005663322894,
+          "raptorbt": 0.9957611893195056
         }
       },
       {
@@ -957,7 +1020,8 @@
         "data_digest": "b7c2ad8cea687ce0",
         "engines": [
           "manifoldbt",
-          "vectorbt"
+          "vectorbt",
+          "nautilus_trader"
         ],
         "parity": {
           "vectorbt": {
@@ -986,6 +1050,33 @@
               }
             },
             "note": ""
+          },
+          "nautilus_trader": {
+            "status": "exact",
+            "expected": "exact",
+            "publishable": true,
+            "diffs": {
+              "final_equity_vs_capital": 3.1024683266878126e-13,
+              "round_trips_delta": 0,
+              "total_fees_vs_capital": 1.0607209333102218e-13
+            },
+            "metrics": {
+              "manifoldbt": {
+                "total_return": -0.01570110342278974,
+                "final_equity": 98429.88965772103,
+                "round_trips": 3176,
+                "fills": 6352,
+                "total_fees": 1542.3890014306103
+              },
+              "nautilus_trader": {
+                "total_return": -0.01570110342310005,
+                "final_equity": 98429.88965769,
+                "round_trips": 3176,
+                "fills": 6352,
+                "total_fees": 1542.389001420003
+              }
+            },
+            "note": ""
           }
         },
         "status": "exact",
@@ -995,48 +1086,58 @@
         "timings": {
           "manifoldbt": {
             "samples_s": [
-              0.00477752300002976,
-              0.004572770999857312,
-              0.004391392999878008,
-              0.004386554000120668,
-              0.0070069660000626754,
-              0.004938453000022491,
-              0.004525162000163618
+              0.007866064000040751,
+              0.006250550000004296,
+              0.006472875999975258
             ],
-            "min_s": 0.004386554000120668,
-            "median_s": 0.004572770999857312,
-            "max_s": 0.0070069660000626754,
-            "iqr_s": 0.0005470600001444836,
-            "iqr_over_median": 0.11963424369196578
+            "min_s": 0.006250550000004296,
+            "median_s": 0.006472875999975258,
+            "max_s": 0.007866064000040751,
+            "iqr_s": 0.0016155140000364554,
+            "iqr_over_median": 0.2495821023054714
           },
           "vectorbt": {
             "samples_s": [
-              0.19279505000008612,
-              0.1915437559998736,
-              0.18630753000002187,
-              0.18897513999991133,
-              0.3524239060000127,
-              0.18910302900007991,
-              0.18559250800012705
+              0.20176602699996238,
+              0.19890839799995774,
+              0.19518191399993157
             ],
-            "min_s": 0.18559250800012705,
-            "median_s": 0.18910302900007991,
-            "max_s": 0.3524239060000127,
-            "iqr_s": 0.006487520000064251,
-            "iqr_over_median": 0.03430680108281877
+            "min_s": 0.19518191399993157,
+            "median_s": 0.19890839799995774,
+            "max_s": 0.20176602699996238,
+            "iqr_s": 0.006584113000030811,
+            "iqr_over_median": 0.033101231854635975
+          },
+          "nautilus_trader": {
+            "samples_s": [
+              13.104121166999903,
+              13.199672702000044,
+              13.321832899000015
+            ],
+            "min_s": 13.104121166999903,
+            "median_s": 13.199672702000044,
+            "max_s": 13.321832899000015,
+            "iqr_s": 0.21771173200011162,
+            "iqr_over_median": 0.016493721997146448
           }
         },
         "speedup": {
           "vectorbt": {
-            "median_of_ratios": 41.8878959838248,
-            "min": 38.29195681303815,
-            "max": 50.2962203608324
+            "median_of_ratios": 30.153816325336315,
+            "min": 25.65018883636303,
+            "max": 31.822543296161303
+          },
+          "nautilus_trader": {
+            "median_of_ratios": 2058.101051070797,
+            "min": 1665.9057397615904,
+            "max": 2111.761797280395
           }
         },
-        "noisy": false,
+        "noisy": true,
         "cpu_over_wall": {
           "manifoldbt": null,
-          "vectorbt": 1.0021920974651646
+          "vectorbt": 0.9901715587860495,
+          "nautilus_trader": 0.9996056398529306
         }
       },
       {
@@ -1079,53 +1180,49 @@
         },
         "status": "exact",
         "unsupported": {
-          "raptorbt": "Two blockers, either one sufficient. Sizing: raptorbt has no fixed-quantity mode. `position_sizes` is a fraction of equity (measured: 0.5 buys exactly half the equity of the bar before the entry), `lot_size` rounds a computed size down to a multiple, and `alloted_capital` fixes the notional, not the quantity. Reproducing `units=5` would mean feeding a fraction derived from an equity curve that does not exist until the run is over. Indicator: `raptorbt.ema` seeds on a simple mean of the first `period` bars and emits from bar `period-1`, while manifoldbt seeds on the first observation and emits from bar 0 (measured: 11 leading NaN for span 12, and ema[11] equal to sma(12)[11] to the last bit). The two are the same recursion with a different warmup, so the signal differs early and the round-trip count with it. Its `sma` and `rsi` do match, which is why the other three workloads run."
+          "raptorbt": "Two blockers, either one sufficient. Sizing: raptorbt has no fixed-quantity mode. `position_sizes` is a fraction of equity (measured: 0.5 buys exactly half the equity of the bar before the entry), `lot_size` rounds a computed size down to a multiple, and `alloted_capital` fixes the notional, not the quantity. Reproducing `units=5` would mean feeding a fraction derived from an equity curve that does not exist until the run is over. Indicator: `raptorbt.ema` seeds on a simple mean of the first `period` bars and emits from bar `period-1`, while manifoldbt seeds on the first observation and emits from bar 0 (measured: 11 leading NaN for span 12, and ema[11] equal to sma(12)[11] to the last bit). The two are the same recursion with a different warmup, so the signal differs early and the round-trip count with it. Its `sma` and `rsi` do match, which is why the other three workloads run.",
+          "nautilus_trader": "Not run above 100,000 bars. NautilusTrader is event-driven: every bar goes through a simulated exchange and a Python strategy callback, so one call costs seconds per 100,000 bars and grows linearly with the series. Repeated and interleaved, a longer series does not fit the time budget of the job. The measured time at the ceiling is in the table, and `bench.py --engine-max-bars nautilus_trader=N` lifts the ceiling for a local run."
+        },
+        "beyond_ceiling": {
+          "nautilus_trader": 100000
         },
         "timings": {
           "manifoldbt": {
             "samples_s": [
-              0.04497810299994853,
-              0.044222795999985465,
-              0.04708782500006237,
-              0.04517020199978106,
-              0.04571132099999886,
-              0.04666193299999577,
-              0.04621049299998958
+              0.046326603000011346,
+              0.04304969200006781,
+              0.04313296199995875
             ],
-            "min_s": 0.044222795999985465,
-            "median_s": 0.04571132099999886,
-            "max_s": 0.04708782500006237,
-            "iqr_s": 0.0016838300000472373,
-            "iqr_over_median": 0.0368361701917842
+            "min_s": 0.04304969200006781,
+            "median_s": 0.04313296199995875,
+            "max_s": 0.046326603000011346,
+            "iqr_s": 0.0032769109999435386,
+            "iqr_over_median": 0.07597231555641072
           },
           "vectorbt": {
             "samples_s": [
-              2.2064937039999677,
-              2.085798260000047,
-              2.221423907000144,
-              2.0840804649999427,
-              2.2129535789999863,
-              2.0817675920000056,
-              2.200813190999952
+              2.2030476449999696,
+              2.4206321230000185,
+              2.1773281830000997
             ],
-            "min_s": 2.0817675920000056,
-            "median_s": 2.200813190999952,
-            "max_s": 2.221423907000144,
-            "iqr_s": 0.12887311400004364,
-            "iqr_over_median": 0.05855704360872602
+            "min_s": 2.1773281830000997,
+            "median_s": 2.2030476449999696,
+            "max_s": 2.4206321230000185,
+            "iqr_s": 0.24330393999991884,
+            "iqr_over_median": 0.11043970862460498
           }
         },
         "speedup": {
           "vectorbt": {
-            "median_of_ratios": 47.176184225905565,
-            "min": 44.613830978673654,
-            "max": 49.05706458990706
+            "median_of_ratios": 50.47944963766184,
+            "min": 47.5546986468969,
+            "max": 56.22879074247978
           }
         },
         "noisy": false,
         "cpu_over_wall": {
           "manifoldbt": null,
-          "vectorbt": 1.0004418707927054
+          "vectorbt": 0.999851793880055
         }
       },
       {
@@ -1135,7 +1232,8 @@
         "data_digest": "b7c2ad8cea687ce0",
         "engines": [
           "manifoldbt",
-          "vectorbt"
+          "vectorbt",
+          "nautilus_trader"
         ],
         "parity": {
           "vectorbt": {
@@ -1164,6 +1262,33 @@
               }
             },
             "note": ""
+          },
+          "nautilus_trader": {
+            "status": "exact",
+            "expected": "exact",
+            "publishable": true,
+            "diffs": {
+              "final_equity_vs_capital": 1.599255483597517e-13,
+              "round_trips_delta": 0,
+              "total_fees_vs_capital": 3.7455606616276784e-13
+            },
+            "metrics": {
+              "manifoldbt": {
+                "total_return": -0.002745042655159957,
+                "final_equity": 99725.49573448401,
+                "round_trips": 450,
+                "fills": 900,
+                "total_fees": 218.42799507745576
+              },
+              "nautilus_trader": {
+                "total_return": -0.002745042654999974,
+                "final_equity": 99725.4957345,
+                "round_trips": 450,
+                "fills": 900,
+                "total_fees": 218.42799504000016
+              }
+            },
+            "note": ""
           }
         },
         "status": "exact",
@@ -1173,48 +1298,58 @@
         "timings": {
           "manifoldbt": {
             "samples_s": [
-              0.0032224139999925683,
-              0.002960254999834433,
-              0.0025632849999510654,
-              0.0025700480000523385,
-              0.005475912000065364,
-              0.0025893540000652138,
-              0.0030049179999878106
+              0.004720108000014989,
+              0.004348275999973339,
+              0.004351543999973728
             ],
-            "min_s": 0.0025632849999510654,
-            "median_s": 0.002960254999834433,
-            "max_s": 0.005475912000065364,
-            "iqr_s": 0.0006523659999402298,
-            "iqr_over_median": 0.22037493390830068
+            "min_s": 0.004348275999973339,
+            "median_s": 0.004351543999973728,
+            "max_s": 0.004720108000014989,
+            "iqr_s": 0.00037183200004164974,
+            "iqr_over_median": 0.08544829146709641
           },
           "vectorbt": {
             "samples_s": [
-              0.18784725000000435,
-              0.18474951899997905,
-              0.33136523200005286,
-              0.1847791939999297,
-              0.18727370200008409,
-              0.18020214700004544,
-              0.18129249900016475
+              0.18788963400004377,
+              0.18744198399997458,
+              0.42181937000009384
             ],
-            "min_s": 0.18020214700004544,
-            "median_s": 0.1847791939999297,
-            "max_s": 0.33136523200005286,
-            "iqr_s": 0.006554750999839598,
-            "iqr_over_median": 0.035473425649005116
+            "min_s": 0.18744198399997458,
+            "median_s": 0.18788963400004377,
+            "max_s": 0.42181937000009384,
+            "iqr_s": 0.23437738600011926,
+            "iqr_over_median": 1.2474205256052853
+          },
+          "nautilus_trader": {
+            "samples_s": [
+              6.6248271910000085,
+              6.655864492999967,
+              6.609391290000076
+            ],
+            "min_s": 6.609391290000076,
+            "median_s": 6.6248271910000085,
+            "max_s": 6.655864492999967,
+            "iqr_s": 0.04647320299989133,
+            "iqr_over_median": 0.007015006076388879
           }
         },
         "speedup": {
           "vectorbt": {
-            "median_of_ratios": 62.410001506732385,
-            "min": 34.19954557302029,
-            "max": 129.27365938878384
+            "median_of_ratios": 43.10719558765908,
+            "min": 39.80621502716615,
+            "max": 96.93556356149462
+          },
+          "nautilus_trader": {
+            "median_of_ratios": 1518.8611881300014,
+            "min": 1403.5329680971222,
+            "max": 1530.6904375529007
           }
         },
         "noisy": true,
         "cpu_over_wall": {
           "manifoldbt": null,
-          "vectorbt": 1.0017324803246845
+          "vectorbt": 1.016118667847441,
+          "nautilus_trader": 0.9994930652620644
         }
       },
       {
@@ -1257,53 +1392,49 @@
         },
         "status": "exact",
         "unsupported": {
-          "raptorbt": "Same blocker as the other fixed-quantity workload: raptorbt has no units sizing, and a cost model on top of a fraction of equity compares policy rather than arithmetic. See `ema_rsi_fees` for the measurements behind that."
+          "raptorbt": "Same blocker as the other fixed-quantity workload: raptorbt has no units sizing, and a cost model on top of a fraction of equity compares policy rather than arithmetic. See `ema_rsi_fees` for the measurements behind that.",
+          "nautilus_trader": "Not run above 100,000 bars. NautilusTrader is event-driven: every bar goes through a simulated exchange and a Python strategy callback, so one call costs seconds per 100,000 bars and grows linearly with the series. Repeated and interleaved, a longer series does not fit the time budget of the job. The measured time at the ceiling is in the table, and `bench.py --engine-max-bars nautilus_trader=N` lifts the ceiling for a local run."
+        },
+        "beyond_ceiling": {
+          "nautilus_trader": 100000
         },
         "timings": {
           "manifoldbt": {
             "samples_s": [
-              0.03326944599984927,
-              0.029586581999865302,
-              0.02941224100004547,
-              0.028842468999982884,
-              0.02971645200000239,
-              0.029831838000063726,
-              0.028689941000038743
+              0.03226409400008379,
+              0.029703078000011374,
+              0.029096354999978757
             ],
-            "min_s": 0.028689941000038743,
-            "median_s": 0.029586581999865302,
-            "max_s": 0.03326944599984927,
-            "iqr_s": 0.000989369000080842,
-            "iqr_over_median": 0.0334397869982192
+            "min_s": 0.029096354999978757,
+            "median_s": 0.029703078000011374,
+            "max_s": 0.03226409400008379,
+            "iqr_s": 0.00316773900010503,
+            "iqr_over_median": 0.106646826302103
           },
           "vectorbt": {
             "samples_s": [
-              1.982046760000003,
-              2.2181789989999743,
-              1.9964042389999577,
-              2.200982844000009,
-              1.9965725780000412,
-              2.1972200519999205,
-              2.057020414000135
+              2.4227834939999866,
+              2.148179094999932,
+              2.3945496979999916
             ],
-            "min_s": 1.982046760000003,
-            "median_s": 2.057020414000135,
-            "max_s": 2.2181789989999743,
-            "iqr_s": 0.20457860500005154,
-            "iqr_over_median": 0.09945385257612621
+            "min_s": 2.148179094999932,
+            "median_s": 2.3945496979999916,
+            "max_s": 2.4227834939999866,
+            "iqr_s": 0.2746043990000544,
+            "iqr_over_median": 0.11467893075237204
           }
         },
         "speedup": {
           "vectorbt": {
-            "median_of_ratios": 71.69831454157948,
-            "min": 59.575586560984,
-            "max": 76.3104865953506
+            "median_of_ratios": 75.09225252051692,
+            "min": 72.32176729290849,
+            "max": 82.29723956838373
           }
         },
         "noisy": false,
         "cpu_over_wall": {
           "manifoldbt": null,
-          "vectorbt": 1.000107459600905
+          "vectorbt": 0.9992086315014798
         }
       },
       {
@@ -1346,53 +1477,49 @@
         },
         "status": "exact",
         "unsupported": {
-          "raptorbt": "Same blocker as the other fixed-quantity workload: raptorbt has no units sizing, and a cost model on top of a fraction of equity compares policy rather than arithmetic. See `ema_rsi_fees` for the measurements behind that."
+          "raptorbt": "Same blocker as the other fixed-quantity workload: raptorbt has no units sizing, and a cost model on top of a fraction of equity compares policy rather than arithmetic. See `ema_rsi_fees` for the measurements behind that.",
+          "nautilus_trader": "Not run above 100,000 bars. NautilusTrader is event-driven: every bar goes through a simulated exchange and a Python strategy callback, so one call costs seconds per 100,000 bars and grows linearly with the series. Repeated and interleaved, a longer series does not fit the time budget of the job. The measured time at the ceiling is in the table, and `bench.py --engine-max-bars nautilus_trader=N` lifts the ceiling for a local run."
+        },
+        "beyond_ceiling": {
+          "nautilus_trader": 100000
         },
         "timings": {
           "manifoldbt": {
             "samples_s": [
-              0.31298200600008386,
-              0.312369149999995,
-              0.3142331430001377,
-              0.3126117230001455,
-              0.313712212000155,
-              0.31751921299996866,
-              0.3112761459999547
+              0.31510102199990797,
+              0.30997897500003546,
+              0.3119126610000649
             ],
-            "min_s": 0.3112761459999547,
-            "median_s": 0.31298200600008386,
-            "max_s": 0.31751921299996866,
-            "iqr_s": 0.0018639930001427274,
-            "iqr_over_median": 0.00595559158165223
+            "min_s": 0.30997897500003546,
+            "median_s": 0.3119126610000649,
+            "max_s": 0.31510102199990797,
+            "iqr_s": 0.005122046999872509,
+            "iqr_over_median": 0.016421414197968207
           },
           "vectorbt": {
             "samples_s": [
-              24.960857759999953,
-              24.84649537899986,
-              25.006657556000164,
-              24.830743560999963,
-              24.86713434400008,
-              24.846800853000104,
-              24.777834781000138
+              25.893134344999908,
+              25.864682870000024,
+              25.819573876999925
             ],
-            "min_s": 24.777834781000138,
-            "median_s": 24.846800853000104,
-            "max_s": 25.006657556000164,
-            "iqr_s": 0.13011419899999055,
-            "iqr_over_median": 0.005236658021681694
+            "min_s": 25.819573876999925,
+            "median_s": 25.864682870000024,
+            "max_s": 25.893134344999908,
+            "iqr_s": 0.07356046799998239,
+            "iqr_over_median": 0.0028440506450324136
           }
         },
         "speedup": {
           "vectorbt": {
-            "median_of_ratios": 79.54209107717666,
-            "min": 78.25290513365739,
-            "max": 79.75173422587517
+            "median_of_ratios": 82.77821680664177,
+            "min": 82.17407287561089,
+            "max": 83.4401199952257
           }
         },
         "noisy": false,
         "cpu_over_wall": {
-          "manifoldbt": 1.1072110182668065,
-          "vectorbt": 0.9997328289731016
+          "manifoldbt": 1.0779166638891444,
+          "vectorbt": 0.9999047262108745
         }
       },
       {
@@ -1402,7 +1529,8 @@
         "data_digest": "b7c2ad8cea687ce0",
         "engines": [
           "manifoldbt",
-          "vectorbt"
+          "vectorbt",
+          "nautilus_trader"
         ],
         "parity": {
           "vectorbt": {
@@ -1431,6 +1559,33 @@
               }
             },
             "note": ""
+          },
+          "nautilus_trader": {
+            "status": "exact",
+            "expected": "exact",
+            "publishable": true,
+            "diffs": {
+              "final_equity_vs_capital": 3.667519195005297e-12,
+              "round_trips_delta": 0,
+              "total_fees_vs_capital": 2.576578026491916e-12
+            },
+            "metrics": {
+              "manifoldbt": {
+                "total_return": -0.004784214364567441,
+                "final_equity": 99521.57856354325,
+                "round_trips": 2350,
+                "fills": 4700,
+                "total_fees": 464.09434549765643
+              },
+              "nautilus_trader": {
+                "total_return": -0.00478421436089993,
+                "final_equity": 99521.57856391,
+                "round_trips": 2350,
+                "fills": 4700,
+                "total_fees": 464.09434523999863
+              }
+            },
+            "note": ""
           }
         },
         "status": "exact",
@@ -1440,48 +1595,58 @@
         "timings": {
           "manifoldbt": {
             "samples_s": [
-              0.0177658350000911,
-              0.014356919000192647,
-              0.01442664300020624,
-              0.014256421999789382,
-              0.014327714000046399,
-              0.01820738900005381,
-              0.014235030999998344
+              0.018894026999987545,
+              0.018525074000081077,
+              0.02033012299989423
             ],
-            "min_s": 0.014235030999998344,
-            "median_s": 0.014356919000192647,
-            "max_s": 0.01820738900005381,
-            "iqr_s": 0.00350941300030172,
-            "iqr_over_median": 0.24444053771248755
+            "min_s": 0.018525074000081077,
+            "median_s": 0.018894026999987545,
+            "max_s": 0.02033012299989423,
+            "iqr_s": 0.0018050489998131525,
+            "iqr_over_median": 0.09553543031426505
           },
           "vectorbt": {
             "samples_s": [
-              0.22987368100007188,
-              0.22614373500005058,
-              0.23037641799987796,
-              0.2255625319999126,
-              0.2219124359999114,
-              0.22122285099999317,
-              0.22389691699981995
+              0.22580127000003358,
+              0.22789545399996314,
+              0.5315867439999238
             ],
-            "min_s": 0.22122285099999317,
-            "median_s": 0.2255625319999126,
-            "max_s": 0.23037641799987796,
-            "iqr_s": 0.007961245000160488,
-            "iqr_over_median": 0.03529506842104243
+            "min_s": 0.22580127000003358,
+            "median_s": 0.22789545399996314,
+            "max_s": 0.5315867439999238,
+            "iqr_s": 0.3057854739998902,
+            "iqr_over_median": 1.341779612681259
+          },
+          "nautilus_trader": {
+            "samples_s": [
+              56.353062174,
+              56.747392567999896,
+              55.613515216999986
+            ],
+            "min_s": 55.613515216999986,
+            "median_s": 56.353062174,
+            "max_s": 56.747392567999896,
+            "iqr_s": 1.13387735099991,
+            "iqr_over_median": 0.020120953631567778
           }
         },
         "speedup": {
           "vectorbt": {
-            "median_of_ratios": 15.728586541177606,
-            "min": 12.150168868218248,
-            "max": 15.968816723099374
+            "median_of_ratios": 12.301999657273473,
+            "min": 11.950934017411027,
+            "max": 26.147738702942892
+          },
+          "nautilus_trader": {
+            "median_of_ratios": 2982.586093162519,
+            "min": 2735.5228110173916,
+            "max": 3063.2748116283656
           }
         },
         "noisy": true,
         "cpu_over_wall": {
           "manifoldbt": null,
-          "vectorbt": 0.9879742194715846
+          "vectorbt": 1.0149363431723395,
+          "nautilus_trader": 0.9997393816350197
         }
       },
       {
@@ -1524,53 +1689,49 @@
         },
         "status": "exact",
         "unsupported": {
-          "raptorbt": "No multi-instrument portfolio on the entry point this harness drives: `run_single_backtest` is one instrument, and `run_multi_backtest` broadcasts over strategies rather than over assets. 0.9.0 does add `run_portfolio_backtest`, but its allocation model is a different one and would need its own parity work before any timing from it could be published. The units blocker applies here too."
+          "raptorbt": "No multi-instrument portfolio on the entry point this harness drives: `run_single_backtest` is one instrument, and `run_multi_backtest` broadcasts over strategies rather than over assets. 0.9.0 does add `run_portfolio_backtest`, but its allocation model is a different one and would need its own parity work before any timing from it could be published. The units blocker applies here too.",
+          "nautilus_trader": "Not run above 100,000 bars. NautilusTrader is event-driven: every bar goes through a simulated exchange and a Python strategy callback, so one call costs seconds per 100,000 bars and grows linearly with the series. Repeated and interleaved, a longer series does not fit the time budget of the job. The measured time at the ceiling is in the table, and `bench.py --engine-max-bars nautilus_trader=N` lifts the ceiling for a local run."
+        },
+        "beyond_ceiling": {
+          "nautilus_trader": 100000
         },
         "timings": {
           "manifoldbt": {
             "samples_s": [
-              0.15212340899984156,
-              0.15202386300006765,
-              0.1529296339999746,
-              0.1529764100000648,
-              0.15295549200004643,
-              0.15385655000000042,
-              0.15159554100000605
+              0.1555478900002072,
+              0.1558432740000626,
+              0.15616228399994725
             ],
-            "min_s": 0.15159554100000605,
-            "median_s": 0.1529296339999746,
-            "max_s": 0.15385655000000042,
-            "iqr_s": 0.0009525469999971392,
-            "iqr_over_median": 0.006228662000180405
+            "min_s": 0.1555478900002072,
+            "median_s": 0.1558432740000626,
+            "max_s": 0.15616228399994725,
+            "iqr_s": 0.0006143939997400594,
+            "iqr_over_median": 0.003942383806309232
           },
           "vectorbt": {
             "samples_s": [
-              2.476660180999943,
-              2.328624371999922,
-              2.4640334059999986,
-              2.5244513339998775,
-              2.3143077430001995,
-              2.569451905999813,
-              2.294564856000079
+              2.50202176300013,
+              2.793003007000152,
+              2.5243200089998936
             ],
-            "min_s": 2.294564856000079,
-            "median_s": 2.4640334059999986,
-            "max_s": 2.569451905999813,
-            "iqr_s": 0.21014359099967805,
-            "iqr_over_median": 0.08528439204110294
+            "min_s": 2.50202176300013,
+            "median_s": 2.5243200089998936,
+            "max_s": 2.793003007000152,
+            "iqr_s": 0.29098124400002234,
+            "iqr_over_median": 0.11527113953959654
           }
         },
         "speedup": {
           "vectorbt": {
-            "median_of_ratios": 16.11220364262696,
-            "min": 15.13059591871011,
-            "max": 16.700308865627143
+            "median_of_ratios": 16.16472264840047,
+            "min": 16.085218275842873,
+            "max": 17.921870705815834
           }
         },
         "noisy": false,
         "cpu_over_wall": {
-          "manifoldbt": 1.226062648830887,
-          "vectorbt": 0.9992874304052444
+          "manifoldbt": null,
+          "vectorbt": 1.0026415539388214
         }
       },
       {
@@ -1581,7 +1742,8 @@
         "engines": [
           "manifoldbt",
           "vectorbt",
-          "raptorbt"
+          "raptorbt",
+          "nautilus_trader"
         ],
         "parity": {
           "vectorbt": {
@@ -1637,6 +1799,33 @@
               }
             },
             "note": "Same fork in the road, taken further: raptorbt does not re-arm at all. Once a bracket closes a position, the entry level being still true is not enough to open another one; it waits for the level to go false and true again. So on the same bars the three engines book a different number of round-trips from the same signal, manifoldbt re-entering on the exit bar, vectorbt on the next bar, raptorbt not until the next crossing. The count of affected round-trips is measured rather than asserted, and it is the same population for both challengers."
+          },
+          "nautilus_trader": {
+            "status": "documented",
+            "expected": "documented",
+            "publishable": false,
+            "diffs": {
+              "final_equity_vs_capital": 7.0812876849959135e-06,
+              "round_trips_delta": 0,
+              "total_fees_vs_capital": 0.0
+            },
+            "metrics": {
+              "manifoldbt": {
+                "total_return": -0.05756525685928504,
+                "final_equity": 94243.4743140715,
+                "round_trips": 2309,
+                "fills": 4618,
+                "total_fees": 0.0
+              },
+              "nautilus_trader": {
+                "total_return": -0.057558175571600034,
+                "final_equity": 94244.18244284,
+                "round_trips": 2309,
+                "fills": 4995,
+                "total_fees": 0.0
+              }
+            },
+            "note": "Re-entry sizing. Entries, exits and fill prices are the same trades as the reference's, round-trip for round-trip: the stop and the target are native contingent orders, they fill at their own levels, and because the simulated exchange runs before the strategy sees the bar, a position stopped out intrabar is re-entered at that bar's close just as the reference does. What differs is the quantity of that re-entry. The reference sizes it from the equity at the close, counting the position it has just closed at the close price, so it buys back the quantity it held; Nautilus sizes it from the cash balance after the stop or target has been booked at its own price. Neither is wrong, the two quantities differ by the gap between the exit price and the close, and that gap is carried into every later trade. The harness measures it (re-entries on the exit bar, and how far each one's quantity sits from the position closed on that bar) instead of asserting it."
           }
         },
         "status": "documented",
@@ -1644,6 +1833,13 @@
           "raptorbt": {
             "round_trips": 1384,
             "final_equity": 93318.65079959332
+          },
+          "nautilus_trader": {
+            "round_trips": 2309,
+            "final_equity": 94244.18244284,
+            "reentries_on_exit_bar": 925,
+            "reentry_quantity_gap_median": 0.00027019269628733995,
+            "reentry_quantity_gap_max": 0.0010824454381871866
           },
           "manifoldbt": {
             "reentries_on_exit_bar": 925,
@@ -1656,70 +1852,76 @@
         "timings": {
           "manifoldbt": {
             "samples_s": [
-              0.005064890000085143,
-              0.0050489740001467,
-              0.00520860000005996,
-              0.007461052000053314,
-              0.005144800999914878,
-              0.005172694000066258,
-              0.005207307000091532
+              0.005162129999916942,
+              0.007363703999999416,
+              0.007375988000148936
             ],
-            "min_s": 0.0050489740001467,
-            "median_s": 0.005172694000066258,
-            "max_s": 0.007461052000053314,
-            "iqr_s": 0.00014370999997481704,
-            "iqr_over_median": 0.027782428261361725
+            "min_s": 0.005162129999916942,
+            "median_s": 0.007363703999999416,
+            "max_s": 0.007375988000148936,
+            "iqr_s": 0.002213858000231994,
+            "iqr_over_median": 0.3006446212710573
           },
           "vectorbt": {
             "samples_s": [
-              0.1768484140000055,
-              0.3510828250000486,
-              0.1862260249999963,
-              0.1802293109999482,
-              0.18528943000001163,
-              0.17819291099999646,
-              0.17925044300000081
+              0.19116203500016127,
+              0.19213546900004985,
+              0.6316490350000095
             ],
-            "min_s": 0.1768484140000055,
-            "median_s": 0.1802293109999482,
-            "max_s": 0.3510828250000486,
-            "iqr_s": 0.008033113999999841,
-            "iqr_over_median": 0.04457162908425117
+            "min_s": 0.19116203500016127,
+            "median_s": 0.19213546900004985,
+            "max_s": 0.6316490350000095,
+            "iqr_s": 0.4404869999998482,
+            "iqr_over_median": 2.292585550665473
           },
           "raptorbt": {
             "samples_s": [
-              0.007719270999814398,
-              0.007745279000118899,
-              0.007720052999957261,
-              0.007907310000064172,
-              0.010523295999973925,
-              0.010431495999910112,
-              0.010004123000044274
+              0.0106546030001482,
+              0.009868416000017532,
+              0.009324687000116683
             ],
-            "min_s": 0.007719270999814398,
-            "median_s": 0.007907310000064172,
-            "max_s": 0.010523295999973925,
-            "iqr_s": 0.002711442999952851,
-            "iqr_over_median": 0.3429033388005335
+            "min_s": 0.009324687000116683,
+            "median_s": 0.009868416000017532,
+            "max_s": 0.0106546030001482,
+            "iqr_s": 0.0013299160000315169,
+            "iqr_over_median": 0.13476489033591146
+          },
+          "nautilus_trader": {
+            "samples_s": [
+              14.181575714000019,
+              13.762473349999937,
+              13.770359562000067
+            ],
+            "min_s": 13.762473349999937,
+            "median_s": 13.770359562000067,
+            "max_s": 14.181575714000019,
+            "iqr_s": 0.41910236400008216,
+            "iqr_over_median": 0.030435106804081877
           }
         },
         "speedup": {
           "vectorbt": {
-            "median_of_ratios": 34.91653599526004,
-            "min": 24.156018614889742,
-            "max": 69.5354788893442
+            "median_of_ratios": 37.03161970024719,
+            "min": 26.09223143679663,
+            "max": 85.6358544763434
           },
           "raptorbt": {
-            "median_of_ratios": 1.5340302801903627,
-            "min": 1.059811672671316,
-            "max": 2.0454233312713233
+            "median_of_ratios": 1.340142949800578,
+            "min": 1.2641949797001293,
+            "max": 2.0639935453620173
+          },
+          "nautilus_trader": {
+            "median_of_ratios": 1868.9606955957258,
+            "min": 1866.9172945674552,
+            "max": 2747.233354105417
           }
         },
         "noisy": true,
         "cpu_over_wall": {
           "manifoldbt": null,
-          "vectorbt": 1.0020044549410645,
-          "raptorbt": null
+          "vectorbt": 1.0148317772624562,
+          "raptorbt": null,
+          "nautilus_trader": 0.9996545887506363
         }
       },
       {
@@ -1789,6 +1991,12 @@
           }
         },
         "status": "documented",
+        "unsupported": {
+          "nautilus_trader": "Not run above 100,000 bars. NautilusTrader is event-driven: every bar goes through a simulated exchange and a Python strategy callback, so one call costs seconds per 100,000 bars and grows linearly with the series. Repeated and interleaved, a longer series does not fit the time budget of the job. The measured time at the ceiling is in the table, and `bench.py --engine-max-bars nautilus_trader=N` lifts the ceiling for a local run."
+        },
+        "beyond_ceiling": {
+          "nautilus_trader": 100000
+        },
         "divergence_scale": {
           "raptorbt": {
             "round_trips": 13745,
@@ -1805,70 +2013,58 @@
         "timings": {
           "manifoldbt": {
             "samples_s": [
-              0.0487347849998514,
-              0.06041391299982024,
-              0.05585747299983268,
-              0.05695771300020169,
-              0.05800088800015146,
-              0.057920977000094354,
-              0.05789597100010724
+              0.04811898699995254,
+              0.057673803999932716,
+              0.056148783000026015
             ],
-            "min_s": 0.0487347849998514,
-            "median_s": 0.05789597100010724,
-            "max_s": 0.06041391299982024,
-            "iqr_s": 0.0021434150003187824,
-            "iqr_over_median": 0.03702183352818821
+            "min_s": 0.04811898699995254,
+            "median_s": 0.056148783000026015,
+            "max_s": 0.057673803999932716,
+            "iqr_s": 0.009554816999980176,
+            "iqr_over_median": 0.17016961881392423
           },
           "vectorbt": {
             "samples_s": [
-              2.0639292210000804,
-              2.1940950759999396,
-              2.0703828010000507,
-              2.2024907090001307,
-              2.052529811000113,
-              2.188496894999844,
-              2.053396133999968
+              2.3862398260000646,
+              2.797548099000096,
+              2.3533503629998904
             ],
-            "min_s": 2.052529811000113,
-            "median_s": 2.0703828010000507,
-            "max_s": 2.2024907090001307,
-            "iqr_s": 0.1406989419999718,
-            "iqr_over_median": 0.06795793605511523
+            "min_s": 2.3533503629998904,
+            "median_s": 2.3862398260000646,
+            "max_s": 2.797548099000096,
+            "iqr_s": 0.4441977360002056,
+            "iqr_over_median": 0.1861496615555161
           },
           "raptorbt": {
             "samples_s": [
-              0.08449166700006572,
-              0.07658401899993805,
-              0.08475684399991223,
-              0.07669465699996181,
-              0.08593812300000536,
-              0.07693433300005381,
-              0.08505656500005898
+              0.07617342499997903,
+              0.0760776510001051,
+              0.07673301199997695
             ],
-            "min_s": 0.07658401899993805,
-            "median_s": 0.08449166700006572,
-            "max_s": 0.08593812300000536,
-            "iqr_s": 0.008361908000097173,
-            "iqr_over_median": 0.0989672508188372
+            "min_s": 0.0760776510001051,
+            "median_s": 0.07617342499997903,
+            "max_s": 0.07673301199997695,
+            "iqr_s": 0.0006553609998718457,
+            "iqr_over_median": 0.008603538568365885
           }
         },
         "speedup": {
           "vectorbt": {
-            "median_of_ratios": 37.06545766949129,
-            "min": 35.38790321614995,
-            "max": 42.35022727619243
+            "median_of_ratios": 48.506391203246444,
+            "min": 41.91275816251975,
+            "max": 49.59040027177667
           },
           "raptorbt": {
-            "median_of_ratios": 1.4691275322060224,
-            "min": 1.267655332972157,
-            "max": 1.733703493312289
+            "median_of_ratios": 1.366601516544738,
+            "min": 1.3191023605828716,
+            "max": 1.5830222070147522
           }
         },
-        "noisy": false,
+        "noisy": true,
         "cpu_over_wall": {
           "manifoldbt": null,
-          "vectorbt": 0.9996411108314855,
-          "raptorbt": 1.0167301045480626
+          "vectorbt": 0.9990529180005605,
+          "raptorbt": null
         }
       },
       {
@@ -1938,6 +2134,12 @@
           }
         },
         "status": "documented",
+        "unsupported": {
+          "nautilus_trader": "Not run above 100,000 bars. NautilusTrader is event-driven: every bar goes through a simulated exchange and a Python strategy callback, so one call costs seconds per 100,000 bars and grows linearly with the series. Repeated and interleaved, a longer series does not fit the time budget of the job. The measured time at the ceiling is in the table, and `bench.py --engine-max-bars nautilus_trader=N` lifts the ceiling for a local run."
+        },
+        "beyond_ceiling": {
+          "nautilus_trader": 100000
+        },
         "divergence_scale": {
           "raptorbt": {
             "round_trips": 137787,
@@ -1954,70 +2156,58 @@
         "timings": {
           "manifoldbt": {
             "samples_s": [
-              0.5311088559999462,
-              0.5427174189999278,
-              0.5428811389999737,
-              0.5377721859999838,
-              0.5383665709998695,
-              0.5398651919999793,
-              0.5392422519998945
+              0.47996589700005643,
+              0.4935150449998673,
+              0.5010534959999404
             ],
-            "min_s": 0.5311088559999462,
-            "median_s": 0.5392422519998945,
-            "max_s": 0.5428811389999737,
-            "iqr_s": 0.004945232999943983,
-            "iqr_over_median": 0.009170707565298407
+            "min_s": 0.47996589700005643,
+            "median_s": 0.4935150449998673,
+            "max_s": 0.5010534959999404,
+            "iqr_s": 0.021087598999883994,
+            "iqr_over_median": 0.04272939439949529
           },
           "vectorbt": {
             "samples_s": [
-              25.608132736000016,
-              24.975536221000084,
-              24.768055013000094,
-              24.79133382400005,
-              25.619712230000005,
-              24.879596987000014,
-              24.870040404000065
+              28.079414629999974,
+              29.442635924999877,
+              28.817998062000015
             ],
-            "min_s": 24.768055013000094,
-            "median_s": 24.879596987000014,
-            "max_s": 25.619712230000005,
-            "iqr_s": 0.8167989119999675,
-            "iqr_over_median": 0.03283007005405907
+            "min_s": 28.079414629999974,
+            "median_s": 28.817998062000015,
+            "max_s": 29.442635924999877,
+            "iqr_s": 1.363221294999903,
+            "iqr_over_median": 0.04730451060712207
           },
           "raptorbt": {
             "samples_s": [
-              0.8697882490000666,
-              0.8931955940001899,
-              0.8873095670001021,
-              0.8917392460000428,
-              0.8900132859998848,
-              0.8903543019998779,
-              0.8879866929999025
+              0.8850994019999234,
+              0.8840201860000434,
+              0.8835336050001388
             ],
-            "min_s": 0.8697882490000666,
-            "median_s": 0.8900132859998848,
-            "max_s": 0.8931955940001899,
-            "iqr_s": 0.004429678999940734,
-            "iqr_over_median": 0.004977093117170958
+            "min_s": 0.8835336050001388,
+            "median_s": 0.8840201860000434,
+            "max_s": 0.8850994019999234,
+            "iqr_s": 0.0015657969997846521,
+            "iqr_over_median": 0.0017712231288173042
           }
         },
         "speedup": {
           "vectorbt": {
-            "median_of_ratios": 46.10006703470677,
-            "min": 45.623347789581786,
-            "max": 48.216354230784304
+            "median_of_ratios": 58.502936990951824,
+            "min": 57.51481287340113,
+            "max": 59.65904428507908
           },
           "raptorbt": {
-            "median_of_ratios": 1.64673055515701,
-            "min": 1.634445375344206,
-            "max": 1.6582100547685628
+            "median_of_ratios": 1.7912730218797708,
+            "min": 1.763351841776679,
+            "max": 1.8440881061177132
           }
         },
         "noisy": false,
         "cpu_over_wall": {
-          "manifoldbt": 1.0498538434440645,
-          "vectorbt": 0.9997014033607516,
-          "raptorbt": 1.007988723328102
+          "manifoldbt": 1.0443974452632474,
+          "vectorbt": 0.9999994369125252,
+          "raptorbt": 0.9989997965030677
         }
       }
     ],
@@ -2027,44 +2217,53 @@
       "engines": [
         "manifoldbt",
         "vectorbt",
-        "raptorbt"
+        "raptorbt",
+        "nautilus_trader"
       ],
       "samples_s": {
         "manifoldbt": [
-          0.46900875000005726,
-          0.430605929000194,
-          0.4297237359999144
+          0.46410306999996465,
+          0.4327693489999547,
+          0.43966461400009393
         ],
         "vectorbt": [
-          7.25397321100013,
-          7.362531011999863,
-          7.3575497960000575
+          7.363154013999974,
+          7.427940599000067,
+          7.372740119999889
         ],
         "raptorbt": [
-          0.39650831800008746,
-          0.4110155719999966,
-          0.40010278899990226
+          0.4255423210001936,
+          0.4212101299999631,
+          0.41333107100012967
+        ],
+        "nautilus_trader": [
+          2.292968202000111,
+          2.2869743370001743,
+          2.24788376399988
         ],
         "baseline": [
-          0.3637579280000409,
-          0.36391318999994837,
-          0.3669124909999937
+          0.37101216099995327,
+          0.36468700399996123,
+          0.36670702199990046
         ]
       },
       "median_s": {
-        "manifoldbt": 0.430605929000194,
-        "vectorbt": 7.3575497960000575,
-        "raptorbt": 0.40010278899990226,
-        "baseline": 0.36391318999994837
+        "manifoldbt": 0.43966461400009393,
+        "vectorbt": 7.372740119999889,
+        "raptorbt": 0.4212101299999631,
+        "nautilus_trader": 2.2869743370001743,
+        "baseline": 0.36670702199990046
       },
       "engine_share_s": {
-        "manifoldbt": 0.06669273900024564,
-        "vectorbt": 6.993636606000109,
-        "raptorbt": 0.03618959899995389
+        "manifoldbt": 0.07295759200019347,
+        "vectorbt": 7.006033097999989,
+        "raptorbt": 0.05450310800006264,
+        "nautilus_trader": 1.9202673150002738
       },
       "ratio": {
-        "vectorbt": 17.086503692792263,
-        "raptorbt": 0.9291622851754138
+        "vectorbt": 16.769009570550324,
+        "raptorbt": 0.9580259966062975,
+        "nautilus_trader": 5.201633845837968
       }
     },
     "memory": {
@@ -2073,40 +2272,52 @@
       "engines": [
         "manifoldbt",
         "vectorbt",
-        "raptorbt"
+        "raptorbt",
+        "nautilus_trader"
       ],
       "manifoldbt": {
-        "before_mb": 481.947648,
-        "peak_mb": 481.964032,
-        "added_mb": 0.016383999999959542,
-        "added_mb_per_million_bars": 0.008191999999979771,
-        "seconds": 0.047171872000035364,
+        "before_mb": 482.832384,
+        "peak_mb": 482.852864,
+        "added_mb": 0.020480000000020482,
+        "added_mb_per_million_bars": 0.010240000000010241,
+        "seconds": 0.04804365800009691,
         "mode": "memory",
         "engine": "mbt",
         "workload": "sma_cross",
         "bars": 2000000
       },
       "vectorbt": {
-        "before_mb": 602.312704,
-        "peak_mb": 850.010112,
-        "added_mb": 247.697408,
-        "added_mb_per_million_bars": 123.848704,
-        "seconds": 4.3757272180000655,
+        "before_mb": 602.157056,
+        "peak_mb": 866.01728,
+        "added_mb": 263.860224,
+        "added_mb_per_million_bars": 131.930112,
+        "seconds": 4.341360242000064,
         "mode": "memory",
         "engine": "vbt",
         "workload": "sma_cross",
         "bars": 2000000
       },
       "raptorbt": {
-        "before_mb": 327.606272,
-        "peak_mb": 368.70144,
-        "added_mb": 41.095168,
-        "added_mb_per_million_bars": 20.547584,
-        "seconds": 0.16192295799987733,
+        "before_mb": 334.04928,
+        "peak_mb": 374.607872,
+        "added_mb": 40.558591999999976,
+        "added_mb_per_million_bars": 20.279295999999988,
+        "seconds": 0.16475942300007773,
         "mode": "memory",
         "engine": "rbt",
         "workload": "sma_cross",
         "bars": 2000000
+      },
+      "nautilus_trader": {
+        "before_mb": 461.02528,
+        "peak_mb": 461.70112,
+        "added_mb": 0.6758399999999938,
+        "added_mb_per_million_bars": 6.758399999999938,
+        "seconds": 8.432393408000053,
+        "mode": "memory",
+        "engine": "nt",
+        "workload": "sma_cross",
+        "bars": 100000
       }
     },
     "sweeps": null,
@@ -2114,12 +2325,12 @@
   },
   "sweeps": {
     "schema_version": 2,
-    "generated_at": "2026-10-23T12:39:29.256456+00:00",
+    "generated_at": "2026-10-23T14:55:54.849871+00:00",
     "environment": {
       "os": "Linux",
       "os_release": "6.17.0-1022-azure",
       "arch": "x86_64",
-      "cpu": "INTEL(R) XEON(R) PLATINUM 8573C",
+      "cpu": "AMD EPYC 9V74 80-Core Processor",
       "logical_cores": 4,
       "ram_gb": 16.8,
       "python": "3.12.15",
@@ -2127,26 +2338,35 @@
         "manifoldbt": "0.28.1",
         "vectorbt": "0.28.4",
         "raptorbt": "0.9.0",
+        "nautilus_trader": "1.231.0",
         "numpy": "2.4.3",
         "numba": "0.64.0",
         "pandas": "2.3.3"
       },
-      "runner": "GitHub Actions 1000000930",
+      "runner": "GitHub Actions 1000000965",
       "ci": true,
-      "run_url": "https://github.com/manifoldbt/manifoldbt/actions/runs/39953716390",
-      "commit": "df166ae172fcb9516d13fe760cb45aaf0645225b",
+      "run_url": "https://github.com/manifoldbt/manifoldbt/actions/runs/39971035390",
+      "commit": "665023e7bc70cad74c15f71b9b4bf259ebf754c0",
       "pinned_cores": null,
       "engines": [
         "manifoldbt",
         "vectorbt",
-        "raptorbt"
-      ]
+        "raptorbt",
+        "nautilus_trader"
+      ],
+      "engine_max_bars": {
+        "nautilus_trader": 100000
+      },
+      "engine_max_sweep_combos": {
+        "nautilus_trader": 64
+      }
     },
     "reference": "manifoldbt",
     "engines": [
       "manifoldbt",
       "vectorbt",
-      "raptorbt"
+      "raptorbt",
+      "nautilus_trader"
     ],
     "reps": 1,
     "results": [
@@ -2158,7 +2378,8 @@
         "engines": [
           "manifoldbt",
           "vectorbt",
-          "raptorbt"
+          "raptorbt",
+          "nautilus_trader"
         ],
         "parity": {
           "vectorbt": {
@@ -2214,58 +2435,101 @@
               }
             },
             "note": ""
+          },
+          "nautilus_trader": {
+            "status": "exact",
+            "expected": "exact",
+            "publishable": true,
+            "diffs": {
+              "final_equity_vs_capital": 5.593261448666453e-11,
+              "round_trips_delta": 0,
+              "total_fees_vs_capital": 0.0
+            },
+            "metrics": {
+              "manifoldbt": {
+                "total_return": 0.0667552139716674,
+                "final_equity": 106675.52139716674,
+                "round_trips": 450,
+                "fills": 900,
+                "total_fees": 0.0
+              },
+              "nautilus_trader": {
+                "total_return": 0.06675521402759999,
+                "final_equity": 106675.52140276,
+                "round_trips": 450,
+                "fills": 900,
+                "total_fees": 0.0
+              }
+            },
+            "note": ""
           }
         },
         "status": "exact",
         "timings": {
           "manifoldbt": {
             "samples_s": [
-              0.004819265999998379
+              0.004292743999997128
             ],
-            "min_s": 0.004819265999998379,
-            "median_s": 0.004819265999998379,
-            "max_s": 0.004819265999998379,
+            "min_s": 0.004292743999997128,
+            "median_s": 0.004292743999997128,
+            "max_s": 0.004292743999997128,
             "iqr_s": 0.0,
             "iqr_over_median": 0.0
           },
           "vectorbt": {
             "samples_s": [
-              0.14450300600000787
+              0.3324189490000009
             ],
-            "min_s": 0.14450300600000787,
-            "median_s": 0.14450300600000787,
-            "max_s": 0.14450300600000787,
+            "min_s": 0.3324189490000009,
+            "median_s": 0.3324189490000009,
+            "max_s": 0.3324189490000009,
             "iqr_s": 0.0,
             "iqr_over_median": 0.0
           },
           "raptorbt": {
             "samples_s": [
-              0.008029931000010038
+              0.008756845999997154
             ],
-            "min_s": 0.008029931000010038,
-            "median_s": 0.008029931000010038,
-            "max_s": 0.008029931000010038,
+            "min_s": 0.008756845999997154,
+            "median_s": 0.008756845999997154,
+            "max_s": 0.008756845999997154,
+            "iqr_s": 0.0,
+            "iqr_over_median": 0.0
+          },
+          "nautilus_trader": {
+            "samples_s": [
+              4.135295411000001
+            ],
+            "min_s": 4.135295411000001,
+            "median_s": 4.135295411000001,
+            "max_s": 4.135295411000001,
             "iqr_s": 0.0,
             "iqr_over_median": 0.0
           }
         },
         "speedup": {
           "vectorbt": {
-            "median_of_ratios": 29.98444285915251,
-            "min": 29.98444285915251,
-            "max": 29.98444285915251
+            "median_of_ratios": 77.43740344176668,
+            "min": 77.43740344176668,
+            "max": 77.43740344176668
           },
           "raptorbt": {
-            "median_of_ratios": 1.666214523127119,
-            "min": 1.666214523127119,
-            "max": 1.666214523127119
+            "median_of_ratios": 2.039918057075617,
+            "min": 2.039918057075617,
+            "max": 2.039918057075617
+          },
+          "nautilus_trader": {
+            "median_of_ratios": 963.3221573433607,
+            "min": 963.3221573433607,
+            "max": 963.3221573433607
           }
         },
         "noisy": false,
         "cpu_over_wall": {
           "manifoldbt": null,
           "vectorbt": null,
-          "raptorbt": null
+          "raptorbt": null,
+          "nautilus_trader": 0.9987194600448819
         }
       }
     ],
@@ -2290,6 +2554,14 @@
         "tier_before": {
           "pro": true
         },
+        "out_of_scope": {
+          "nautilus_trader": {
+            "status": "out of scope",
+            "reason": "NautilusTrader has no parameter-grid API, so a grid is a Python loop of full backtests, each one replaying every bar through the simulated exchange. Measured: 0.97 s per backtest at 20,000 bars (mean over 16 cells spread across this grid), which puts this grid of 5,000 combinations at about 81 minutes per call. Looped grids are held to 64 combinations, so that a point stays inside the time budget of the job. It is not run.",
+            "parity_scope": "anchor grid",
+            "anchor_seconds": 15.458
+          }
+        },
         "parity": {
           "vectorbt": {
             "status": "exact",
@@ -2310,28 +2582,42 @@
               5,
               328
             ]
+          },
+          "nautilus_trader": {
+            "status": "exact",
+            "combos_compared": 16,
+            "worst_abs_return_delta": 1.4556666982912247e-10,
+            "worst_component": "return",
+            "worst_pair": [
+              103,
+              113
+            ],
+            "checked_at_combos": 16,
+            "scope": "anchor grid, not this grid"
           }
         },
         "status": "exact",
         "timings": {
           "seconds": {
-            "manifoldbt": 0.2358460119999961,
-            "vectorbt": 8.690019248999988,
-            "raptorbt": 4.90482927299999
+            "manifoldbt": 0.22803461299997707,
+            "vectorbt": 4.167468323999998,
+            "raptorbt": 5.547840041000001,
+            "nautilus_trader": null
           },
           "ratio": {
-            "vectorbt": 36.84615726722626,
-            "raptorbt": 20.79674458519176
+            "vectorbt": 18.275595398319716,
+            "raptorbt": 24.328938348497815
           },
-          "reps": 2,
-          "per_combo_us": 47.16920239999922
+          "reps": 3,
+          "per_combo_us": 45.606922599995414
         },
         "memory": {
-          "manifoldbt": 28.7,
-          "vectorbt": 2533.1,
-          "raptorbt": 37.9
+          "manifoldbt": 36.8,
+          "vectorbt": 2531.7,
+          "raptorbt": 36.5,
+          "nautilus_trader": null
         },
-        "memory_baseline_mb": 2170.8,
+        "memory_baseline_mb": 2380.4,
         "tier_after": {
           "pro": true
         }
@@ -2357,7 +2643,14 @@
           "vectorbt": {
             "status": "out of scope",
             "reason": "vectorbt materialises the simulation per combination (measured: 1.57 MB per combination at 20k bars), so this grid would need tens of gigabytes. Running it would measure the swap file.",
-            "parity_scope": "anchor grid"
+            "parity_scope": "anchor grid",
+            "anchor_seconds": 3.496
+          },
+          "nautilus_trader": {
+            "status": "out of scope",
+            "reason": "NautilusTrader has no parameter-grid API, so a grid is a Python loop of full backtests, each one replaying every bar through the simulated exchange. Measured: 1.13 s per backtest at 20,000 bars (mean over 16 cells spread across this grid), which puts this grid of 20,000 combinations at about 6.3 hours per call. Looped grids are held to 64 combinations, so that a point stays inside the time budget of the job. It is not run.",
+            "parity_scope": "anchor grid",
+            "anchor_seconds": 18.037
           }
         },
         "parity": {
@@ -2382,27 +2675,41 @@
             ],
             "checked_at_combos": 250,
             "scope": "anchor grid, not this grid"
+          },
+          "nautilus_trader": {
+            "status": "exact",
+            "combos_compared": 16,
+            "worst_abs_return_delta": 6.041978029003303e-11,
+            "worst_component": "return",
+            "worst_pair": [
+              5,
+              528
+            ],
+            "checked_at_combos": 16,
+            "scope": "anchor grid, not this grid"
           }
         },
         "status": "exact",
         "timings": {
           "seconds": {
-            "manifoldbt": 0.8963307790000101,
-            "raptorbt": 19.40427898500002,
-            "vectorbt": null
+            "manifoldbt": 0.9024305400000117,
+            "raptorbt": 21.921847259999964,
+            "vectorbt": null,
+            "nautilus_trader": null
           },
           "ratio": {
-            "raptorbt": 21.648569300106338
+            "raptorbt": 24.29200507775333
           },
-          "reps": 2,
-          "per_combo_us": 44.816538950000506
+          "reps": 3,
+          "per_combo_us": 45.12152700000058
         },
         "memory": {
-          "manifoldbt": 87.4,
+          "manifoldbt": 74.7,
           "vectorbt": null,
-          "raptorbt": null
+          "raptorbt": 58.8,
+          "nautilus_trader": null
         },
-        "memory_baseline_mb": 598.6,
+        "memory_baseline_mb": 747.8,
         "tier_after": {
           "pro": true
         }
@@ -2428,7 +2735,14 @@
           "vectorbt": {
             "status": "out of scope",
             "reason": "vectorbt materialises the simulation per combination (measured: 1.57 MB per combination at 20k bars), so this grid would need tens of gigabytes. Running it would measure the swap file.",
-            "parity_scope": "anchor grid"
+            "parity_scope": "anchor grid",
+            "anchor_seconds": 6.47
+          },
+          "nautilus_trader": {
+            "status": "out of scope",
+            "reason": "NautilusTrader has no parameter-grid API, so a grid is a Python loop of full backtests, each one replaying every bar through the simulated exchange. Measured: 10.20 s per backtest at 200,000 bars (mean over 16 cells spread across this grid), which puts this grid of 10,000 combinations at about 28.3 hours per call. Looped grids are held to 64 combinations, so that a point stays inside the time budget of the job. It is not run.",
+            "parity_scope": "anchor grid",
+            "anchor_seconds": 163.255
           }
         },
         "parity": {
@@ -2453,32 +2767,46 @@
             ],
             "checked_at_combos": 250,
             "scope": "anchor grid, not this grid"
+          },
+          "nautilus_trader": {
+            "status": "exact",
+            "combos_compared": 16,
+            "worst_abs_return_delta": 1.57424295821329e-10,
+            "worst_component": "return",
+            "worst_pair": [
+              5,
+              708
+            ],
+            "checked_at_combos": 16,
+            "scope": "anchor grid, not this grid"
           }
         },
         "status": "exact",
         "timings": {
           "seconds": {
-            "manifoldbt": 3.7057964139999626,
-            "raptorbt": 112.86968341200003,
-            "vectorbt": null
+            "manifoldbt": 3.534871575000011,
+            "raptorbt": 134.56995109699994,
+            "vectorbt": null,
+            "nautilus_trader": null
           },
           "ratio": {
-            "raptorbt": 30.457605006468974
+            "raptorbt": 38.06926170917525
           },
-          "reps": 2,
-          "per_combo_us": 370.57964139999626
+          "reps": 3,
+          "per_combo_us": 353.4871575000011
         },
         "memory": {
-          "manifoldbt": 345.1,
+          "manifoldbt": 342.8,
           "vectorbt": null,
-          "raptorbt": null
+          "raptorbt": 368.6,
+          "nautilus_trader": null
         },
-        "memory_baseline_mb": 1690.5,
+        "memory_baseline_mb": 1092.3,
         "tier_after": {
           "pro": true
         }
       }
     ],
-    "sweep_reps": 2
+    "sweep_reps": 3
   }
 }
