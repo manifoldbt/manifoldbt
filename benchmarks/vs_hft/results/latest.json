@@ -1,0 +1,3093 @@
+{
+  "repo": "manifoldbt/manifoldbt",
+  "run_id": "40024529245",
+  "run_url": "https://github.com/manifoldbt/manifoldbt/actions/runs/40024529245",
+  "commit": "29ffd98743c816c523fa7a126f0e6cf6a58eb6e9",
+  "run_started_at": "2026-10-23T21:08:16Z",
+  "conclusion": "success",
+  "synced_at": "2026-10-23T21:35:28.023778+00:00",
+  "books": {
+    "schema_version": 3,
+    "kind": "vs_hftbacktest_nautilus",
+    "started_at": "2026-10-23T21:09:56Z",
+    "environment": {
+      "python": "3.12.15",
+      "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+      "machine": "x86_64",
+      "cpu_count_logical": 4,
+      "cpu_count_physical": 2,
+      "ram_gb": 16.8,
+      "versions": {
+        "manifoldbt": "0.28.1",
+        "hftbacktest": "2.4.4",
+        "nautilus_trader": "1.231.0",
+        "numba": "0.68.0",
+        "numpy": "2.2.6",
+        "pandas": "3.1.0",
+        "pyarrow": "26.0.0"
+      },
+      "manifoldbt_native_sha256": "b4ee3697b37e3ff301476c2f2b42acdb7a5d5f2a307084a828a309b61183b927"
+    },
+    "args": {
+      "day": "2025-08-13",
+      "workloads": [
+        "mm_ladder_l2",
+        "mm_touch_bbo",
+        "flow_taker_bbo",
+        "probe_l2_zero",
+        "probe_l2_nominal"
+      ],
+      "engines": [
+        "manifoldbt",
+        "hftbacktest",
+        "nautilus"
+      ],
+      "reps": 3,
+      "probe_window": [
+        36000,
+        39600
+      ],
+      "itch": null,
+      "no_replay": false,
+      "fail_on_blocked": true,
+      "tmp": "/home/runner/work/manifoldbt/manifoldbt/bench-data/tmp",
+      "out": "results-books.json"
+    },
+    "workloads": {
+      "mm_ladder_l2": {
+        "doc": "two post-only quotes, one level back per clip held (example 31), 25 levels",
+        "kind": "mm",
+        "tier": "l2",
+        "latency": "nominal",
+        "window_s": null,
+        "engines": {
+          "manifoldbt": {
+            "status": "ok",
+            "strategy_s": {
+              "n": 3,
+              "min": 0.646,
+              "median": 0.649,
+              "max": 0.652,
+              "iqr": 0.006000000000000005,
+              "noisy": false
+            },
+            "cold_s": {
+              "n": 3,
+              "min": 1.09,
+              "median": 1.1,
+              "max": 1.133,
+              "iqr": 0.04299999999999993,
+              "noisy": false
+            },
+            "prepare_s": {
+              "n": 3,
+              "min": 0.023,
+              "median": 0.026,
+              "max": 5.872,
+              "iqr": 5.849,
+              "noisy": true
+            },
+            "engine_only_s": null,
+            "convert_s": null,
+            "replay_s": {
+              "n": 3,
+              "min": 0.214,
+              "median": 0.215,
+              "max": 0.215,
+              "iqr": 0.0010000000000000009,
+              "noisy": false
+            },
+            "memory_mb": {
+              "baseline_data": 334.2,
+              "peak": 868.1,
+              "added_by_engine": 533.9
+            },
+            "result": {
+              "posts": 133494,
+              "requotes": 95025,
+              "fills": 36579,
+              "volume": 286.782394,
+              "position": 0.016587999999999926,
+              "fees": 0.0,
+              "orders_served": 28766
+            }
+          },
+          "hftbacktest": {
+            "status": "ok",
+            "strategy_s": {
+              "n": 3,
+              "min": 1.768,
+              "median": 1.773,
+              "max": 1.782,
+              "iqr": 0.014000000000000012,
+              "noisy": false
+            },
+            "cold_s": {
+              "n": 3,
+              "min": 8.469,
+              "median": 8.499,
+              "max": 8.542,
+              "iqr": 0.0730000000000004,
+              "noisy": false
+            },
+            "prepare_s": {
+              "n": 3,
+              "min": 1.454,
+              "median": 1.466,
+              "max": 1.468,
+              "iqr": 0.014000000000000012,
+              "noisy": false
+            },
+            "engine_only_s": null,
+            "convert_s": null,
+            "replay_s": {
+              "n": 3,
+              "min": 0.497,
+              "median": 0.498,
+              "max": 0.499,
+              "iqr": 0.0020000000000000018,
+              "noisy": false
+            },
+            "memory_mb": {
+              "baseline_data": 334.2,
+              "peak": 1975.4,
+              "added_by_engine": 1641.2
+            },
+            "result": {
+              "code_end": 1,
+              "wakes": 863986,
+              "last_wake": 863986,
+              "n_wakes_planned": 863987,
+              "posts": 133194,
+              "cancels": 94864,
+              "requotes": 94825,
+              "submit_errors": 0,
+              "fills": 28897,
+              "volume": 288.9699999998822,
+              "position": 0.03,
+              "balance": -7634.695999999976,
+              "fee": 0.0
+            }
+          },
+          "nautilus": {
+            "status": "ok",
+            "strategy_s": {
+              "n": 3,
+              "min": 193.31,
+              "median": 194.174,
+              "max": 198.73,
+              "iqr": 5.4199999999999875,
+              "noisy": false
+            },
+            "cold_s": {
+              "n": 3,
+              "min": 193.31,
+              "median": 194.174,
+              "max": 198.73,
+              "iqr": 5.4199999999999875,
+              "noisy": false
+            },
+            "prepare_s": {
+              "n": 3,
+              "min": 0.0,
+              "median": 0.0,
+              "max": 0.0,
+              "iqr": 0.0,
+              "noisy": false
+            },
+            "engine_only_s": {
+              "n": 3,
+              "min": 180.206,
+              "median": 180.681,
+              "max": 185.367,
+              "iqr": 5.161000000000001,
+              "noisy": false
+            },
+            "convert_s": {
+              "n": 3,
+              "min": 11.261,
+              "median": 11.41,
+              "max": 11.609,
+              "iqr": 0.34800000000000075,
+              "noisy": false
+            },
+            "replay_s": {
+              "n": 3,
+              "min": 60.241,
+              "median": 60.52,
+              "max": 61.844,
+              "iqr": 1.6030000000000015,
+              "noisy": false
+            },
+            "memory_mb": {
+              "baseline_data": 334.1,
+              "peak": 1596.7,
+              "added_by_engine": 1262.6
+            },
+            "result": {
+              "wakes": 863987,
+              "posts": 116412,
+              "cancels": 91042,
+              "requotes": 90915,
+              "rejected": 2155,
+              "fills": 25663,
+              "volume": 252.82962,
+              "position": -0.002202000000000034,
+              "engine_seconds": 185.367,
+              "convert_seconds": 11.41,
+              "run_total_seconds": 196.776
+            }
+          }
+        },
+        "parity": {
+          "reference": "manifoldbt",
+          "pairs": {
+            "hftbacktest_vs_manifoldbt": {
+              "quotes": {
+                "hftbacktest": 133194,
+                "manifoldbt": 133494,
+                "common": 130505,
+                "same_price": 124951,
+                "only_hftbacktest": 2689,
+                "only_manifoldbt": 2989
+              },
+              "first_divergence": {
+                "wake": 310,
+                "side": 1
+              },
+              "verdicts": {
+                "both_served": 27222,
+                "hftbacktest_only": 6,
+                "manifoldbt_only": 49,
+                "neither": 97674
+              },
+              "same_executed_qty_when_both_served": 27073,
+              "fill_time_lag_ms": {
+                "p10": 0.0,
+                "median": 0.0,
+                "p90": 0.0
+              },
+              "served_quotes": {
+                "hftbacktest": 28897,
+                "manifoldbt": 28766
+              },
+              "pnl_common": {
+                "hftbacktest": {
+                  "pnl": -3935.127499999947,
+                  "position": 0.030000000000000304,
+                  "cash": -7634.695999999984
+                },
+                "manifoldbt": {
+                  "pnl": -3906.881793199987,
+                  "position": 0.016587999999999648,
+                  "cash": -5952.496535799944
+                }
+              }
+            },
+            "nautilus_vs_manifoldbt": {
+              "quotes": {
+                "nautilus": 116412,
+                "manifoldbt": 133494,
+                "common": 102871,
+                "same_price": 72848,
+                "only_nautilus": 13541,
+                "only_manifoldbt": 30623
+              },
+              "first_divergence": {
+                "wake": 44,
+                "side": 1
+              },
+              "verdicts": {
+                "both_served": 18361,
+                "nautilus_only": 95,
+                "manifoldbt_only": 293,
+                "neither": 54099
+              },
+              "same_executed_qty_when_both_served": 18104,
+              "fill_time_lag_ms": {
+                "p10": 2.0,
+                "median": 17.0,
+                "p90": 156.0
+              },
+              "served_quotes": {
+                "nautilus": 25663,
+                "manifoldbt": 28766
+              },
+              "pnl_common": {
+                "nautilus": {
+                  "pnl": -3460.6105959000374,
+                  "position": -0.002202000000000086,
+                  "cash": -3189.062268000027
+                },
+                "manifoldbt": {
+                  "pnl": -3906.881793199987,
+                  "position": 0.016587999999999648,
+                  "cash": -5952.496535799944
+                }
+              }
+            }
+          },
+          "reference_used": "manifoldbt"
+        }
+      },
+      "mm_touch_bbo": {
+        "doc": "the same maker on a best-bid/ask feed: it can only join the touch",
+        "kind": "mm",
+        "tier": "bbo",
+        "latency": "nominal",
+        "window_s": null,
+        "engines": {
+          "manifoldbt": {
+            "status": "ok",
+            "strategy_s": {
+              "n": 3,
+              "min": 0.482,
+              "median": 0.494,
+              "max": 0.5,
+              "iqr": 0.018000000000000016,
+              "noisy": false
+            },
+            "cold_s": {
+              "n": 3,
+              "min": 0.755,
+              "median": 0.757,
+              "max": 0.771,
+              "iqr": 0.016000000000000014,
+              "noisy": false
+            },
+            "prepare_s": {
+              "n": 3,
+              "min": 0.023,
+              "median": 0.025,
+              "max": 5.451,
+              "iqr": 5.428,
+              "noisy": true
+            },
+            "engine_only_s": null,
+            "convert_s": null,
+            "replay_s": {
+              "n": 3,
+              "min": 0.19,
+              "median": 0.192,
+              "max": 0.192,
+              "iqr": 0.0020000000000000018,
+              "noisy": false
+            },
+            "memory_mb": {
+              "baseline_data": 334.2,
+              "peak": 732.6,
+              "added_by_engine": 398.4
+            },
+            "result": {
+              "posts": 76847,
+              "requotes": 35342,
+              "fills": 43664,
+              "volume": 306.549566,
+              "position": 0.01511399999999986,
+              "fees": 0.0,
+              "orders_served": 30731
+            }
+          },
+          "hftbacktest": {
+            "status": "ok",
+            "strategy_s": {
+              "n": 3,
+              "min": 0.424,
+              "median": 0.432,
+              "max": 0.437,
+              "iqr": 0.013000000000000012,
+              "noisy": false
+            },
+            "cold_s": {
+              "n": 3,
+              "min": 7.049,
+              "median": 7.349,
+              "max": 7.394,
+              "iqr": 0.34499999999999975,
+              "noisy": false
+            },
+            "prepare_s": {
+              "n": 3,
+              "min": 0.978,
+              "median": 1.014,
+              "max": 1.022,
+              "iqr": 0.04400000000000004,
+              "noisy": false
+            },
+            "engine_only_s": null,
+            "convert_s": null,
+            "replay_s": {
+              "n": 3,
+              "min": 0.08,
+              "median": 0.081,
+              "max": 0.082,
+              "iqr": 0.0020000000000000018,
+              "noisy": false
+            },
+            "memory_mb": {
+              "baseline_data": 334.1,
+              "peak": 725.8,
+              "added_by_engine": 391.7
+            },
+            "result": {
+              "code_end": 1,
+              "wakes": 863986,
+              "last_wake": 863986,
+              "n_wakes_planned": 863987,
+              "posts": 76682,
+              "cancels": 35321,
+              "requotes": 35321,
+              "submit_errors": 0,
+              "fills": 31023,
+              "volume": 310.22999999986286,
+              "position": 0.03,
+              "balance": -7954.284999999966,
+              "fee": 0.0
+            }
+          },
+          "nautilus": {
+            "status": "ok",
+            "strategy_s": {
+              "n": 3,
+              "min": 85.158,
+              "median": 90.449,
+              "max": 90.502,
+              "iqr": 5.343999999999994,
+              "noisy": false
+            },
+            "cold_s": {
+              "n": 3,
+              "min": 85.158,
+              "median": 90.449,
+              "max": 90.502,
+              "iqr": 5.343999999999994,
+              "noisy": false
+            },
+            "prepare_s": {
+              "n": 3,
+              "min": 0.0,
+              "median": 0.0,
+              "max": 0.0,
+              "iqr": 0.0,
+              "noisy": false
+            },
+            "engine_only_s": {
+              "n": 3,
+              "min": 81.52,
+              "median": 86.697,
+              "max": 86.812,
+              "iqr": 5.292000000000002,
+              "noisy": false
+            },
+            "convert_s": {
+              "n": 3,
+              "min": 1.951,
+              "median": 1.951,
+              "max": 1.964,
+              "iqr": 0.0129999999999999,
+              "noisy": false
+            },
+            "replay_s": {
+              "n": 3,
+              "min": 10.114,
+              "median": 10.176,
+              "max": 10.29,
+              "iqr": 0.17599999999999838,
+              "noisy": false
+            },
+            "memory_mb": {
+              "baseline_data": 334.2,
+              "peak": 1202.9,
+              "added_by_engine": 868.7
+            },
+            "result": {
+              "wakes": 863987,
+              "posts": 68913,
+              "cancels": 37065,
+              "requotes": 37009,
+              "rejected": 6449,
+              "fills": 29502,
+              "volume": 290.506826,
+              "position": -0.004978000000000423,
+              "engine_seconds": 86.697,
+              "convert_seconds": 1.964,
+              "run_total_seconds": 88.661
+            }
+          }
+        },
+        "parity": {
+          "reference": "manifoldbt",
+          "pairs": {
+            "hftbacktest_vs_manifoldbt": {
+              "quotes": {
+                "hftbacktest": 76682,
+                "manifoldbt": 76847,
+                "common": 75198,
+                "same_price": 75198,
+                "only_hftbacktest": 1484,
+                "only_manifoldbt": 1649
+              },
+              "first_divergence": {
+                "wake": 488,
+                "side": -1
+              },
+              "verdicts": {
+                "both_served": 30102,
+                "hftbacktest_only": 17,
+                "manifoldbt_only": 24,
+                "neither": 45055
+              },
+              "same_executed_qty_when_both_served": 29966,
+              "fill_time_lag_ms": {
+                "p10": 0.0,
+                "median": 0.0,
+                "p90": 0.0
+              },
+              "served_quotes": {
+                "hftbacktest": 31023,
+                "manifoldbt": 30731
+              },
+              "pnl_common": {
+                "hftbacktest": {
+                  "pnl": -4254.716500000013,
+                  "position": 0.029999999999999895,
+                  "cash": -7954.285
+                },
+                "manifoldbt": {
+                  "pnl": -4237.563058399975,
+                  "position": 0.015113999999999891,
+                  "cash": -6101.405668699961
+                }
+              }
+            },
+            "nautilus_vs_manifoldbt": {
+              "quotes": {
+                "nautilus": 68913,
+                "manifoldbt": 76847,
+                "common": 63539,
+                "same_price": 63539,
+                "only_nautilus": 5374,
+                "only_manifoldbt": 13308
+              },
+              "first_divergence": {
+                "wake": 37,
+                "side": -1
+              },
+              "verdicts": {
+                "both_served": 25123,
+                "nautilus_only": 998,
+                "manifoldbt_only": 631,
+                "neither": 36787
+              },
+              "same_executed_qty_when_both_served": 25045,
+              "fill_time_lag_ms": {
+                "p10": -1.0,
+                "median": 2.0,
+                "p90": 155.0
+              },
+              "served_quotes": {
+                "nautilus": 29502,
+                "manifoldbt": 30731
+              },
+              "pnl_common": {
+                "nautilus": {
+                  "pnl": -3787.8115475000222,
+                  "position": -0.004978000000000281,
+                  "cash": -3173.9298143999877
+                },
+                "manifoldbt": {
+                  "pnl": -4237.563058399975,
+                  "position": 0.015113999999999891,
+                  "cash": -6101.405668699961
+                }
+              }
+            }
+          },
+          "reference_used": "manifoldbt"
+        }
+      },
+      "flow_taker_bbo": {
+        "doc": "aggressor-imbalance taker on the trade clock (example 33), market orders",
+        "kind": "taker",
+        "tier": "bbo",
+        "latency": "nominal",
+        "window_s": null,
+        "engines": {
+          "manifoldbt": {
+            "status": "ok",
+            "strategy_s": {
+              "n": 3,
+              "min": 0.093,
+              "median": 0.099,
+              "max": 0.101,
+              "iqr": 0.008000000000000007,
+              "noisy": false
+            },
+            "cold_s": {
+              "n": 3,
+              "min": 0.358,
+              "median": 0.36,
+              "max": 0.368,
+              "iqr": 0.010000000000000009,
+              "noisy": false
+            },
+            "prepare_s": {
+              "n": 3,
+              "min": 0.023,
+              "median": 0.024,
+              "max": 0.024,
+              "iqr": 0.0010000000000000009,
+              "noisy": false
+            },
+            "engine_only_s": null,
+            "convert_s": null,
+            "replay_s": null,
+            "memory_mb": {
+              "baseline_data": 334.2,
+              "peak": 669.9,
+              "added_by_engine": 335.7
+            },
+            "result": {
+              "fills": 364,
+              "orders": 364,
+              "position": -0.010000000000000009
+            }
+          },
+          "hftbacktest": {
+            "status": "ok",
+            "strategy_s": {
+              "n": 3,
+              "min": 0.106,
+              "median": 0.106,
+              "max": 0.108,
+              "iqr": 0.0020000000000000018,
+              "noisy": false
+            },
+            "cold_s": {
+              "n": 3,
+              "min": 4.107,
+              "median": 4.117,
+              "max": 4.21,
+              "iqr": 0.10299999999999976,
+              "noisy": false
+            },
+            "prepare_s": {
+              "n": 3,
+              "min": 0.958,
+              "median": 0.961,
+              "max": 0.971,
+              "iqr": 0.013000000000000012,
+              "noisy": false
+            },
+            "engine_only_s": null,
+            "convert_s": null,
+            "replay_s": null,
+            "memory_mb": {
+              "baseline_data": 334.2,
+              "peak": 684.1,
+              "added_by_engine": 349.9
+            },
+            "result": {
+              "prints": 767526,
+              "decisions": 364,
+              "orders": 364,
+              "fills": 364,
+              "position": -0.01,
+              "balance": 1243.6339999999987,
+              "fee": 350.2162807999999,
+              "volume": 7.269999999999933,
+              "code_end": 1
+            }
+          },
+          "nautilus": {
+            "status": "ok",
+            "strategy_s": {
+              "n": 3,
+              "min": 13.701,
+              "median": 13.763,
+              "max": 14.031,
+              "iqr": 0.33000000000000007,
+              "noisy": false
+            },
+            "cold_s": {
+              "n": 3,
+              "min": 13.701,
+              "median": 13.763,
+              "max": 14.031,
+              "iqr": 0.33000000000000007,
+              "noisy": false
+            },
+            "prepare_s": {
+              "n": 3,
+              "min": 0.0,
+              "median": 0.0,
+              "max": 0.0,
+              "iqr": 0.0,
+              "noisy": false
+            },
+            "engine_only_s": {
+              "n": 3,
+              "min": 10.428,
+              "median": 10.499,
+              "max": 10.747,
+              "iqr": 0.31899999999999906,
+              "noisy": false
+            },
+            "convert_s": {
+              "n": 3,
+              "min": 1.921,
+              "median": 1.936,
+              "max": 1.936,
+              "iqr": 0.014999999999999902,
+              "noisy": false
+            },
+            "replay_s": null,
+            "memory_mb": {
+              "baseline_data": 334.2,
+              "peak": 857.4,
+              "added_by_engine": 523.2
+            },
+            "result": {
+              "prints": 767526,
+              "decisions": 364,
+              "orders": 364,
+              "fills": 447,
+              "position": -0.01000000000000001,
+              "rejected": 0,
+              "volume": 7.2700000000000005,
+              "engine_seconds": 10.747,
+              "convert_seconds": 1.936,
+              "run_total_seconds": 12.683
+            }
+          }
+        },
+        "parity": {
+          "reference": "manifoldbt",
+          "pairs": {
+            "hftbacktest_vs_manifoldbt": {
+              "decisions": {
+                "a": 364,
+                "b": 364,
+                "identical_time_and_side": true
+              },
+              "orders": {
+                "a": 364,
+                "b": 364,
+                "identical": true
+              },
+              "fills": {
+                "a": 364,
+                "b": 364,
+                "volume_a": 7.27,
+                "volume_b": 7.27,
+                "notional_diff_bp": -0.03400173025468552
+              }
+            },
+            "nautilus_vs_manifoldbt": {
+              "decisions": {
+                "a": 364,
+                "b": 364,
+                "identical_time_and_side": true
+              },
+              "orders": {
+                "a": 364,
+                "b": 364,
+                "identical": true
+              },
+              "fills": {
+                "a": 447,
+                "b": 364,
+                "volume_a": 7.27,
+                "volume_b": 7.27,
+                "notional_diff_bp": 0.005744693407275645
+              }
+            }
+          },
+          "reference_used": "manifoldbt"
+        }
+      },
+      "probe_l2_zero": {
+        "doc": "one quote a side at the touch re-posted at every wake-up, no inventory",
+        "kind": "mm",
+        "tier": "l2",
+        "latency": "zero",
+        "window_s": [
+          36000,
+          39600
+        ],
+        "engines": {
+          "manifoldbt": {
+            "status": "ok",
+            "strategy_s": {
+              "n": 3,
+              "min": 0.312,
+              "median": 0.314,
+              "max": 0.314,
+              "iqr": 0.0020000000000000018,
+              "noisy": false
+            },
+            "cold_s": {
+              "n": 3,
+              "min": 0.619,
+              "median": 0.619,
+              "max": 0.629,
+              "iqr": 0.010000000000000009,
+              "noisy": false
+            },
+            "prepare_s": {
+              "n": 3,
+              "min": 0.023,
+              "median": 0.024,
+              "max": 0.024,
+              "iqr": 0.0010000000000000009,
+              "noisy": false
+            },
+            "engine_only_s": null,
+            "convert_s": null,
+            "replay_s": null,
+            "memory_mb": {
+              "baseline_data": 116.6,
+              "peak": 486.2,
+              "added_by_engine": 369.6
+            },
+            "result": {
+              "posts": 71994,
+              "fills": 1792,
+              "volume": 15.865446,
+              "position": -0.252666
+            }
+          },
+          "hftbacktest": {
+            "status": "ok",
+            "strategy_s": {
+              "n": 3,
+              "min": 0.106,
+              "median": 0.106,
+              "max": 0.107,
+              "iqr": 0.0010000000000000009,
+              "noisy": false
+            },
+            "cold_s": {
+              "n": 3,
+              "min": 6.371,
+              "median": 6.375,
+              "max": 6.647,
+              "iqr": 0.2759999999999998,
+              "noisy": false
+            },
+            "prepare_s": {
+              "n": 3,
+              "min": 0.884,
+              "median": 0.886,
+              "max": 0.917,
+              "iqr": 0.03300000000000003,
+              "noisy": false
+            },
+            "engine_only_s": null,
+            "convert_s": null,
+            "replay_s": null,
+            "memory_mb": {
+              "baseline_data": 114.3,
+              "peak": 486.2,
+              "added_by_engine": 371.9
+            },
+            "result": {
+              "code_end": 1,
+              "wakes": 35997,
+              "last_wake": 35997,
+              "n_wakes_planned": 35999,
+              "posts": 71994,
+              "cancels": 70402,
+              "requotes": 70402,
+              "submit_errors": 0,
+              "fills": 1590,
+              "volume": 15.899999999999705,
+              "position": -0.30000000000000004,
+              "balance": 35961.508999999955,
+              "fee": 0.0
+            }
+          },
+          "nautilus": {
+            "status": "ok",
+            "strategy_s": {
+              "n": 3,
+              "min": 32.905,
+              "median": 32.938,
+              "max": 33.156,
+              "iqr": 0.25099999999999767,
+              "noisy": false
+            },
+            "cold_s": {
+              "n": 3,
+              "min": 32.905,
+              "median": 32.938,
+              "max": 33.156,
+              "iqr": 0.25099999999999767,
+              "noisy": false
+            },
+            "prepare_s": {
+              "n": 3,
+              "min": 0.0,
+              "median": 0.0,
+              "max": 0.0,
+              "iqr": 0.0,
+              "noisy": false
+            },
+            "engine_only_s": {
+              "n": 3,
+              "min": 30.988,
+              "median": 31.048,
+              "max": 31.249,
+              "iqr": 0.26099999999999923,
+              "noisy": false
+            },
+            "convert_s": {
+              "n": 3,
+              "min": 0.493,
+              "median": 0.502,
+              "max": 0.509,
+              "iqr": 0.016000000000000014,
+              "noisy": false
+            },
+            "replay_s": null,
+            "memory_mb": {
+              "baseline_data": 114.5,
+              "peak": 912.6,
+              "added_by_engine": 798.1
+            },
+            "result": {
+              "wakes": 35999,
+              "posts": 71998,
+              "cancels": 70776,
+              "requotes": 70776,
+              "rejected": 0,
+              "fills": 1311,
+              "volume": 12.596011999999998,
+              "position": -0.2616199999999991,
+              "engine_seconds": 30.988,
+              "convert_seconds": 0.509,
+              "run_total_seconds": 31.497
+            }
+          }
+        },
+        "parity": {
+          "reference": "manifoldbt",
+          "pairs": {
+            "hftbacktest_vs_manifoldbt": {
+              "quotes": {
+                "hftbacktest": 71994,
+                "manifoldbt": 71994,
+                "common": 71994,
+                "same_price": 71994,
+                "only_hftbacktest": 0,
+                "only_manifoldbt": 0
+              },
+              "first_divergence": null,
+              "verdicts": {
+                "both_served": 1590,
+                "hftbacktest_only": 0,
+                "manifoldbt_only": 16,
+                "neither": 70388
+              },
+              "same_executed_qty_when_both_served": 1561,
+              "fill_time_lag_ms": {
+                "p10": 0.0,
+                "median": 0.0,
+                "p90": 0.0
+              },
+              "served_quotes": {
+                "hftbacktest": 1590,
+                "manifoldbt": 1606
+              },
+              "pnl_common": {
+                "hftbacktest": {
+                  "pnl": -1034.1760000000213,
+                  "position": -0.3,
+                  "cash": 35961.50899999998
+                },
+                "manifoldbt": {
+                  "pnl": -887.9954960999712,
+                  "position": -0.2526659999999999,
+                  "cash": 30270.510324600014
+                }
+              }
+            },
+            "nautilus_vs_manifoldbt": {
+              "quotes": {
+                "nautilus": 71998,
+                "manifoldbt": 71994,
+                "common": 71994,
+                "same_price": 71994,
+                "only_nautilus": 4,
+                "only_manifoldbt": 0
+              },
+              "first_divergence": {
+                "wake": 35998,
+                "side": -1
+              },
+              "verdicts": {
+                "both_served": 1311,
+                "nautilus_only": 0,
+                "manifoldbt_only": 295,
+                "neither": 70388
+              },
+              "same_executed_qty_when_both_served": 1249,
+              "fill_time_lag_ms": {
+                "p10": 0.0,
+                "median": 0.0,
+                "p90": 86.0
+              },
+              "served_quotes": {
+                "nautilus": 1311,
+                "manifoldbt": 1606
+              },
+              "pnl_common": {
+                "nautilus": {
+                  "pnl": -898.1203713000104,
+                  "position": -0.2616199999999999,
+                  "cash": 31364.583327699977
+                },
+                "manifoldbt": {
+                  "pnl": -887.9954960999712,
+                  "position": -0.2526659999999999,
+                  "cash": 30270.510324600014
+                }
+              }
+            }
+          },
+          "reference_used": "manifoldbt"
+        }
+      },
+      "probe_l2_nominal": {
+        "doc": "the same probe under the 5/5/5/2 ms venue",
+        "kind": "mm",
+        "tier": "l2",
+        "latency": "nominal",
+        "window_s": [
+          36000,
+          39600
+        ],
+        "engines": {
+          "manifoldbt": {
+            "status": "ok",
+            "strategy_s": {
+              "n": 3,
+              "min": 0.311,
+              "median": 0.313,
+              "max": 0.314,
+              "iqr": 0.0030000000000000027,
+              "noisy": false
+            },
+            "cold_s": {
+              "n": 3,
+              "min": 0.62,
+              "median": 0.632,
+              "max": 0.634,
+              "iqr": 0.014000000000000012,
+              "noisy": false
+            },
+            "prepare_s": {
+              "n": 3,
+              "min": 0.022,
+              "median": 0.023,
+              "max": 0.026,
+              "iqr": 0.004,
+              "noisy": true
+            },
+            "engine_only_s": null,
+            "convert_s": null,
+            "replay_s": null,
+            "memory_mb": {
+              "baseline_data": 114.3,
+              "peak": 486.2,
+              "added_by_engine": 371.9
+            },
+            "result": {
+              "posts": 71994,
+              "fills": 1567,
+              "volume": 14.25317,
+              "position": -0.4706680000000001
+            }
+          },
+          "hftbacktest": {
+            "status": "ok",
+            "strategy_s": {
+              "n": 3,
+              "min": 0.106,
+              "median": 0.108,
+              "max": 0.108,
+              "iqr": 0.0020000000000000018,
+              "noisy": false
+            },
+            "cold_s": {
+              "n": 3,
+              "min": 6.4,
+              "median": 6.442,
+              "max": 6.601,
+              "iqr": 0.20099999999999962,
+              "noisy": false
+            },
+            "prepare_s": {
+              "n": 3,
+              "min": 0.89,
+              "median": 0.902,
+              "max": 0.911,
+              "iqr": 0.02100000000000002,
+              "noisy": false
+            },
+            "engine_only_s": null,
+            "convert_s": null,
+            "replay_s": null,
+            "memory_mb": {
+              "baseline_data": 114.3,
+              "peak": 486.2,
+              "added_by_engine": 371.9
+            },
+            "result": {
+              "code_end": 1,
+              "wakes": 35998,
+              "last_wake": 35998,
+              "n_wakes_planned": 35999,
+              "posts": 71996,
+              "cancels": 70144,
+              "requotes": 70144,
+              "submit_errors": 0,
+              "fills": 1431,
+              "volume": 14.30999999999974,
+              "position": -0.4900000000000002,
+              "balance": 58842.03499999997,
+              "fee": 0.0
+            }
+          },
+          "nautilus": {
+            "status": "ok",
+            "strategy_s": {
+              "n": 3,
+              "min": 34.2,
+              "median": 34.42,
+              "max": 34.432,
+              "iqr": 0.23199999999999932,
+              "noisy": false
+            },
+            "cold_s": {
+              "n": 3,
+              "min": 34.2,
+              "median": 34.42,
+              "max": 34.432,
+              "iqr": 0.23199999999999932,
+              "noisy": false
+            },
+            "prepare_s": {
+              "n": 3,
+              "min": 0.0,
+              "median": 0.0,
+              "max": 0.0,
+              "iqr": 0.0,
+              "noisy": false
+            },
+            "engine_only_s": {
+              "n": 3,
+              "min": 32.286,
+              "median": 32.507,
+              "max": 32.529,
+              "iqr": 0.2430000000000021,
+              "noisy": false
+            },
+            "convert_s": {
+              "n": 3,
+              "min": 0.488,
+              "median": 0.489,
+              "max": 0.49,
+              "iqr": 0.0020000000000000018,
+              "noisy": false
+            },
+            "replay_s": null,
+            "memory_mb": {
+              "baseline_data": 114.3,
+              "peak": 916.9,
+              "added_by_engine": 802.6
+            },
+            "result": {
+              "wakes": 35999,
+              "posts": 71998,
+              "cancels": 71640,
+              "requotes": 71647,
+              "rejected": 1073,
+              "fills": 1137,
+              "volume": 11.20737,
+              "position": -0.2669020000000001,
+              "engine_seconds": 32.529,
+              "convert_seconds": 0.49,
+              "run_total_seconds": 33.019
+            }
+          }
+        },
+        "parity": {
+          "reference": "manifoldbt",
+          "pairs": {
+            "hftbacktest_vs_manifoldbt": {
+              "quotes": {
+                "hftbacktest": 71996,
+                "manifoldbt": 71994,
+                "common": 71994,
+                "same_price": 71994,
+                "only_hftbacktest": 2,
+                "only_manifoldbt": 0
+              },
+              "first_divergence": {
+                "wake": 35998,
+                "side": -1
+              },
+              "verdicts": {
+                "both_served": 1430,
+                "hftbacktest_only": 1,
+                "manifoldbt_only": 8,
+                "neither": 70555
+              },
+              "same_executed_qty_when_both_served": 1408,
+              "fill_time_lag_ms": {
+                "p10": 0.0,
+                "median": 0.0,
+                "p90": 0.0
+              },
+              "served_quotes": {
+                "hftbacktest": 1431,
+                "manifoldbt": 1438
+              },
+              "pnl_common": {
+                "hftbacktest": {
+                  "pnl": -1584.2504999999728,
+                  "position": -0.4899999999999997,
+                  "cash": 58842.03499999999
+                },
+                "manifoldbt": {
+                  "pnl": -1522.1716925000292,
+                  "position": -0.47066800000000014,
+                  "cash": 56520.111866099985
+                }
+              }
+            },
+            "nautilus_vs_manifoldbt": {
+              "quotes": {
+                "nautilus": 71998,
+                "manifoldbt": 71994,
+                "common": 71994,
+                "same_price": 71994,
+                "only_nautilus": 4,
+                "only_manifoldbt": 0
+              },
+              "first_divergence": {
+                "wake": 35998,
+                "side": -1
+              },
+              "verdicts": {
+                "both_served": 1132,
+                "nautilus_only": 5,
+                "manifoldbt_only": 306,
+                "neither": 70551
+              },
+              "same_executed_qty_when_both_served": 1111,
+              "fill_time_lag_ms": {
+                "p10": 2.0,
+                "median": 2.0,
+                "p90": 84.0
+              },
+              "served_quotes": {
+                "nautilus": 1137,
+                "manifoldbt": 1438
+              },
+              "pnl_common": {
+                "nautilus": {
+                  "pnl": -902.9490433000137,
+                  "position": -0.26690200000000003,
+                  "cash": 32011.125349599988
+                },
+                "manifoldbt": {
+                  "pnl": -1522.1716925000292,
+                  "position": -0.47066800000000014,
+                  "cash": 56520.111866099985
+                }
+              }
+            }
+          },
+          "reference_used": "manifoldbt"
+        }
+      }
+    },
+    "data": {
+      "day": "2025-08-13",
+      "prepared_npz": "2025-08-13_full.npz",
+      "meta": {
+        "day": "2025-08-13",
+        "window_ns": [
+          1755043201229000000,
+          1755129600000000000
+        ],
+        "window_tag": "full",
+        "raw": {
+          "book": {
+            "url": "https://quote-saver.bycsi.com/orderbook/spot/BTCUSDT/2025-08-13_BTCUSDT_ob200.data.zip",
+            "bytes": 89852338,
+            "seconds": 6.82,
+            "sha256": "63e1f91c9b3e28fd0189a0bf1773eadf0e02cc0d63c1608d4403013da848bc38",
+            "cached": false
+          },
+          "trades": {
+            "url": "https://public.bybit.com/spot/BTCUSDT/BTCUSDT_2025-08-13.csv.gz",
+            "bytes": 5095045,
+            "seconds": 2.29,
+            "sha256": "5a9277a3c73f93af1811917a29cf723fc34b5d4f1a17868dbd90d5fa26dd671c",
+            "cached": false
+          }
+        },
+        "replay": {
+          "messages": 431934,
+          "snapshots": 1,
+          "states": 431933,
+          "clamped_ts": 0,
+          "first_real_ts": 1755043201229000000
+        },
+        "counts": {
+          "depth_events_25": 6952043,
+          "depth_events_1": 620783,
+          "bbo_changes": 356339,
+          "trades": 767526
+        },
+        "prepare_seconds": {
+          "replay_book": 36.15,
+          "read_trades": 1.48,
+          "total_with_download": 46.97
+        },
+        "arrays_sha256": "70daffab0e402e39de58db80aa28bcbcef8592a1eaea5eba4033bcc0386c3759",
+        "npz_bytes": 230340356
+      }
+    },
+    "finished_at": "2026-10-23T21:35:14Z"
+  },
+  "orders": {
+    "schema_version": 3,
+    "kind": "vs_hftbacktest_nautilus",
+    "started_at": "2026-10-23T21:09:01Z",
+    "environment": {
+      "python": "3.12.15",
+      "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+      "machine": "x86_64",
+      "cpu_count_logical": 4,
+      "cpu_count_physical": 2,
+      "ram_gb": 16.8,
+      "versions": {
+        "manifoldbt": "0.28.1",
+        "hftbacktest": "2.4.4",
+        "nautilus_trader": "1.231.0",
+        "numba": "0.68.0",
+        "numpy": "2.2.6",
+        "pandas": "3.1.0",
+        "pyarrow": "26.0.0"
+      },
+      "manifoldbt_native_sha256": "b4ee3697b37e3ff301476c2f2b42acdb7a5d5f2a307084a828a309b61183b927"
+    },
+    "args": {
+      "day": "2025-08-13",
+      "workloads": [
+        "mbo_join_mbo"
+      ],
+      "engines": [
+        "manifoldbt",
+        "hftbacktest",
+        "nautilus"
+      ],
+      "reps": 3,
+      "probe_window": [
+        36000,
+        39600
+      ],
+      "itch": "/home/runner/work/manifoldbt/manifoldbt/bench-data/itch-extract/AAPL.itch",
+      "no_replay": false,
+      "fail_on_blocked": true,
+      "tmp": "/home/runner/work/manifoldbt/manifoldbt/bench-data/tmp",
+      "out": "results-orders.json"
+    },
+    "workloads": {
+      "mbo_join_mbo": {
+        "doc": "join the best bid and ask with a round lot, stand aside behind a crowded best (Nasdaq ITCH, AAPL)",
+        "kind": "mbo",
+        "tier": "mbo",
+        "latency": "zero",
+        "window_s": null,
+        "engines": {
+          "manifoldbt": {
+            "status": "ok",
+            "strategy_s": {
+              "n": 3,
+              "min": 0.299,
+              "median": 0.302,
+              "max": 0.302,
+              "iqr": 0.0030000000000000027,
+              "noisy": false
+            },
+            "cold_s": {
+              "n": 3,
+              "min": 0.501,
+              "median": 0.502,
+              "max": 0.509,
+              "iqr": 0.008000000000000007,
+              "noisy": false
+            },
+            "prepare_s": {
+              "n": 3,
+              "min": 0.017,
+              "median": 0.02,
+              "max": 0.247,
+              "iqr": 0.22999999999999998,
+              "noisy": true
+            },
+            "engine_only_s": null,
+            "convert_s": null,
+            "replay_s": {
+              "n": 3,
+              "min": 0.206,
+              "median": 0.207,
+              "max": 0.208,
+              "iqr": 0.0020000000000000018,
+              "noisy": false
+            },
+            "memory_mb": {
+              "baseline_data": 242.3,
+              "peak": 934.5,
+              "added_by_engine": 692.2
+            },
+            "result": {
+              "posts": 20002,
+              "requotes": 15989,
+              "fills": 10261,
+              "volume": 435096.0,
+              "position": 286.0,
+              "fees": 0.0,
+              "orders_served": 5170
+            }
+          },
+          "hftbacktest": {
+            "status": "ok",
+            "strategy_s": {
+              "n": 3,
+              "min": 0.46,
+              "median": 0.49,
+              "max": 0.516,
+              "iqr": 0.055999999999999994,
+              "noisy": false
+            },
+            "cold_s": {
+              "n": 3,
+              "min": 4.349,
+              "median": 4.355,
+              "max": 4.47,
+              "iqr": 0.12099999999999955,
+              "noisy": false
+            },
+            "prepare_s": {
+              "n": 3,
+              "min": 0.066,
+              "median": 0.067,
+              "max": 0.094,
+              "iqr": 0.027999999999999997,
+              "noisy": true
+            },
+            "engine_only_s": null,
+            "convert_s": null,
+            "replay_s": {
+              "n": 3,
+              "min": 0.459,
+              "median": 0.503,
+              "max": 0.51,
+              "iqr": 0.05099999999999999,
+              "noisy": false
+            },
+            "memory_mb": {
+              "baseline_data": 208.1,
+              "peak": 464.0,
+              "added_by_engine": 255.9
+            },
+            "result": {
+              "code_end": 0,
+              "wakes": 125999,
+              "posts": 20124,
+              "cancels": 14960,
+              "requotes": 14950,
+              "submit_errors": 0,
+              "fills": 5162,
+              "volume": 516200.0,
+              "position": 400.0,
+              "balance": -114746.00000000012,
+              "fee": 0.0
+            }
+          },
+          "nautilus": {
+            "status": "ok",
+            "strategy_s": {
+              "n": 3,
+              "min": 17.086,
+              "median": 17.316,
+              "max": 18.617,
+              "iqr": 1.5310000000000024,
+              "noisy": false
+            },
+            "cold_s": {
+              "n": 3,
+              "min": 17.086,
+              "median": 17.316,
+              "max": 18.617,
+              "iqr": 1.5310000000000024,
+              "noisy": false
+            },
+            "prepare_s": {
+              "n": 3,
+              "min": 0.0,
+              "median": 0.0,
+              "max": 0.0,
+              "iqr": 0.0,
+              "noisy": false
+            },
+            "engine_only_s": {
+              "n": 3,
+              "min": 15.306,
+              "median": 15.506,
+              "max": 16.28,
+              "iqr": 0.974000000000002,
+              "noisy": false
+            },
+            "convert_s": {
+              "n": 3,
+              "min": 1.255,
+              "median": 1.267,
+              "max": 1.273,
+              "iqr": 0.018000000000000016,
+              "noisy": false
+            },
+            "replay_s": {
+              "n": 3,
+              "min": 7.906,
+              "median": 8.086,
+              "max": 8.087,
+              "iqr": 0.18100000000000005,
+              "noisy": false
+            },
+            "memory_mb": {
+              "baseline_data": 208.0,
+              "peak": 804.6,
+              "added_by_engine": 596.6
+            },
+            "result": {
+              "wakes": 125999,
+              "posts": 20067,
+              "cancels": 14936,
+              "requotes": 14872,
+              "rejected": 0,
+              "fills": 6828,
+              "volume": 568622.0,
+              "position": -234.0,
+              "engine_seconds": 16.28,
+              "convert_seconds": 1.267,
+              "run_total_seconds": 17.546,
+              "reject_reasons": []
+            }
+          }
+        },
+        "parity": {
+          "reference": "manifoldbt",
+          "pairs": {
+            "hftbacktest_vs_manifoldbt": {
+              "quotes": {
+                "hftbacktest": 20124,
+                "manifoldbt": 20002,
+                "common": 19215,
+                "same_price": 19215,
+                "only_hftbacktest": 909,
+                "only_manifoldbt": 787
+              },
+              "first_divergence": {
+                "wake": 428,
+                "side": -1
+              },
+              "verdicts": {
+                "both_served": 4790,
+                "hftbacktest_only": 83,
+                "manifoldbt_only": 174,
+                "neither": 14168
+              },
+              "same_executed_qty_when_both_served": 3638,
+              "fill_time_lag_ms": {
+                "p10": 0.0,
+                "median": 0.0,
+                "p90": 0.0
+              },
+              "served_quotes": {
+                "hftbacktest": 5162,
+                "manifoldbt": 5170
+              }
+            },
+            "nautilus_vs_manifoldbt": {
+              "quotes": {
+                "nautilus": 20067,
+                "manifoldbt": 20002,
+                "common": 19038,
+                "same_price": 19038,
+                "only_nautilus": 1029,
+                "only_manifoldbt": 964
+              },
+              "first_divergence": {
+                "wake": 53,
+                "side": -1
+              },
+              "verdicts": {
+                "both_served": 4891,
+                "nautilus_only": 1499,
+                "manifoldbt_only": 0,
+                "neither": 12648
+              },
+              "same_executed_qty_when_both_served": 3854,
+              "fill_time_lag_ms": {
+                "p10": -0.42264,
+                "median": 0.0,
+                "p90": 0.335801
+              },
+              "served_quotes": {
+                "nautilus": 6828,
+                "manifoldbt": 5170
+              }
+            }
+          },
+          "reference_used": "manifoldbt"
+        }
+      }
+    },
+    "data": {
+      "itch_extract": {
+        "path": "AAPL.itch",
+        "bytes": 40264920,
+        "sha256": "6d66ec7f49fc61971f4617208d179258ebf26a976a29a10255dfb7574fd07106"
+      }
+    },
+    "finished_at": "2026-10-23T21:10:51Z"
+  },
+  "orders_exact_replay": {
+    "schema_version": 3,
+    "kind": "exact_queue_replay",
+    "quotes_sent_at_one_price_by_every_engine": 18583,
+    "quotes_judged": 6298,
+    "exact_queue_serves": 4772,
+    "engines": {
+      "manifoldbt": {
+        "served": 4769,
+        "exact_queue_agrees": 4769,
+        "spurious": 0,
+        "missed": 3
+      },
+      "hftbacktest": {
+        "served": 4684,
+        "exact_queue_agrees": 4603,
+        "spurious": 81,
+        "missed": 169
+      },
+      "nautilus": {
+        "served": 6226,
+        "exact_queue_agrees": 4772,
+        "spurious": 1454,
+        "missed": 0
+      }
+    }
+  },
+  "sweeps_maker": {
+    "schema_version": 3,
+    "day": "2025-08-13",
+    "window_s": [
+      36000,
+      43200
+    ],
+    "tier": "l2",
+    "family": "maker",
+    "workers": 4,
+    "pinned_cpus": null,
+    "grids": {
+      "4": {
+        "combos": 4,
+        "axes": {
+          "clip": [
+            0.01,
+            0.02
+          ],
+          "max_clips": [
+            3,
+            5
+          ],
+          "off_bid": [
+            0
+          ],
+          "off_ask": [
+            0
+          ]
+        },
+        "engines": {
+          "hftbacktest": {
+            "serial": {
+              "setup_s": 6.335612486999992,
+              "sweep_s": 0.3740445680000448,
+              "workers": 1
+            },
+            "pool": {
+              "setup_s": 9.387324815999989,
+              "sweep_s": 0.20691270499997927,
+              "workers": 4
+            },
+            "pool_equals_serial": true,
+            "combos_per_s_pool": 19.331824017284973,
+            "combos_per_s_serial": 10.693912817361166,
+            "sample": [
+              {
+                "posts": 5370,
+                "fills": 1219,
+                "volume": 12.189999999999785,
+                "position": 0.030000000000000006
+              },
+              {
+                "posts": 8807,
+                "fills": 1521,
+                "volume": 15.20999999999972,
+                "position": 0.05000000000000001
+              },
+              {
+                "posts": 5370,
+                "fills": 1219,
+                "volume": 24.37999999999957,
+                "position": 0.06000000000000001
+              }
+            ]
+          },
+          "nautilus": {
+            "combos_run": 4,
+            "serial": {
+              "setup_s": 0.0,
+              "sweep_s": 26.056005792000008,
+              "workers": 1
+            },
+            "pool": {
+              "setup_s": 0.2054966219999983,
+              "sweep_s": 12.49802123500001,
+              "workers": 4
+            },
+            "pool_equals_serial": true,
+            "seconds_per_combo_serial": 6.514001448000002,
+            "combos_per_s_pool": 0.32005066440423574,
+            "projected_full_grid_pool_s": 12.49802123500001,
+            "sample": [
+              {
+                "posts": 4832,
+                "fills": 1094,
+                "volume": 10.791653,
+                "position": 0.02544699999999997
+              },
+              {
+                "posts": 8023,
+                "fills": 1354,
+                "volume": 13.329441,
+                "position": 0.04587299999999995
+              },
+              {
+                "posts": 4878,
+                "fills": 1093,
+                "volume": 21.367966000000003,
+                "position": 0.05344400000000001
+              }
+            ]
+          }
+        }
+      },
+      "16": {
+        "combos": 16,
+        "axes": {
+          "clip": [
+            0.005,
+            0.01,
+            0.02,
+            0.03
+          ],
+          "max_clips": [
+            3,
+            5
+          ],
+          "off_bid": [
+            0,
+            1
+          ],
+          "off_ask": [
+            0
+          ]
+        },
+        "engines": {
+          "hftbacktest": {
+            "serial": {
+              "setup_s": 0.12451783599999544,
+              "sweep_s": 1.4378821259999768,
+              "workers": 1
+            },
+            "pool": {
+              "setup_s": 8.84549986999997,
+              "sweep_s": 0.6558065819999683,
+              "workers": 4
+            },
+            "pool_equals_serial": true,
+            "combos_per_s_pool": 24.397437352955347,
+            "combos_per_s_serial": 11.127476801252246,
+            "sample": [
+              {
+                "posts": 5370,
+                "fills": 1219,
+                "volume": 6.094999999999892,
+                "position": 0.015000000000000003
+              },
+              {
+                "posts": 7296,
+                "fills": 1139,
+                "volume": 5.694999999999901,
+                "position": 0.015000000000000003
+              },
+              {
+                "posts": 8807,
+                "fills": 1521,
+                "volume": 7.60499999999986,
+                "position": 0.025000000000000005
+              }
+            ]
+          },
+          "nautilus": {
+            "combos_run": 8,
+            "serial": {
+              "setup_s": 0.0,
+              "sweep_s": 50.00299250900002,
+              "workers": 1
+            },
+            "pool": {
+              "setup_s": 0.20974549000004572,
+              "sweep_s": 22.462095651000027,
+              "workers": 4
+            },
+            "pool_equals_serial": true,
+            "seconds_per_combo_serial": 6.250374063625003,
+            "combos_per_s_pool": 0.35615554863171617,
+            "projected_full_grid_pool_s": 44.924191302000054,
+            "sample": [
+              {
+                "posts": 4809,
+                "fills": 1096,
+                "volume": 5.438165000000001,
+                "position": 0.013054999999999999
+              },
+              {
+                "posts": 7883,
+                "fills": 1358,
+                "volume": 6.724183,
+                "position": 0.02382499999999995
+              },
+              {
+                "posts": 4832,
+                "fills": 1094,
+                "volume": 10.791653,
+                "position": 0.02544699999999997
+              }
+            ]
+          }
+        }
+      },
+      "64": {
+        "combos": 64,
+        "axes": {
+          "clip": [
+            0.005,
+            0.01,
+            0.02,
+            0.03
+          ],
+          "max_clips": [
+            2,
+            3,
+            5,
+            8
+          ],
+          "off_bid": [
+            0,
+            1
+          ],
+          "off_ask": [
+            0,
+            1
+          ]
+        },
+        "engines": {
+          "hftbacktest": {
+            "serial": {
+              "setup_s": 0.13018781499999932,
+              "sweep_s": 5.7724929729999985,
+              "workers": 1
+            },
+            "pool": {
+              "setup_s": 8.799284096000008,
+              "sweep_s": 2.130558758999996,
+              "workers": 4
+            },
+            "pool_equals_serial": true,
+            "combos_per_s_pool": 30.03906826303124,
+            "combos_per_s_serial": 11.087064167830217,
+            "sample": [
+              {
+                "posts": 3990,
+                "fills": 984,
+                "volume": 4.919999999999917,
+                "position": 0.009999999999999998
+              },
+              {
+                "posts": 5583,
+                "fills": 930,
+                "volume": 4.649999999999923,
+                "position": 0.01
+              },
+              {
+                "posts": 5935,
+                "fills": 946,
+                "volume": 4.729999999999921,
+                "position": 0.010000000000000002
+              }
+            ]
+          },
+          "nautilus": {
+            "combos_run": 8,
+            "serial": {
+              "setup_s": 0.0,
+              "sweep_s": 47.973679000999994,
+              "workers": 1
+            },
+            "pool": {
+              "setup_s": 0.2129696069999909,
+              "sweep_s": 22.025771832000032,
+              "workers": 4
+            },
+            "pool_equals_serial": true,
+            "seconds_per_combo_serial": 5.996709875124999,
+            "combos_per_s_pool": 0.36321088137203167,
+            "projected_full_grid_pool_s": 176.20617465600026,
+            "sample": [
+              {
+                "posts": 3400,
+                "fills": 867,
+                "volume": 4.313965,
+                "position": 0.010084999999999997
+              },
+              {
+                "posts": 7883,
+                "fills": 1358,
+                "volume": 6.724183,
+                "position": 0.02382499999999995
+              },
+              {
+                "posts": 3401,
+                "fills": 869,
+                "volume": 8.614205,
+                "position": 0.020907000000000002
+              }
+            ]
+          }
+        }
+      },
+      "256": {
+        "combos": 256,
+        "axes": {
+          "clip": [
+            0.005,
+            0.01,
+            0.02,
+            0.03
+          ],
+          "max_clips": [
+            2,
+            3,
+            5,
+            8
+          ],
+          "off_bid": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "off_ask": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "engines": {
+          "hftbacktest": {
+            "serial": {
+              "setup_s": 0.12888608000002932,
+              "sweep_s": 23.492619777000073,
+              "workers": 1
+            },
+            "pool": {
+              "setup_s": 8.640828553999995,
+              "sweep_s": 10.153193070000043,
+              "workers": 4
+            },
+            "pool_equals_serial": true,
+            "combos_per_s_pool": 25.213742931414473,
+            "combos_per_s_serial": 10.897039258713543,
+            "sample": [
+              {
+                "posts": 3990,
+                "fills": 984,
+                "volume": 4.919999999999917,
+                "position": 0.009999999999999998
+              },
+              {
+                "posts": 5583,
+                "fills": 930,
+                "volume": 4.649999999999923,
+                "position": 0.01
+              },
+              {
+                "posts": 7840,
+                "fills": 900,
+                "volume": 4.499999999999926,
+                "position": 0.009999999999999998
+              }
+            ]
+          },
+          "nautilus": {
+            "combos_run": 8,
+            "serial": {
+              "setup_s": 0.0,
+              "sweep_s": 46.33556223699998,
+              "workers": 1
+            },
+            "pool": {
+              "setup_s": 0.20244770600004358,
+              "sweep_s": 21.372812617000022,
+              "workers": 4
+            },
+            "pool_equals_serial": true,
+            "seconds_per_combo_serial": 5.791945279624997,
+            "combos_per_s_pool": 0.3743073101027783,
+            "projected_full_grid_pool_s": 683.9300037440007,
+            "sample": [
+              {
+                "posts": 3400,
+                "fills": 867,
+                "volume": 4.313965,
+                "position": 0.010084999999999997
+              },
+              {
+                "posts": 7883,
+                "fills": 1358,
+                "volume": 6.724183,
+                "position": 0.02382499999999995
+              },
+              {
+                "posts": 3401,
+                "fills": 869,
+                "volume": 8.614205,
+                "position": 0.020907000000000002
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "sweeps_latency": {
+    "schema_version": 3,
+    "day": "2025-08-13",
+    "window_s": [
+      36000,
+      43200
+    ],
+    "tier": "l2",
+    "family": "latency",
+    "workers": 4,
+    "pinned_cpus": null,
+    "grids": {
+      "16": {
+        "combos": 16,
+        "axes": {
+          "clip": [
+            0.01
+          ],
+          "max_clips": [
+            3,
+            5
+          ],
+          "off_bid": [
+            0,
+            1
+          ],
+          "off_ask": [
+            0
+          ],
+          "lat_order_ms": [
+            0,
+            1,
+            5,
+            10
+          ]
+        },
+        "engines": {
+          "hftbacktest": {
+            "serial": {
+              "setup_s": 4.809050522000007,
+              "sweep_s": 1.3831578770000306,
+              "workers": 1
+            },
+            "pool": {
+              "setup_s": 8.028490852000004,
+              "sweep_s": 0.5023023159999411,
+              "workers": 4
+            },
+            "pool_equals_serial": true,
+            "combos_per_s_pool": 31.85332715050009,
+            "combos_per_s_serial": 11.567732264015184,
+            "sample": [
+              {
+                "posts": 5394,
+                "fills": 1219,
+                "volume": 12.189999999999785,
+                "position": 0.030000000000000006
+              },
+              {
+                "posts": 7367,
+                "fills": 1135,
+                "volume": 11.349999999999802,
+                "position": 0.030000000000000006
+              },
+              {
+                "posts": 8887,
+                "fills": 1517,
+                "volume": 15.169999999999721,
+                "position": 0.05000000000000001
+              }
+            ]
+          },
+          "nautilus": {
+            "combos_run": 8,
+            "serial": {
+              "setup_s": 0.0,
+              "sweep_s": 47.365975284,
+              "workers": 1
+            },
+            "pool": {
+              "setup_s": 0.20237344899999243,
+              "sweep_s": 21.997054582000032,
+              "workers": 4
+            },
+            "pool_equals_serial": true,
+            "seconds_per_combo_serial": 5.9207469105,
+            "combos_per_s_pool": 0.3636850547502991,
+            "projected_full_grid_pool_s": 43.994109164000065,
+            "sample": [
+              {
+                "posts": 4745,
+                "fills": 1103,
+                "volume": 10.871674,
+                "position": 0.02542999999999996
+              },
+              {
+                "posts": 7887,
+                "fills": 1386,
+                "volume": 13.621028,
+                "position": 0.04607199999999995
+              },
+              {
+                "posts": 4812,
+                "fills": 1091,
+                "volume": 10.752538,
+                "position": 0.025857999999999957
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "sweeps_taker": {
+    "schema_version": 3,
+    "day": "2025-08-13",
+    "window_s": null,
+    "tier": "bbo",
+    "family": "taker",
+    "workers": 4,
+    "pinned_cpus": null,
+    "grids": {
+      "12": {
+        "combos": 12,
+        "axes": {
+          "thr": [
+            0.5,
+            0.6,
+            0.7,
+            0.8,
+            0.9,
+            0.95
+          ],
+          "qty": [
+            0.01,
+            0.02
+          ]
+        },
+        "engines": {
+          "hftbacktest": {
+            "serial": {
+              "setup_s": 3.4611902139999984,
+              "sweep_s": 0.745271285000058,
+              "workers": 1
+            },
+            "pool": {
+              "setup_s": 6.088965220999967,
+              "sweep_s": 0.3596825270000181,
+              "workers": 4
+            },
+            "pool_equals_serial": true,
+            "combos_per_s_pool": 33.36275492748469,
+            "combos_per_s_serial": 16.10151932795729,
+            "sample": [
+              {
+                "fills": 1198,
+                "volume": 23.94999999999958,
+                "position": -0.01,
+                "decisions": 1198,
+                "orders": 1198
+              },
+              {
+                "fills": 1006,
+                "volume": 20.109999999999662,
+                "position": -0.01,
+                "decisions": 1006,
+                "orders": 1006
+              },
+              {
+                "fills": 804,
+                "volume": 16.069999999999748,
+                "position": -0.01,
+                "decisions": 804,
+                "orders": 804
+              }
+            ]
+          },
+          "nautilus": {
+            "combos_run": 6,
+            "serial": {
+              "setup_s": 0.0,
+              "sweep_s": 49.40901304200008,
+              "workers": 1
+            },
+            "pool": {
+              "setup_s": 0.2934706469999355,
+              "sweep_s": 23.492501222999977,
+              "workers": 4
+            },
+            "pool_equals_serial": true,
+            "seconds_per_combo_serial": 8.234835507000014,
+            "combos_per_s_pool": 0.25540064648909294,
+            "projected_full_grid_pool_s": 46.98500244599995,
+            "sample": [
+              {
+                "fills": 1510,
+                "volume": 23.95,
+                "position": -0.009999999999999976,
+                "decisions": 1198,
+                "orders": 1198
+              },
+              {
+                "fills": 1000,
+                "volume": 16.07,
+                "position": -0.010000000000000005,
+                "decisions": 804,
+                "orders": 804
+              },
+              {
+                "fills": 447,
+                "volume": 7.2700000000000005,
+                "position": -0.01000000000000001,
+                "decisions": 364,
+                "orders": 364
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "sweeps_mbt_maker": {
+    "schema_version": 3,
+    "day": "2025-08-13",
+    "window_s": [
+      36000,
+      43200
+    ],
+    "family": "maker",
+    "workers": 4,
+    "pinned_cpus": null,
+    "grids": {
+      "4": {
+        "lite": {
+          "grid": 4,
+          "combos": 4,
+          "call": "lite",
+          "workers": 4,
+          "wall_s": 0.092,
+          "combos_per_s": 43.478,
+          "results": 4,
+          "peak_rss_mb": 303.1
+        },
+        "full": {
+          "grid": 4,
+          "combos": 4,
+          "call": "full",
+          "workers": 4,
+          "wall_s": 0.099,
+          "combos_per_s": 40.404,
+          "results": 4,
+          "peak_rss_mb": 302.1,
+          "sample": [
+            {
+              "posts": 5384,
+              "fills": 1572,
+              "volume": 12.092737,
+              "position": 0.03488699999999996
+            },
+            {
+              "posts": 8755,
+              "fills": 1941,
+              "volume": 15.104864,
+              "position": 0.047842
+            },
+            {
+              "posts": 5389,
+              "fills": 1759,
+              "volume": 24.17067,
+              "position": 0.06558000000000012
+            },
+            {
+              "posts": 8763,
+              "fills": 2158,
+              "volume": 30.125196,
+              "position": 0.10208200000000006
+            }
+          ],
+          "identity": [
+            {
+              "i": 0,
+              "clip": 0.01,
+              "max_clips": 3,
+              "off_ask": 0,
+              "off_bid": 0,
+              "orders": true,
+              "fills": true,
+              "events": true,
+              "pnl_bits": true,
+              "n_orders": 5384
+            },
+            {
+              "i": 1,
+              "clip": 0.01,
+              "max_clips": 5,
+              "off_ask": 0,
+              "off_bid": 0,
+              "orders": true,
+              "fills": true,
+              "events": true,
+              "pnl_bits": true,
+              "n_orders": 8755
+            },
+            {
+              "i": 2,
+              "clip": 0.02,
+              "max_clips": 3,
+              "off_ask": 0,
+              "off_bid": 0,
+              "orders": true,
+              "fills": true,
+              "events": true,
+              "pnl_bits": true,
+              "n_orders": 5389
+            },
+            {
+              "i": 3,
+              "clip": 0.02,
+              "max_clips": 5,
+              "off_ask": 0,
+              "off_bid": 0,
+              "orders": true,
+              "fills": true,
+              "events": true,
+              "pnl_bits": true,
+              "n_orders": 8763
+            }
+          ]
+        }
+      },
+      "16": {
+        "lite": {
+          "grid": 16,
+          "combos": 16,
+          "call": "lite",
+          "workers": 4,
+          "wall_s": 0.197,
+          "combos_per_s": 81.218,
+          "results": 16,
+          "peak_rss_mb": 297.8
+        },
+        "full": {
+          "grid": 16,
+          "combos": 16,
+          "call": "full",
+          "workers": 4,
+          "wall_s": 0.241,
+          "combos_per_s": 66.39,
+          "results": 16,
+          "peak_rss_mb": 435.1,
+          "sample": [
+            {
+              "posts": 5390,
+              "fills": 1453,
+              "volume": 6.071146,
+              "position": 0.01537999999999996
+            },
+            {
+              "posts": 7315,
+              "fills": 1267,
+              "volume": 5.696325999999999,
+              "position": 0.017362000000000013
+            },
+            {
+              "posts": 8785,
+              "fills": 1789,
+              "volume": 7.570731999999999,
+              "position": 0.025793999999999966
+            },
+            {
+              "posts": 10765,
+              "fills": 1543,
+              "volume": 6.969312999999999,
+              "position": 0.02437500000000003
+            }
+          ],
+          "identity": [
+            {
+              "i": 0,
+              "clip": 0.005,
+              "max_clips": 3,
+              "off_ask": 0,
+              "off_bid": 0,
+              "orders": true,
+              "fills": true,
+              "events": true,
+              "pnl_bits": true,
+              "n_orders": 5390
+            },
+            {
+              "i": 2,
+              "clip": 0.005,
+              "max_clips": 5,
+              "off_ask": 0,
+              "off_bid": 0,
+              "orders": true,
+              "fills": true,
+              "events": true,
+              "pnl_bits": true,
+              "n_orders": 8785
+            },
+            {
+              "i": 4,
+              "clip": 0.01,
+              "max_clips": 3,
+              "off_ask": 0,
+              "off_bid": 0,
+              "orders": true,
+              "fills": true,
+              "events": true,
+              "pnl_bits": true,
+              "n_orders": 5384
+            },
+            {
+              "i": 6,
+              "clip": 0.01,
+              "max_clips": 5,
+              "off_ask": 0,
+              "off_bid": 0,
+              "orders": true,
+              "fills": true,
+              "events": true,
+              "pnl_bits": true,
+              "n_orders": 8755
+            },
+            {
+              "i": 8,
+              "clip": 0.02,
+              "max_clips": 3,
+              "off_ask": 0,
+              "off_bid": 0,
+              "orders": true,
+              "fills": true,
+              "events": true,
+              "pnl_bits": true,
+              "n_orders": 5389
+            },
+            {
+              "i": 10,
+              "clip": 0.02,
+              "max_clips": 5,
+              "off_ask": 0,
+              "off_bid": 0,
+              "orders": true,
+              "fills": true,
+              "events": true,
+              "pnl_bits": true,
+              "n_orders": 8763
+            },
+            {
+              "i": 12,
+              "clip": 0.03,
+              "max_clips": 3,
+              "off_ask": 0,
+              "off_bid": 0,
+              "orders": true,
+              "fills": true,
+              "events": true,
+              "pnl_bits": true,
+              "n_orders": 5377
+            },
+            {
+              "i": 14,
+              "clip": 0.03,
+              "max_clips": 5,
+              "off_ask": 0,
+              "off_bid": 0,
+              "orders": true,
+              "fills": true,
+              "events": true,
+              "pnl_bits": true,
+              "n_orders": 8724
+            }
+          ]
+        }
+      },
+      "64": {
+        "lite": {
+          "grid": 64,
+          "combos": 64,
+          "call": "lite",
+          "workers": 4,
+          "wall_s": 0.664,
+          "combos_per_s": 96.386,
+          "results": 64,
+          "peak_rss_mb": 297.6
+        },
+        "full": {
+          "grid": 64,
+          "combos": 64,
+          "call": "full",
+          "workers": 4,
+          "wall_s": 0.793,
+          "combos_per_s": 80.706,
+          "results": 64,
+          "peak_rss_mb": 771.3,
+          "sample": [
+            {
+              "posts": 3995,
+              "fills": 1190,
+              "volume": 4.897762,
+              "position": 0.008763999999999963
+            },
+            {
+              "posts": 5592,
+              "fills": 1047,
+              "volume": 4.636803,
+              "position": 0.007747
+            },
+            {
+              "posts": 5961,
+              "fills": 1111,
+              "volume": 4.7228069999999995,
+              "position": 0.008960999999999962
+            },
+            {
+              "posts": 7553,
+              "fills": 970,
+              "volume": 4.475407,
+              "position": 0.008278999999999998
+            }
+          ],
+          "identity": [
+            {
+              "i": 0,
+              "clip": 0.005,
+              "max_clips": 2,
+              "off_ask": 0,
+              "off_bid": 0,
+              "orders": true,
+              "fills": true,
+              "events": true,
+              "pnl_bits": true,
+              "n_orders": 3995
+            },
+            {
+              "i": 8,
+              "clip": 0.005,
+              "max_clips": 5,
+              "off_ask": 0,
+              "off_bid": 0,
+              "orders": true,
+              "fills": true,
+              "events": true,
+              "pnl_bits": true,
+              "n_orders": 8785
+            },
+            {
+              "i": 16,
+              "clip": 0.01,
+              "max_clips": 2,
+              "off_ask": 0,
+              "off_bid": 0,
+              "orders": true,
+              "fills": true,
+              "events": true,
+              "pnl_bits": true,
+              "n_orders": 3972
+            },
+            {
+              "i": 24,
+              "clip": 0.01,
+              "max_clips": 5,
+              "off_ask": 0,
+              "off_bid": 0,
+              "orders": true,
+              "fills": true,
+              "events": true,
+              "pnl_bits": true,
+              "n_orders": 8755
+            },
+            {
+              "i": 32,
+              "clip": 0.02,
+              "max_clips": 2,
+              "off_ask": 0,
+              "off_bid": 0,
+              "orders": true,
+              "fills": true,
+              "events": true,
+              "pnl_bits": true,
+              "n_orders": 3970
+            },
+            {
+              "i": 40,
+              "clip": 0.02,
+              "max_clips": 5,
+              "off_ask": 0,
+              "off_bid": 0,
+              "orders": true,
+              "fills": true,
+              "events": true,
+              "pnl_bits": true,
+              "n_orders": 8763
+            },
+            {
+              "i": 48,
+              "clip": 0.03,
+              "max_clips": 2,
+              "off_ask": 0,
+              "off_bid": 0,
+              "orders": true,
+              "fills": true,
+              "events": true,
+              "pnl_bits": true,
+              "n_orders": 3965
+            },
+            {
+              "i": 56,
+              "clip": 0.03,
+              "max_clips": 5,
+              "off_ask": 0,
+              "off_bid": 0,
+              "orders": true,
+              "fills": true,
+              "events": true,
+              "pnl_bits": true,
+              "n_orders": 8724
+            }
+          ]
+        }
+      },
+      "256": {
+        "lite": {
+          "grid": 256,
+          "combos": 256,
+          "call": "lite",
+          "workers": 4,
+          "wall_s": 2.673,
+          "combos_per_s": 95.773,
+          "results": 256,
+          "peak_rss_mb": 294.9
+        },
+        "full": {
+          "grid": 256,
+          "combos": 256,
+          "call": "full",
+          "workers": 4,
+          "wall_s": 3.208,
+          "combos_per_s": 79.8,
+          "results": 256,
+          "peak_rss_mb": 2209.8,
+          "sample": [
+            {
+              "posts": 3995,
+              "fills": 1190,
+              "volume": 4.897762,
+              "position": 0.008763999999999963
+            },
+            {
+              "posts": 5592,
+              "fills": 1047,
+              "volume": 4.636803,
+              "position": 0.007747
+            },
+            {
+              "posts": 7849,
+              "fills": 1010,
+              "volume": 4.499949,
+              "position": 0.010893
+            },
+            {
+              "posts": 9172,
+              "fills": 960,
+              "volume": 4.3076799999999995,
+              "position": 0.008624
+            }
+          ],
+          "identity": [
+            {
+              "i": 0,
+              "clip": 0.005,
+              "max_clips": 2,
+              "off_ask": 0,
+              "off_bid": 0,
+              "orders": true,
+              "fills": true,
+              "events": true,
+              "pnl_bits": true,
+              "n_orders": 3995
+            },
+            {
+              "i": 32,
+              "clip": 0.005,
+              "max_clips": 5,
+              "off_ask": 0,
+              "off_bid": 0,
+              "orders": true,
+              "fills": true,
+              "events": true,
+              "pnl_bits": true,
+              "n_orders": 8785
+            },
+            {
+              "i": 64,
+              "clip": 0.01,
+              "max_clips": 2,
+              "off_ask": 0,
+              "off_bid": 0,
+              "orders": true,
+              "fills": true,
+              "events": true,
+              "pnl_bits": true,
+              "n_orders": 3972
+            },
+            {
+              "i": 96,
+              "clip": 0.01,
+              "max_clips": 5,
+              "off_ask": 0,
+              "off_bid": 0,
+              "orders": true,
+              "fills": true,
+              "events": true,
+              "pnl_bits": true,
+              "n_orders": 8755
+            },
+            {
+              "i": 128,
+              "clip": 0.02,
+              "max_clips": 2,
+              "off_ask": 0,
+              "off_bid": 0,
+              "orders": true,
+              "fills": true,
+              "events": true,
+              "pnl_bits": true,
+              "n_orders": 3970
+            },
+            {
+              "i": 160,
+              "clip": 0.02,
+              "max_clips": 5,
+              "off_ask": 0,
+              "off_bid": 0,
+              "orders": true,
+              "fills": true,
+              "events": true,
+              "pnl_bits": true,
+              "n_orders": 8763
+            },
+            {
+              "i": 192,
+              "clip": 0.03,
+              "max_clips": 2,
+              "off_ask": 0,
+              "off_bid": 0,
+              "orders": true,
+              "fills": true,
+              "events": true,
+              "pnl_bits": true,
+              "n_orders": 3965
+            },
+            {
+              "i": 224,
+              "clip": 0.03,
+              "max_clips": 5,
+              "off_ask": 0,
+              "off_bid": 0,
+              "orders": true,
+              "fills": true,
+              "events": true,
+              "pnl_bits": true,
+              "n_orders": 8724
+            }
+          ]
+        }
+      }
+    }
+  },
+  "sweeps_mbt_latency": {
+    "schema_version": 3,
+    "day": "2025-08-13",
+    "window_s": [
+      36000,
+      43200
+    ],
+    "family": "latency",
+    "workers": 4,
+    "pinned_cpus": null,
+    "grids": {
+      "16": {
+        "lite": {
+          "grid": 16,
+          "combos": 16,
+          "call": "lite",
+          "workers": 4,
+          "wall_s": 0.196,
+          "combos_per_s": 81.633,
+          "results": 16,
+          "peak_rss_mb": 299.7
+        },
+        "full": {
+          "grid": 16,
+          "combos": 16,
+          "call": "full",
+          "workers": 4,
+          "wall_s": 0.228,
+          "combos_per_s": 70.175,
+          "results": 16,
+          "peak_rss_mb": 420.8,
+          "sample": [
+            {
+              "posts": 5401,
+              "fills": 1576,
+              "volume": 12.072737,
+              "position": 0.03488699999999996
+            },
+            {
+              "posts": 7395,
+              "fills": 1327,
+              "volume": 11.341372,
+              "position": 0.03231600000000003
+            },
+            {
+              "posts": 8842,
+              "fills": 1942,
+              "volume": 15.085379999999999,
+              "position": 0.04835799999999999
+            },
+            {
+              "posts": 10858,
+              "fills": 1634,
+              "volume": 13.904871999999997,
+              "position": 0.04881599999999999
+            }
+          ],
+          "identity": [
+            {
+              "i": 0,
+              "clip": 0.01,
+              "lat_order_ms": 0,
+              "max_clips": 3,
+              "off_ask": 0,
+              "off_bid": 0,
+              "orders": true,
+              "fills": true,
+              "events": true,
+              "pnl_bits": true,
+              "n_orders": 5401
+            },
+            {
+              "i": 2,
+              "clip": 0.01,
+              "lat_order_ms": 0,
+              "max_clips": 5,
+              "off_ask": 0,
+              "off_bid": 0,
+              "orders": true,
+              "fills": true,
+              "events": true,
+              "pnl_bits": true,
+              "n_orders": 8842
+            },
+            {
+              "i": 4,
+              "clip": 0.01,
+              "lat_order_ms": 1,
+              "max_clips": 3,
+              "off_ask": 0,
+              "off_bid": 0,
+              "orders": true,
+              "fills": true,
+              "events": true,
+              "pnl_bits": true,
+              "n_orders": 5399
+            },
+            {
+              "i": 6,
+              "clip": 0.01,
+              "lat_order_ms": 1,
+              "max_clips": 5,
+              "off_ask": 0,
+              "off_bid": 0,
+              "orders": true,
+              "fills": true,
+              "events": true,
+              "pnl_bits": true,
+              "n_orders": 8814
+            },
+            {
+              "i": 8,
+              "clip": 0.01,
+              "lat_order_ms": 5,
+              "max_clips": 3,
+              "off_ask": 0,
+              "off_bid": 0,
+              "orders": true,
+              "fills": true,
+              "events": true,
+              "pnl_bits": true,
+              "n_orders": 5384
+            },
+            {
+              "i": 10,
+              "clip": 0.01,
+              "lat_order_ms": 5,
+              "max_clips": 5,
+              "off_ask": 0,
+              "off_bid": 0,
+              "orders": true,
+              "fills": true,
+              "events": true,
+              "pnl_bits": true,
+              "n_orders": 8755
+            },
+            {
+              "i": 12,
+              "clip": 0.01,
+              "lat_order_ms": 10,
+              "max_clips": 3,
+              "off_ask": 0,
+              "off_bid": 0,
+              "orders": true,
+              "fills": true,
+              "events": true,
+              "pnl_bits": true,
+              "n_orders": 5382
+            },
+            {
+              "i": 14,
+              "clip": 0.01,
+              "lat_order_ms": 10,
+              "max_clips": 5,
+              "off_ask": 0,
+              "off_bid": 0,
+              "orders": true,
+              "fills": true,
+              "events": true,
+              "pnl_bits": true,
+              "n_orders": 8753
+            }
+          ]
+        }
+      }
+    }
+  },
+  "sweeps_mbt_taker": {
+    "schema_version": 3,
+    "day": "2025-08-13",
+    "window_s": null,
+    "family": "taker",
+    "workers": 4,
+    "pinned_cpus": null,
+    "grids": {
+      "12": {
+        "full": {
+          "grid": 12,
+          "combos": 12,
+          "call": "full",
+          "workers": 4,
+          "wall_s": 0.289,
+          "combos_per_s": 41.522,
+          "results": 12,
+          "peak_rss_mb": 776.7,
+          "identity": [
+            {
+              "i": 0,
+              "qty": 0.01,
+              "thr": 0.5,
+              "trades": true,
+              "n_trades": 1198
+            },
+            {
+              "i": 3,
+              "qty": 0.01,
+              "thr": 0.8,
+              "trades": true,
+              "n_trades": 594
+            },
+            {
+              "i": 6,
+              "qty": 0.02,
+              "thr": 0.5,
+              "trades": true,
+              "n_trades": 1198
+            },
+            {
+              "i": 9,
+              "qty": 0.02,
+              "thr": 0.8,
+              "trades": true,
+              "n_trades": 594
+            }
+          ]
+        }
+      }
+    }
+  }
+}
