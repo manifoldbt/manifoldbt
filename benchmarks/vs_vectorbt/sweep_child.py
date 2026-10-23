@@ -36,6 +36,19 @@ imposed by the harness, it is the only spelling available, and it is the one a
 raptorbt user would write. It gets the same courtesy vectorbt gets on its own
 path: each distinct moving average is computed once and reused across every
 combination it appears in, rather than recomputed per cell.
+
+NautilusTrader has no grid either, and its loop is the expensive one
+-------------------------------------------------------------------
+Each cell of a Nautilus grid is a full event-driven replay: every bar goes
+through the simulated exchange and a Python callback. So the loop is run the way
+the engine documents repeat runs (one engine, data loaded once, ``reset()`` and
+``run()`` per cell), and the cost is measured rather than guessed: on a grid
+larger than the engine's sweep ceiling (``engines.py``) the runner declares it
+out of scope, and the reason carries the per-backtest time measured on a small
+anchor grid of the same code path, and what that makes of this grid.
+Moving averages cannot be hoisted out of the loop for it: a Nautilus indicator
+lives inside the event loop, so each cell computes its own, which is what a
+Nautilus user's strategy does.
 """
 from __future__ import annotations
 
@@ -311,6 +324,18 @@ def run_rbt(df, fast_vals, slow_vals, metrics=False):
     return call
 
 
+def run_nt(df, fast_vals, slow_vals, metrics=False):
+    """NautilusTrader's grid path: one replay per cell, in Python (see engine_nt)."""
+    if metrics:
+        raise ValueError(
+            "nautilus_trader reports no drawdown, so a grid asked for a "
+            "performance summary has nothing to compare there")
+
+    import engine_nt
+
+    return engine_nt.sweep_runner(df, fast_vals, slow_vals)
+
+
 def builder(name: str, df, fast_vals, slow_vals, workdir: str, metrics: bool = False):
     """The grid closure for one engine, ready to be timed."""
     if name == "manifoldbt":
@@ -319,6 +344,8 @@ def builder(name: str, df, fast_vals, slow_vals, workdir: str, metrics: bool = F
         return run_vbt(df, fast_vals, slow_vals, metrics)
     if name == "raptorbt":
         return run_rbt(df, fast_vals, slow_vals, metrics)
+    if name == "nautilus_trader":
+        return run_nt(df, fast_vals, slow_vals, metrics)
     raise KeyError("no sweep path for engine {!r}".format(name))
 
 
@@ -366,15 +393,66 @@ def compare(reference_out: dict, other_out: dict) -> dict:
     }
 
 
-# vectorbt is the only engine here whose grid footprint grows with the number of
-# combinations, so it is the only one a point can declare out of scope. The
-# others are looped or streamed and cost the same memory at any grid size.
-OOS_ENGINE = "vectorbt"
-OOS_REASON = (
+# Why an engine can be declared out of scope at a point, and how big a grid it
+# still runs so that the point carries a cross-engine check of the same code path.
+#
+# vectorbt is the one engine whose grid footprint grows with the number of
+# combinations, so a point can be out of its reach for memory. NautilusTrader's
+# footprint is flat, but its wall time is a full replay per cell, so a point can
+# be out of its reach for time. The others are looped or streamed and cost the
+# same at any grid size.
+OOS_VBT_REASON = (
     "vectorbt materialises the simulation per combination (measured: 1.57 MB "
     "per combination at 20k bars), so this grid would need tens of gigabytes. "
     "Running it would measure the swap file."
 )
+# vectorbt's anchor is a smaller grid of its own (a near-square grid of that many
+# cells). NautilusTrader's is a subsample of THIS grid, ANCHOR_SPREAD values of
+# each parameter spread evenly from smallest to largest, because what it has to
+# measure is the cost of a replay, and that depends on the windows: short moving
+# averages trade often and a Nautilus replay pays about a millisecond per fill, so
+# the cheap corner of a grid and the expensive corner differ several-fold.
+ANCHOR_CELLS = {"vectorbt": 250}
+ANCHOR_SPREAD = 4
+
+
+def spread(values, count):
+    """`count` values taken evenly across `values`, both ends included."""
+    if len(values) <= count:
+        return list(values)
+    last = len(values) - 1
+    return [values[round(i * last / (count - 1))] for i in range(count)]
+
+
+def _duration(seconds: float) -> str:
+    if seconds < 90:
+        return "{:.0f} seconds".format(seconds)
+    if seconds < 90 * 60:
+        return "{:.0f} minutes".format(seconds / 60.0)
+    return "{:.1f} hours".format(seconds / 3600.0)
+
+
+def oos_reason(name: str, bars: int, combos: int, anchor_cells: int, anchor_s: float,
+               loop_limit: int | None = None) -> str:
+    """The sentence a reader gets in place of an empty cell."""
+    if name == "vectorbt":
+        return OOS_VBT_REASON
+    per_cell = anchor_s / anchor_cells
+    held = (
+        "Looped grids are held to {:,} combinations, so that a point stays inside "
+        "the time budget of the job.".format(loop_limit)
+        if loop_limit else "That is past the time budget of the job."
+    )
+    return (
+        "NautilusTrader has no parameter-grid API, so a grid is a Python loop of "
+        "full backtests, each one replaying every bar through the simulated "
+        "exchange. Measured: {per:.2f} s per backtest at {bars:,} bars (mean over "
+        "{cells} cells spread across this grid), which puts this grid of "
+        "{combos:,} combinations at about {total} per call. {held} It is not "
+        "run.".format(
+            per=per_cell, bars=bars, cells=anchor_cells, combos=combos,
+            total=_duration(per_cell * combos), held=held)
+    )
 
 
 def main() -> int:
@@ -436,20 +514,32 @@ def ap_parse():
              "says anything useful without a licence.",
     )
     ap.add_argument(
-        "--vectorbt",
-        choices=("run", "oos"),
-        default="run",
-        help="'oos' declares vectorbt out of scope for this point and runs the "
-             "others. For grids whose vectorbt side does not fit in memory on "
-             "any ordinary machine: not running it is the honest reading, since "
-             "the alternative is a number produced by swapping.",
+        "--out-of-scope",
+        nargs="+",
+        default=[],
+        choices=sorted(set(ENGINES) - {REFERENCE}),
+        metavar="ENGINE",
+        help="engines declared out of scope for this point; the others run. For "
+             "grids an engine cannot hold: vectorbt when its materialised "
+             "simulation needs tens of gigabytes (not running it is the honest "
+             "reading, since the alternative is a number produced by swapping), "
+             "nautilus_trader when a loop of full replays would need hours.",
+    )
+    ap.add_argument(
+        "--loop-limit",
+        type=int,
+        default=None,
+        help="the largest grid an engine with no sweep API is looped over, as the "
+             "runner applied it; only quoted in the reason an engine is out of scope",
     )
     ap.add_argument(
         "--parity-anchor",
         type=int,
-        default=250,
-        help="with --vectorbt oos, the grid size vectorbt DOES run, so the point "
-             "still carries a cross-engine check of the same code path.",
+        default=None,
+        help="with --out-of-scope, the grid size vectorbt DOES run, so the "
+             "point still carries a cross-engine check of the same code path. "
+             "(default {}). NautilusTrader's check is a {}x{} subsample of the "
+             "grid itself.".format(ANCHOR_CELLS["vectorbt"], ANCHOR_SPREAD, ANCHOR_SPREAD),
     )
     ap.add_argument(
         "--memory-only",
@@ -542,9 +632,24 @@ def _main(args) -> int:
 
     running = [REFERENCE] + [n for n in args.engines if n != REFERENCE]
     out_of_scope = {}
-    if args.vectorbt == "oos" and OOS_ENGINE in running:
-        running.remove(OOS_ENGINE)
-        out_of_scope[OOS_ENGINE] = {"status": "out of scope", "reason": OOS_REASON}
+    for name in args.out_of_scope:
+        if name in running:
+            running.remove(name)
+            # The reason is filled in below, once the anchor grid has been run:
+            # for an engine out of reach for time, it carries what that grid
+            # measured.
+            out_of_scope[name] = {"status": "out of scope", "reason": ""}
+    if args.metrics and "nautilus_trader" in running:
+        print(json.dumps({
+            "bars": args.bars,
+            "combos": actual,
+            "status": "skipped",
+            "reason": "nautilus_trader reports no drawdown, so there is no performance "
+                      "summary to compare on a grid; drop it with "
+                      "--out-of-scope nautilus_trader or leave --metrics off",
+            "tier_before": tier_before,
+        }))
+        return 2
 
     calls = {
         name: builder(name, df, fast_vals, slow_vals,
@@ -580,18 +685,26 @@ def _main(args) -> int:
         # same code path at a size that engine can hold: same data, same
         # strategy, same adapters, fewer cells. That is weaker than checking the
         # grid itself, and the report says so rather than implying otherwise.
-        a_fast, a_slow = grid(args.parity_anchor)
-        anchor = compare(
-            builder(REFERENCE, df, a_fast, a_slow,
-                    os.path.join(workdir, "anchor"), args.metrics)(),
-            builder(name, df, a_fast, a_slow, workdir, args.metrics)(),
-        )
+        if name in ANCHOR_CELLS:
+            a_fast, a_slow = grid(args.parity_anchor or ANCHOR_CELLS[name])
+        else:
+            a_fast, a_slow = spread(fast_vals, ANCHOR_SPREAD), spread(slow_vals, ANCHOR_SPREAD)
+        anchor_cells = len(a_fast) * len(a_slow)
+        reference_anchor = builder(REFERENCE, df, a_fast, a_slow,
+                                   os.path.join(workdir, "anchor"), args.metrics)()
+        challenger = builder(name, df, a_fast, a_slow, workdir, args.metrics)
+        started = time.perf_counter()
+        challenger_anchor = challenger()
+        anchor_s = time.perf_counter() - started
         verdicts[name] = {
-            **anchor,
-            "checked_at_combos": len(a_fast) * len(a_slow),
+            **compare(reference_anchor, challenger_anchor),
+            "checked_at_combos": anchor_cells,
             "scope": "anchor grid, not this grid",
         }
         detail["parity_scope"] = "anchor grid"
+        detail["reason"] = oos_reason(name, args.bars, actual, anchor_cells, anchor_s,
+                                      args.loop_limit if name != "vectorbt" else None)
+        detail["anchor_seconds"] = round(anchor_s, 3)
 
     result["parity"] = verdicts
     result["status"] = "failed" if any(

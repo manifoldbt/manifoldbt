@@ -1,7 +1,7 @@
 """Workload definitions: the numbers every engine reads, in one place.
 
 Nothing here is engine-specific. Each adapter (``engine_mbt``, ``engine_vbt``,
-``engine_rbt``) reads the same constants, so a workload cannot drift between two
+``engine_rbt``, ``engine_nt``) reads the same constants, so a workload cannot drift between two
 sides by someone editing one file and forgetting another.
 
 What a workload *does* carry per engine is a note: the places where an engine is
@@ -218,6 +218,25 @@ WORKLOADS: Dict[str, Workload] = {
                     "vectorbt on the next bar, raptorbt not until the next crossing. "
                     "The count of affected round-trips is measured rather than "
                     "asserted, and it is the same population for both challengers.",
+                ),
+                "nautilus_trader": Note(
+                    "documented",
+                    "Re-entry sizing. Entries, exits and fill prices are the same "
+                    "trades as the reference's, round-trip for round-trip: the stop "
+                    "and the target are native contingent orders, they fill at their "
+                    "own levels, and because the simulated exchange runs before the "
+                    "strategy sees the bar, a position stopped out intrabar is "
+                    "re-entered at that bar's close just as the reference does. What "
+                    "differs is the quantity of that re-entry. The reference sizes it "
+                    "from the equity at the close, counting the position it has just "
+                    "closed at the close price, so it buys back the quantity it "
+                    "held; Nautilus sizes it from the cash balance after the stop or "
+                    "target has been booked at its own price. Neither is wrong, the "
+                    "two quantities differ by the gap between the exit price and the "
+                    "close, and that gap is carried into every later trade. The "
+                    "harness measures it (re-entries on the exit bar, and how far "
+                    "each one's quantity sits from the position closed on that bar) "
+                    "instead of asserting it.",
                 ),
             },
         ),
