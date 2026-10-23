@@ -11,7 +11,8 @@ beforehand (reported apart) so the pool is not charged for its start.
 
 Families
   maker    clip x max_clips x extra levels back on each side   (spec.GRID_AXES: 4, 16, 64, 256)
-  latency  the order delay as an axis (0, 1, 5, 10 ms) x inventory bound x levels back
+  latency  the order delay as an axis (0, 1, 5, 10 ms) x inventory bound x levels back; the cancel
+           delay is the order delay, in every engine (one value per combination, not a product)
   taker    flow threshold x order size, the flow taker on the trade clock
 
     python sweep.py --day 2025-08-13 --window 36000 43200 --grids 4 16 64 \
@@ -43,6 +44,28 @@ def family_grid(family, n):
     axes = {"maker": spec.GRID_AXES, "latency": GRID_LATENCY, "taker": GRID_TAKER}[family][n]
     names = sorted(axes)
     return axes, names, [dict(zip(names, v)) for v in itertools.product(*[axes[k] for k in names])]
+
+
+def mbt_latency_grid(lat_ms):
+    """The latency axis of the grid, written for manifoldbt: ONE execution axis whose value is the whole
+    latency model, so the order delay and the cancel delay move together, as they do in hftbacktest
+    (`constant_order_latency`) and in NautilusTrader (`LatencyModel`). Two axes, `latency.order` and
+    `latency.cancel`, are swept as a product: N values on each run N x N combinations, N of which have
+    the two delays equal.
+
+    The response and the feed delay do not move; the axis restates them, because it replaces the whole
+    model. The durations go in as nanoseconds: the wheel converts an `Interval` only when it is the whole
+    value of an axis, not when it sits inside a dictionary."""
+    return {"latency": [{"order": int(x * spec.MS), "cancel": int(x * spec.MS),
+                         "response": spec.LAT_RESPONSE_NS, "feed": spec.LAT_FEED_NS} for x in lat_ms]}
+
+
+def check_served(n_served, combos, what):
+    """A throughput is the combinations announced over the wall time, so it is only one if the engine ran
+    those combinations and no others. Refuse to go on when it returned another number."""
+    if n_served != len(combos):
+        raise RuntimeError(f"{what}: the engine returned {n_served} results for {len(combos)} announced "
+                           f"combinations; no throughput is reported for a grid that is not the one announced")
 
 
 def combo_params(c, tier):
@@ -151,7 +174,6 @@ def mbt_sweep(day, window_ns, tier, family, n, workers, lite=True, root=None):
     """`run_sweep_lite` / `run_sweep` over the grid. Written against the documented API; see DESIGN.md."""
     import manifoldbt as mbt
     import engine_mbt as M
-    from manifoldbt.helpers import Interval
 
     axes, names, combos = family_grid(family, n)
     store = M.open_store(root or data.DATA_ROOT, day, "bbo" if family == "taker" else tier)
@@ -161,15 +183,13 @@ def mbt_sweep(day, window_ns, tier, family, n, workers, lite=True, root=None):
                             M.flow_taker_config(day, "nominal", window_ns), store, max_parallelism=workers)
     else:
         grid = {k: v for k, v in axes.items() if k != "lat_order_ms"}
-        ex = None
-        if "lat_order_ms" in axes:
-            ex = {"latency.order": [Interval.millis(x) for x in axes["lat_order_ms"]],
-                  "latency.cancel": [Interval.millis(x) for x in axes["lat_order_ms"]]}
+        ex = mbt_latency_grid(axes["lat_order_ms"]) if "lat_order_ms" in axes else None
         strat = M.maker_strategy({"ladder": tier == "l2"}, params=True)
         cfg = M.maker_config(day, window_ns, "nominal")
         fn = mbt.run_sweep_lite if lite else mbt.run_sweep
         res = fn(strat, grid, cfg, store, max_parallelism=workers, execution_grid=ex)
     wall = time.perf_counter() - t0
+    check_served(len(list(res)), combos, f"manifoldbt {family} grid {n}")
     return res, {"sweep_s": wall, "workers": workers, "combos": len(combos), "lite": lite}
 
 

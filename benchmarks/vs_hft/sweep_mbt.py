@@ -6,12 +6,18 @@
 Each (grid, call) runs in a fresh process so that the peak resident memory is the call's own:
   lite   `run_sweep_lite` (metrics only)
   full   `run_sweep` (every combination keeps its order journal)
+Grid served: a throughput is the combinations announced over the wall time, so a call that returns another
+number of results than the combinations announced is refused (no throughput is written for it), and a full
+call must also carry, one for one, the combinations announced: the parameters and the latency model each
+result ran under, read from the result itself. The latency family sweeps ONE execution axis, the whole
+latency model, so that the order delay and the cancel delay are the same value in every combination, as
+they are in hftbacktest and NautilusTrader.
 Identity: a sample of combinations is run alone with `mbt.run` (the parameters written as literals, which
 is what "the run `mbt.run` makes alone with those values as its defaults" means) and compared to the
-same combination inside the full sweep, bit for bit on the order, fill and event tables, and to the lite
-sweep on its metrics.
+same combination inside the full sweep, bit for bit on the order, fill and event tables.
 """
 import argparse
+import collections
 import json
 import os
 import struct
@@ -21,6 +27,7 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+import spec  # noqa: E402
 
 
 def peak_rss_mb():
@@ -48,15 +55,44 @@ def _df_equal(a, b):
     return True
 
 
+def combo_key(c, pnames):
+    """What identifies a combination: its parameters and, when the family sweeps it, its latency model."""
+    lat = None
+    if "lat_order_ms" in c:
+        ns = int(c["lat_order_ms"] * spec.MS)
+        lat = (ns, ns, spec.LAT_RESPONSE_NS, spec.LAT_FEED_NS)
+    return tuple(c[n] for n in pnames) + (lat,)
+
+
+def served_keys(res, pnames, latency):
+    """The combination each full result ran, read from the parameters and the config the result carries
+    (the labels of `to_df`), not from its position in the list."""
+    keys = []
+    for row in res.to_df(backend="pandas").to_dict("records"):
+        lat = None
+        if latency:
+            m = row["exec_latency"]
+            lat = (m["order"], m["cancel"], m.get("response", 0), m.get("feed", 0))
+        keys.append(tuple(row[f"param_{n}"] for n in pnames) + (lat,))
+    return keys
+
+
+def check_labels(keys, combos, pnames, what):
+    want = collections.Counter(combo_key(c, pnames) for c in combos)
+    got = collections.Counter(keys)
+    if want != got:
+        raise RuntimeError(f"{what}: the results are not the combinations announced; "
+                           f"missing {list((want - got).elements())[:4]}, unexpected {list((got - want).elements())[:4]}")
+
+
 def worker(args):
     import numpy as np
 
     import data
     import engine_mbt as M
     import manifoldbt as mbt
-    import spec
     from manifoldbt.helpers import Interval
-    from sweep import family_grid
+    from sweep import check_served, family_grid, mbt_latency_grid
 
     if args.pin:
         import psutil
@@ -78,10 +114,7 @@ def worker(args):
         strat = M.maker_strategy({"ladder": True}, params=True)
         cfg = M.maker_config(args.day, w, "nominal")
         grid = {k: v for k, v in axes.items() if k != "lat_order_ms"}
-        ex = None
-        if "lat_order_ms" in axes:
-            ex = {"latency.order": [Interval.millis(x) for x in axes["lat_order_ms"]],
-                  "latency.cancel": [Interval.millis(x) for x in axes["lat_order_ms"]]}
+        ex = mbt_latency_grid(axes["lat_order_ms"]) if "lat_order_ms" in axes else None
     kw = dict(max_parallelism=args.workers)
     if ex:
         kw["execution_grid"] = ex
@@ -90,10 +123,18 @@ def worker(args):
         res = mbt.run_sweep_lite(strat, grid, cfg, store, **kw)
     else:
         res = mbt.run_sweep(strat, grid, cfg, store, **kw)
-    out["wall_s"] = round(time.perf_counter() - t0, 3)
+    wall = time.perf_counter() - t0
+    results = list(res)
+    check_served(len(results), combos, f"{args.family} {args.call} grid {args.grid}")
+    out["wall_s"] = round(wall, 3)
     out["combos_per_s"] = round(len(combos) / out["wall_s"], 3)
-    out["results"] = len(list(res))
+    out["results"] = len(results)
     out["peak_rss_mb"] = round(peak_rss_mb(), 1)
+    pnames = [n for n in names if n != "lat_order_ms"]
+    served = None
+    if args.call == "full":
+        served = served_keys(res, pnames, args.family == "latency")
+        check_labels(served, combos, pnames, f"{args.family} full grid {args.grid}")
     if args.call == "full" and args.family != "taker":
         sample = []
         for i, r in enumerate(res):
@@ -104,10 +145,11 @@ def worker(args):
                            "volume": float(fl["qty"].sum()) if len(fl) else 0.0,
                            "position": float(r.sim.position[spec.SYMBOL])})
         out["sample"] = sample
-    if args.identity and args.call == "full" and args.family == "maker":
-        full = list(res)
-        # the identity sample is read in the enumeration order: parameters by name, last fastest,
-        # execution axes slowest (here none, or the latency axis)
+    if args.identity and args.call == "full" and args.family in ("maker", "latency"):
+        full = results
+        # the sample is read in the order the combinations are announced, and each one is looked up in the
+        # sweep by the parameters and the latency model its result carries, not by position
+        where = {k: j for j, k in enumerate(served)}
         step = max(1, len(combos) // args.identity)
         idx = list(range(0, len(combos), step))[:args.identity]
         rows = []
@@ -128,8 +170,7 @@ def worker(args):
                                  "feed": Interval.millis(spec.LAT_FEED_NS // spec.MS)},
                         fill_model={"queue": {"depth_source": "book", "model": "risk_adverse", "assumed_queue": 2.0}}))
             alone = mbt.run(M.maker_strategy(p, params=False), cfg_i, store)
-            # find the combination in the sweep by its labels when it has them, else by position
-            sw = full[i]
+            sw = full[where[combo_key(c, pnames)]]
             rows.append({
                 "i": i, **{k: c[k] for k in c},
                 "orders": _df_equal(alone.orders_df(backend="pandas"), sw.orders_df(backend="pandas")),
@@ -140,13 +181,15 @@ def worker(args):
             })
         out["identity"] = rows
     if args.identity and args.call == "full" and args.family == "taker":
-        full = list(res)
+        full = results
+        where = {k: j for j, k in enumerate(served)}
         step = max(1, len(combos) // args.identity)
         rows = []
         for i in list(range(0, len(combos), step))[:args.identity]:
             c = combos[i]
             alone = mbt.run(M.flow_taker_strategy(thr=c["thr"], qty=c["qty"]), cfg, store)
-            rows.append({"i": i, **c, "trades": _df_equal(alone.trades_df(), full[i].trades_df()),
+            sw = full[where[combo_key(c, pnames)]]
+            rows.append({"i": i, **c, "trades": _df_equal(alone.trades_df(), sw.trades_df()),
                          "n_trades": int(len(alone.trades_df()))})
         out["identity"] = rows
     print("@@SWEEP@@" + json.dumps(out, default=str), flush=True)
