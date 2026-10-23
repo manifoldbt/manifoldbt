@@ -2,8 +2,8 @@
 
 An engine-to-engine benchmark you can re-run yourself. It installs every engine
 from PyPI at a pinned version, downloads one pinned day of public market data
-(checked against a SHA-256), runs the same trading rules in the three engines,
-checks that they did **the same work**, and only then reports how long each took.
+(checked against a SHA-256), runs the same trading rules in the three engines, and
+reports, beside how long each took, how far they did **the same work**.
 
 ```bash
 pip install manifoldbt
