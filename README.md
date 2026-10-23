@@ -534,7 +534,10 @@ paid tiers add scale and depth. See [pricing](https://www.manifoldbt.com/#pricin
 
 ## License
 
-Apache 2.0 with Commons Clause. The source is available, free to use, modify and
-self-host. Reselling the software or offering it as a paid hosted service is not
-permitted. See [LICENSE](https://github.com/manifoldbt/manifoldbt/blob/master/LICENSE)
-for the full text.
+Apache 2.0 with Commons Clause, for what this repository holds (the Python
+package, the examples, the tests and the benchmarks) and for the wheels
+published on PyPI. The Rust engine inside those wheels is distributed compiled;
+its source is not published. Use, modification and self-hosting are permitted.
+Reselling the software or offering it as a paid hosted service is not. See
+[LICENSE](https://github.com/manifoldbt/manifoldbt/blob/master/LICENSE) for the
+full text.
