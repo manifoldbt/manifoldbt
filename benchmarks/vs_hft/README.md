@@ -217,10 +217,21 @@ held after loading the shared neutral data.
 manifoldbt sweeps a quoting strategy through `run_sweep` (every combination keeps
 its order journal) and `run_sweep_lite` (metrics only): the book and tape are loaded
 once and the combinations run in parallel inside the engine. The order delay is a
-sweep axis of its own (`execution_grid`). The flow taker, on the trade clock, sweeps
+sweep axis of its own (`execution_grid`): one axis whose value is the whole latency
+model, so that the order delay and the cancel delay take the same value in every
+combination, as they do in hftbacktest and NautilusTrader. (Two axes, `latency.order`
+and `latency.cancel`, would be swept as a product: four values on each make sixteen
+latency pairs, not four.) The flow taker, on the trade clock, sweeps
 through `run_sweep`. Each call runs in its own process so that its peak memory is
 its own, and a sample of combinations is run alone with `mbt.run` and compared
 bit for bit with the same combination inside the sweep (`sweep_mbt.py`).
+
+A combinations-per-second figure is the combinations announced over the wall time, so
+it only means something if the engine ran those combinations and no others.
+`sweep_mbt.py` refuses to report a call that returns another number of results than
+the combinations announced, and a full sweep must also carry the announced combinations
+one for one: the parameters and the latency model each result ran under are read
+from the result itself.
 
 hftbacktest and NautilusTrader have no sweep call; what is timed is the loop of
 runs, and a pool of four processes (one per vCPU of the runner), each holding its
@@ -229,8 +240,9 @@ apart (`sweep.py`). The pool must return exactly what the loop returns, and the
 result says whether it does.
 
 The grids are nested (4, 16, 64, 256 combinations of order size, inventory bound
-and the extra levels back of each side), plus a latency family (order delay x
-inventory bound x levels back) and a taker family (flow threshold x order size).
+and the extra levels back of each side), plus a latency family (order delay, for
+orders and cancels alike, x inventory bound x levels back) and a taker family (flow
+threshold x order size).
 NautilusTrader runs a bounded number of combinations per grid and the rest is
 projected from them; the result says which. The first combinations of each engine are
 recorded in the result (`sample`), so that they can be compared across engines, with the
