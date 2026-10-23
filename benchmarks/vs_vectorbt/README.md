@@ -558,12 +558,14 @@ across the 20,000-bar grid above, 7.8 s at 200,000 bars, and more where the
 windows are short enough to trade every few bars. Locally, the three points
 above would cost it 63 minutes for 5,000 combinations at 20,000 bars, 4.7 hours
 for 20,000, and 21.6 hours for 10,000 combinations at 200,000 bars, against
-under three seconds for manifoldbt in each case. That is not a comparison a job
-can repeat, so it is out of scope on all three, and the reason printed beside
-each point carries the per-backtest time measured on 16 cells spread across that
-point's own grid, and what that makes of the whole grid. Those 16 cells are also
-run on manifoldbt and compared cell by cell, so the point still carries a
-cross-engine check of the same code path.
+under three seconds for manifoldbt in each case. On a four-vCPU hosted runner a
+backtest costs about twice as much (1.45 to 1.63 s at 20,000 bars and 15.3 s at
+200,000, run 39945358568), and the same three grids come to 2.0, 9.1 and 42.5
+hours. That is not a comparison a job can repeat, so it is out of scope on all
+three, and the reason printed beside each point carries the per-backtest time
+measured on 16 cells spread across that point's own grid, and what that makes of
+the whole grid. Those 16 cells are also run on manifoldbt and compared cell by
+cell, so the point still carries a cross-engine check of the same code path.
 
 The engine is held back by a sweep ceiling of 64 combinations, applied on its
 own so that a point never needs to say so, and `--engine-max-combos
