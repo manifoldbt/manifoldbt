@@ -8,6 +8,7 @@ reports, beside how long each took, how far they did **the same work**.
 ```bash
 pip install manifoldbt
 pip install -r requirements-lock.txt
+pip install --no-deps -r requirements-nautilus.txt
 python prep_cli.py 2025-08-13                      # download + fingerprint + prepare one day
 python bench.py --day 2025-08-13 --reps 3 --out results-books.json
 python sweep.py --day 2025-08-13 --window 36000 43200 --grids 4 16 64 --workers 4 --out results-sweeps-maker.json

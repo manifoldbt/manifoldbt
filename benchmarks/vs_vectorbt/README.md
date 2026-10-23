@@ -7,6 +7,7 @@ result**, and only then reports how long each took.
 ```bash
 pip install manifoldbt
 pip install -r requirements-lock.txt
+pip install --no-deps -r requirements-nautilus.txt
 python bench.py --bars 10000 100000 1000000 --reps 7 --cold-start-reps 3 --memory-bars 2000000 --out results.json
 python report.py results.json
 ```
