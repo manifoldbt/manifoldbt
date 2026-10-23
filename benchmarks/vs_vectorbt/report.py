@@ -376,26 +376,29 @@ def _sweep_section(payload: Dict[str, Any]) -> List[str]:
 
 
 def _divergence_note(row: Dict[str, Any], payload: Dict[str, Any]) -> List[str]:
-    """The measured size of a documented divergence, engine by engine."""
+    """The measured size of one documented divergence, engine by engine.
+
+    A list item, so that the notes of several points stay one per line once
+    rendered; the cause is common to all of them and render() states it once.
+    """
     scales = row.get("divergence_scale") or {}
     reference = _reference(payload)
     view = scales.get(reference)
     if not view:
         return []
-    lines = [
-        "`{w}` at {b:,} bars: {n} of {t} {ref} round-trips re-enter on the exit "
+    note = (
+        "- `{w}` at {b:,} bars: {n} of {t} {ref} round-trips re-enter on the exit "
         "bar ({p:.0%}), from {sl} stop and {tp} target exits.".format(
             w=row["workload"], b=row["bars"], n=view["reentries_on_exit_bar"],
             t=view["round_trips"], p=view["share_of_round_trips"],
             sl=view["sl_exits"], tp=view["tp_exits"], ref=reference,
-        ),
-    ]
+        )
+    )
     for engine, scale in scales.items():
         if engine == reference or "round_trips" not in scale:
             continue
-        lines[-1] += " {e} books {n}.".format(e=engine, n=scale["round_trips"])
-    lines += ["", "Cause in {}.".format(METHOD_LINK), ""]
-    return lines
+        note += " {e} books {n}.".format(e=engine, n=scale["round_trips"])
+    return [note]
 
 
 def render(payload: Dict[str, Any]) -> str:
@@ -415,10 +418,11 @@ def render(payload: Dict[str, Any]) -> str:
     timed = [r for r in documented if r.get("timings")]
     if timed:
         lines += _speed_table(timed, "Results differ, kept out of the headline", payload)
-        for row in documented:
-            if row.get("divergence_scale"):
-                lines += _divergence_note(row, payload)
-                break
+        # Every point carries its own size: a divergence can grow with the
+        # number of bars, so the first point does not speak for the others.
+        notes = [note for row in documented for note in _divergence_note(row, payload)]
+        if notes:
+            lines += notes + ["", "Cause in {}.".format(METHOD_LINK), ""]
 
     if failed:
         lines += ["## Timing withheld", ""]
