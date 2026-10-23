@@ -15,8 +15,10 @@ import engine_nt as N
 import spec
 
 L3_PX_PREC, L3_SZ_PREC = 4, 0
-L3_PX_UNIT = 10 ** (9 - L3_PX_PREC)      # ITCH prices are in 1e-4 units: raw = price x 1e5
-L3_SZ_UNIT = 10 ** (9 - L3_SZ_PREC)
+# ITCH prices are in 1e-4 units and sizes in shares: raw = ticks x unit, the unit being that of the build
+# of Nautilus (see engine_nt.raw_unit), not a constant.
+L3_PX_UNIT = N.raw_unit(L3_PX_PREC)
+L3_SZ_UNIT = N.raw_unit(L3_SZ_PREC)
 
 
 def l3_instrument(symbol):
@@ -181,6 +183,7 @@ def _make_maker_class():
 
 def run_mbo(m, t_open, t_close, strategy=True):
     N._imports()
+    N.check_raw_scale(L3_PX_PREC, L3_SZ_PREC)
     from nautilus_trader.model.currencies import USD
 
     Maker = _make_maker_class()
