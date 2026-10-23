@@ -17,8 +17,8 @@ python report.py results-books.json
 
 No account and no API key is needed for the data. manifoldbt itself needs a licence
 key for this benchmark, as it does for the sweeps of the other one: the workflow
-reads it from the `MANIFOLDBT_CI_LICENSE` secret and `ci_activate.py` is its first
-step. The same commands run in GitHub Actions on public runners
+reads it from the `MANIFOLDBT_CI_LICENSE` secret and `ci_activate.py` runs before
+anything else. The same commands run in GitHub Actions on public runners
 (`.github/workflows/bench-vs-hft.yml`), so every published number has a run URL
 behind it.
 
@@ -31,9 +31,10 @@ behind it.
 | `flow_taker_bbo` | follow the aggressor imbalance of the last 34 s (arm at +/-0.9), market orders, flip on the opposite crossing | best bid/ask + trades, trade clock |
 | `mbo_join_mbo` | join the best bid and ask with a round lot, stand a side aside behind a crowded best or at the inventory bound | Nasdaq TotalView-ITCH, order by order (AAPL) |
 | `probe_l2_zero` | open-loop probe: one post-only quote a side at the touch, cancelled and posted again at every wake-up, no inventory | 25 levels + trades, zero latency |
+| `probe_l2_nominal` | the same probe with the venue latencies of the next section | 25 levels + trades |
 
-The first four are strategies. The last one is not a strategy but an instrument:
-its quotes depend on the market only, so each of them gets a verdict (served or
+The first four are strategies. The probes are not strategies but instruments:
+their quotes depend on the market only, so each of them gets a verdict (served or
 not, how much, how late) that does not depend on what the engine did before. That
 is what isolates the queue and fill model of each engine.
 
