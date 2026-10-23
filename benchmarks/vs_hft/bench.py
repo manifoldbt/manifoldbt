@@ -3,8 +3,8 @@
     python bench.py --day 2025-08-23 --reps 3 --out results.json
 
 Prepares one pinned day of public data, runs every workload in every engine (one
-fresh process per run, engines interleaved inside each repetition), checks that
-the engines did the same work, and only then reports how long each took.
+fresh process per run, engines interleaved inside each repetition), and reports how
+long each took together with how far the engines did the same work.
 """
 import argparse
 import hashlib
