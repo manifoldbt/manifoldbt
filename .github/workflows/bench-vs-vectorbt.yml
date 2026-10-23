@@ -309,6 +309,8 @@ jobs:
     if: github.event_name != 'workflow_dispatch' || inputs.manifoldbt_version == ''
     permissions:
       contents: write
+      # `gh run view` below reads this run's own record.
+      actions: read
     steps:
       # The default branch explicitly: a release run is checked out at a tag,
       # and there is nothing to push a commit onto there.
@@ -325,6 +327,22 @@ jobs:
           pattern: bench-*
           path: artifacts
           merge-multiple: true
+
+      # publish.py records GITHUB_RUN_STARTED_AT, which Actions never sets, so
+      # the field went out empty. The run's own record has it. The value is
+      # re-printed through `date` before it reaches $GITHUB_ENV: a lookup that
+      # fails, or answers with anything but a date, leaves the field empty.
+      - name: Read when this run started
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          started="$(gh run view "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --json startedAt --jq .startedAt 2>/dev/null)" || started=""
+          if [ -n "$started" ] && stamp="$(date -u -d "$started" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null)"; then
+            echo "GITHUB_RUN_STARTED_AT=$stamp" >> "$GITHUB_ENV"
+          else
+            echo "::warning::could not read when this run started; publishing without it"
+          fi
 
       - name: Merge the run into one published result
         shell: bash
