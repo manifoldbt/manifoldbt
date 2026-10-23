@@ -155,10 +155,11 @@ NautilusTrader 1.231.0 unless a line says otherwise.
   execution in the raw ITCH messages. hftbacktest keeps its reading: 81 of 4,684 in
   the same run.
 * **NautilusTrader's queue.** With `queue_position=True` a resting order is served
-  only by prints at its own price. A print through the level, a book that crosses the
-  order and a displayed size that shrinks ahead of it do not serve it
-  (`micro_scenarios.py` reproduces each case on a three-line book, for all three
-  engines). On the probe it serves 1,311 quotes: 295 fewer than manifoldbt and none
+  only by prints at its own price: a print through the level and a book that crosses
+  the order do not serve it, and the queue ahead of the order is not capped by the
+  size the book displays, which the other two engines bring down when that size
+  shrinks (`micro_scenarios.py` reproduces each case on a three-line book, for all
+  three engines). On the probe it serves 1,311 quotes: 295 fewer than manifoldbt and none
   that manifoldbt does not. Order by order, it takes an executed size off the queue
   ahead when the order is reduced and again when the trade arrives. The benchmark
   gives it both, as NautilusTrader's own Databento adapter does, so the same size
