@@ -23,6 +23,25 @@ vectorbt==0.28.4
 # 6.x line and the one this harness is validated against.
 plotly==6.9.0
 raptorbt==0.9.0
+# NautilusTrader: an event-driven engine with a Rust core and a Python API. It
+# asks for Python >=3.12,<3.15 and publishes cp312 wheels (checked on Linux,
+# manylinux_2_35, and on Windows), so it sits inside the interpreter that raptorbt
+# already pins us to. 1.231.0 is the latest stable release.
+nautilus_trader==1.231.0
+# Its runtime dependencies, pinned for the same reason plotly is above: nothing
+# in the set is allowed to move because a transitive dependency shipped a
+# release the day before the run. numpy, pandas and psutil are already pinned
+# further down; uvloop is what it installs on Linux and macOS only.
+msgspec==0.22.0
+portion==2.6.3
+sortedcontainers==2.4.0
+click==8.5.0
+fsspec==2026.2.0
+pyarrow==26.0.0
+pytz==2026.5
+tzdata==2026.5
+tqdm==4.70.1
+uvloop==0.22.1 ; sys_platform != "win32"
 numpy==2.4.3
 numba==0.64.0
 pandas==2.3.3

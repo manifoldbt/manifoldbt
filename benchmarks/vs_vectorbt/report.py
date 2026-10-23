@@ -201,15 +201,23 @@ def _summary_cost(exact: List[Dict[str, Any]], payload: Dict[str, Any]) -> List[
             )
     lines.append("")
 
-    top = summarised[shared[-1]]
     advisory = {}
     basis_differs = {}
-    for engine, verdict in top["parity"].items():
-        diffs = verdict.get("diffs", {})
-        if diffs.get("advisory_ratio_rel"):
-            advisory[engine] = max(diffs["advisory_ratio_rel"].values())
-        elif diffs.get("ratio_basis"):
-            basis_differs[engine] = diffs.get("max_drawdown_rel")
+    no_drawdown = set()
+    # Each engine is read at the longest series it ran on: one held back by its
+    # ceiling has no verdict at the longest size, and reading only that row would
+    # leave it out of the sentence.
+    for bars in reversed(shared):
+        for engine, verdict in summarised[bars]["parity"].items():
+            if engine in advisory or engine in basis_differs:
+                continue
+            diffs = verdict.get("diffs", {})
+            if diffs.get("max_drawdown_absent"):
+                no_drawdown.add(engine)
+            if diffs.get("advisory_ratio_rel"):
+                advisory[engine] = max(diffs["advisory_ratio_rel"].values())
+            elif diffs.get("ratio_basis"):
+                basis_differs[engine] = diffs.get("max_drawdown_rel")
     if advisory:
         lines += [
             "Gated on total return, round-trips and max drawdown (exact). Sharpe, "
@@ -217,6 +225,17 @@ def _summary_cost(exact: List[Dict[str, Any]], payload: Dict[str, Any]) -> List[
             "",
         ]
     for engine, drawdown_rel in basis_differs.items():
+        if engine in no_drawdown:
+            # Not "it was not compared": it does not exist. The engine offers
+            # volatility, Sharpe and Sortino and no drawdown statistic, and the
+            # harness does not build one for it.
+            lines += [
+                "{e} annualises its ratios on its own basis and reports no maximum "
+                "drawdown, so this workload is gated on total return and "
+                "round-trips only (exact).".format(e=engine),
+                "",
+            ]
+            continue
         if drawdown_rel is None:
             agreement = "was not compared"
         elif drawdown_rel == 0.0:
@@ -235,12 +254,19 @@ def _side_measures(payload: Dict[str, Any], results: List[Dict[str, Any]]) -> Li
     cold = payload.get("cold_start")
     mem = payload.get("memory")
     engines = _engines(payload)
-    threading_rows = [
-        r for r in results
-        if r.get("cpu_over_wall")
-        and all(r["cpu_over_wall"].get(e) is not None for e in engines)
-    ]
-    if not (cold or mem or threading_rows):
+
+    # CPU over wall time, per engine, at the longest series that engine ran and
+    # produced a reading for. An engine held back by its ceiling has no reading at
+    # the longest size, and requiring every engine at one size would drop the row
+    # for all of them.
+    threading: Dict[str, Any] = {}
+    for engine in engines:
+        rows = [r for r in results
+                if (r.get("cpu_over_wall") or {}).get(engine) is not None]
+        if rows:
+            best = max(rows, key=lambda r: r["bars"])
+            threading[engine] = (best["cpu_over_wall"][engine], best["bars"])
+    if not (cold or mem or threading):
         return []
 
     lines = [
@@ -257,15 +283,38 @@ def _side_measures(payload: Dict[str, Any], results: List[Dict[str, Any]]) -> Li
                      + " | ".join("{:.2f} s".format(share[e]) if e in share else "-"
                                   for e in engines) + " |")
     if mem:
-        lines.append("| RAM added by the run, per 1M bars | " + " | ".join(
-            "{:.0f} MB".format(mem[e]["added_mb_per_million_bars"]) if e in mem else "-"
-            for e in engines) + " |")
-    if threading_rows:
-        biggest = max(threading_rows, key=lambda r: r["bars"])
-        ratio = biggest["cpu_over_wall"]
-        lines.append("| CPU over wall time at {:,} bars | ".format(biggest["bars"])
-                     + " | ".join("{:.2f}".format(ratio[e]) for e in engines) + " |")
+        def memory_cell(engine: str) -> str:
+            if engine not in mem or not isinstance(mem[engine], dict):
+                return "-"
+            probe = mem[engine]
+            text = "{:.0f} MB".format(probe["added_mb_per_million_bars"])
+            # An engine held back by its ceiling is measured at the ceiling, and
+            # the figure is scaled to a million bars like the others. Say so
+            # beside the number rather than leave a reader to assume the same
+            # series length.
+            if probe.get("bars") and probe["bars"] != mem.get("bars"):
+                text += " (at {:,} bars)".format(probe["bars"])
+            return text
+
+        lines.append("| RAM added by the run, per 1M bars | "
+                     + " | ".join(memory_cell(e) for e in engines) + " |")
+    if threading:
+        sizes = {bars for _, bars in threading.values()}
+        if len(sizes) == 1:
+            lines.append("| CPU over wall time at {:,} bars | ".format(sizes.pop())
+                         + " | ".join("{:.2f}".format(threading[e][0]) if e in threading else "-"
+                                      for e in engines) + " |")
+        else:
+            lines.append("| CPU over wall time, at the longest series each ran | " + " | ".join(
+                "{:.2f} (at {:,})".format(*threading[e]) if e in threading else "-"
+                for e in engines) + " |")
     lines.append("")
+    if mem and mem.get("failed"):
+        for engine, why in mem["failed"].items():
+            lines += ["- Memory probe for {}: {}".format(engine, why), ""]
+    if cold and cold.get("failed"):
+        for engine, why in cold["failed"].items():
+            lines += ["- Cold-start probe for {}: {}".format(engine, why), ""]
     return lines
 
 
@@ -275,7 +324,9 @@ def _not_run(payload: Dict[str, Any], results: List[Dict[str, Any]]) -> List[str
     Kept as prose rather than a table because the reason is the content. An
     engine that cannot express a workload has told you something about itself,
     and compressing that into an empty cell would throw away the only part worth
-    reading.
+    reading. An engine held back by its ceiling gets the same treatment, and the
+    same reason is printed once with the list of workloads it applies to, not
+    once per workload.
     """
     seen: Dict[str, Dict[str, str]] = {}
     for row in results:
@@ -287,8 +338,12 @@ def _not_run(payload: Dict[str, Any], results: List[Dict[str, Any]]) -> List[str
 
     lines = ["## Not run, and why", ""]
     for engine, entries in seen.items():
+        by_reason: Dict[str, List[str]] = {}
         for workload, why in entries.items():
-            lines += ["- **{e} on `{w}`.** {why}".format(e=engine, w=workload, why=why), ""]
+            by_reason.setdefault(why, []).append(workload)
+        for why, workloads in by_reason.items():
+            lines += ["- **{e} on {w}.** {why}".format(
+                e=engine, w=", ".join("`{}`".format(w) for w in workloads), why=why), ""]
     return lines
 
 
@@ -394,6 +449,15 @@ def _divergence_line(row: Dict[str, Any], payload: Dict[str, Any]) -> str:
         if engine == reference or "round_trips" not in scale:
             continue
         line += " {e} books {n}.".format(e=engine, n=scale["round_trips"])
+        # An engine that takes the same trades and sizes one of them differently
+        # says how far: a count and a median, not an adjective.
+        if scale.get("reentries_on_exit_bar") is not None:
+            line += (" Of those, {n} re-enter on the exit bar, with a quantity that "
+                     "sits a median of {m:.1e} (at most {x:.1e}), in relative terms, "
+                     "away from the position closed on that bar.".format(
+                         n=scale["reentries_on_exit_bar"],
+                         m=scale.get("reentry_quantity_gap_median", 0.0),
+                         x=scale.get("reentry_quantity_gap_max", 0.0)))
     return line
 
 

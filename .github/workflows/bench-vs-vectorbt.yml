@@ -7,7 +7,7 @@
 # runner. Same for the engines it is compared against: they come from PyPI at
 # pinned versions, and the run prints the versions it resolved.
 
-name: Benchmark vs vectorbt and raptorbt
+name: Benchmark vs vectorbt, raptorbt and NautilusTrader
 
 on:
   workflow_dispatch:
@@ -63,7 +63,18 @@ jobs:
     # engine. Pre-releases are skipped; a manual dispatch can still benchmark
     # one by naming the version, if it ever exists on PyPI.
     if: github.event_name != 'release' || github.event.release.prerelease == false
-    timeout-minutes: 60
+    # 75, not 60. The job ran 30 minutes before NautilusTrader joined it. An
+    # event-driven engine replays every bar through a simulated exchange, so it
+    # costs about 7 minutes of this job on a fast workstation (6 workloads at
+    # 100,000 bars, 8 calls each) and, scaled by how much slower this runner is
+    # than that workstation on the engines both have, 11 to 15 on a hosted
+    # runner. Measured on one (run 39945358568, a dispatch, so 3 repetitions):
+    # the benchmark step took 21 min 58 s against 15 min 4 s for the run before
+    # NautilusTrader joined, which is 6 min 54 s more. That run's medians put
+    # the 8 calls of a release or weekly run (7 repetitions) at about 12 to 13
+    # minutes, inside the estimate. The ceiling that keeps it off the longer
+    # series is in engines.py; this is the margin on top of it.
+    timeout-minutes: 75
     strategy:
       fail-fast: false
       matrix:
@@ -142,11 +153,13 @@ jobs:
           else
             pip install manifoldbt
           fi
+          # The lock adds NautilusTrader: a 189 MB wheel (manylinux_2_35) that
+          # unpacks to about 610 MB, and 6 s to install on a fast connection.
           pip install -r benchmarks/vs_vectorbt/requirements-lock.txt
 
       - name: Record the resolved environment
         shell: bash
-        run: pip freeze | grep -iE '^(manifoldbt|vectorbt|raptorbt|numpy|numba|pandas|psutil|plotly)=' || true
+        run: pip freeze | grep -iE '^(manifoldbt|vectorbt|raptorbt|nautilus[-_]trader|numpy|numba|pandas|psutil|plotly)==' || true
 
       - name: Run the benchmark
         shell: bash
@@ -271,6 +284,21 @@ jobs:
         # why the large point goes deep in combinations on short series rather
         # than the reverse -- 20,000 combinations on 20,000 bars costs it 27 s a
         # call, where 5,000 combinations on a million bars would cost it 25 min.
+        #
+        # NautilusTrader takes part without being named below. It has no sweep
+        # API either, and its loop is the expensive one: a full event-driven
+        # replay per cell, 0.75 s at 20,000 bars and 7.8 s at 200,000 on a fast
+        # workstation, which makes these grids 1 hour, 5 hours and 22 hours.
+        # Its sweep ceiling (64 combinations, engines.py) puts it out of scope
+        # on all three points by itself, so the recipe cannot send it into them.
+        # What it does cost here is its anchor: 16 cells spread across each grid,
+        # run on both engines and compared cell by cell, which is where the
+        # per-backtest time in its reason comes from. About 2.5 minutes on that
+        # workstation, most of it the 200,000-bar point; budget 4 to 5 on this
+        # runner. Measured on one (run 39945358568) it was 8 min 38 s more: the
+        # step ran 23 min 1 s against 14 min 23 s without it, because the runner
+        # took 1.45 to 1.63 s per backtest at 20,000 bars and 15.3 s at 200,000
+        # where the workstation took 0.75 s and 7.8 s. The 45 minutes hold.
         run: |
           python bench.py             --workloads sma_cross             --bars 100000             --reps 1             --cold-start-reps 0             --sweep 20000:5000 20000:20000:oos 200000:10000:oos             --sweep-reps "${{ inputs.reps || '2' }}"             --out "results-sweeps.json"
 
