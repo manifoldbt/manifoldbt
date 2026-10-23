@@ -2,7 +2,8 @@
 # (the version under test); everything else is fixed so that a change of number
 # can be traced to an engine and not to a dependency.
 hftbacktest==2.4.4
-nautilus_trader==1.231.0
+# NautilusTrader 1.231.0 is pinned in requirements-nautilus.txt (see fsspec
+# below for why); its runtime dependencies are pinned in this file.
 numba==0.68.0
 llvmlite==0.50.0
 numpy==2.2.6
@@ -19,7 +20,11 @@ colorcet==3.2.1
 contourpy==1.4.0
 cycler==0.12.1
 fonttools==4.67.0
-fsspec==2026.2.0
+# fsspec: NautilusTrader asks for exactly 2026.2.0, which is inside the range of
+# GHSA-27vj-qcqg-25rc (fixed in 2026.6.0). It is installed with --no-deps from
+# requirements-nautilus.txt, after this file, so the patched pin below is the
+# one that lands.
+fsspec==2026.9.0
 holoviews==1.23.2
 idna==3.20
 Jinja2==3.1.6
@@ -54,5 +59,6 @@ tornado==6.6
 tqdm==4.70.1
 typing_extensions==4.16.0
 tzdata==2026.5
+uvloop==0.22.1 ; sys_platform != "win32"
 urllib3==2.8.0
 xyzservices==2026.9.1
