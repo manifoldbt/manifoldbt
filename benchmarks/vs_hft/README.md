@@ -49,7 +49,10 @@ them in its own idiom:
   risk-adverse queue model, constant order latency.
 * **NautilusTrader**: a `Strategy` subclass per rule on a `BacktestEngine`:
   `OrderBookDelta` (L2_MBP / L3_MBO) or `QuoteTick` (L1_MBP) plus `TradeTick`,
-  `queue_position=True`, `trade_execution=True`, a `LatencyModel`.
+  `queue_position=True`, `trade_execution=True`, a `LatencyModel`. The data objects are
+  built from raw integers, scaled to the fixed precision of the installed wheel (9
+  decimals on Windows, 16 on Linux), which the adapter reads from Nautilus rather than
+  assuming; the journals of the six workloads are identical on both.
 
 ## The rule this harness is built around
 

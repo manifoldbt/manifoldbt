@@ -16,16 +16,41 @@ import numpy as np
 import spec
 
 PX_PREC, SZ_PREC = 1, 6
-PX_UNIT = 10 ** (9 - PX_PREC)      # raw = value x 1e9 at the venue's precision
-SZ_UNIT = 10 ** (9 - SZ_PREC)
 CHUNK = 400_000
+
+# One price tick and one quantity step as a raw integer. They depend on the build of
+# Nautilus, so _imports() sets them (see raw_unit).
+PX_UNIT = SZ_UNIT = None
+
+
+def raw_unit(precision):
+    """The raw integer of one unit of the last decimal at `precision`, on this build of Nautilus.
+
+    The data objects built with `from_raw` take the value scaled to the build's fixed precision, not
+    to the instrument's: 9 decimals on the standard wheel (Windows), 16 on the high-precision wheel
+    (Linux). A scale written as 10 ** 9 is right on one and 10 ** 7 too small on the other, and
+    nothing complains: prices read as zero, the books look empty, a market order fills a quantity
+    that rounds to nothing and the position opens flat (an AssertionError in PositionOpened)."""
+    from nautilus_trader.model.objects import FIXED_PRECISION
+    return 10 ** (FIXED_PRECISION - precision)
+
+
+def check_raw_scale(px_prec, sz_prec):
+    """Refuse to run if a raw integer built with raw_unit is not read back as the value it stands for."""
+    from nautilus_trader.model.objects import Price, Quantity
+    for cls, prec in ((Price, px_prec), (Quantity, sz_prec)):
+        steps = 123_456
+        got = cls.from_raw(steps * raw_unit(prec), prec).as_double()
+        want = steps / 10 ** prec
+        if abs(got - want) > 1e-9 * want:
+            raise RuntimeError(f"raw scale: {cls.__name__} at {prec} decimals reads {got}, expected {want}")
 
 
 def _imports():
     global BacktestEngine, BacktestEngineConfig, FillModel, LatencyModel, LoggingConfig, StrategyConfig
     global BTC, USDT, OrderBookDelta, QuoteTick, TradeTick, AccountType, AggressorSide, BookAction
     global BookType, OmsType, OrderSide, RecordFlag, TimeInForce, InstrumentId, Symbol, TradeId, Venue
-    global CurrencyPair, Money, Price, Quantity, Strategy
+    global CurrencyPair, Money, Price, Quantity, Strategy, PX_UNIT, SZ_UNIT
     from nautilus_trader.backtest.engine import BacktestEngine, BacktestEngineConfig
     from nautilus_trader.backtest.models import FillModel, LatencyModel
     from nautilus_trader.config import LoggingConfig, StrategyConfig
@@ -37,6 +62,8 @@ def _imports():
     from nautilus_trader.model.instruments import CurrencyPair
     from nautilus_trader.model.objects import Money, Price, Quantity
     from nautilus_trader.trading.strategy import Strategy
+    check_raw_scale(PX_PREC, SZ_PREC)
+    PX_UNIT, SZ_UNIT = raw_unit(PX_PREC), raw_unit(SZ_PREC)
 
 
 def instrument():
@@ -66,13 +93,16 @@ def stream(d, tier, iid, feed_ns, conv_clock):
     conv_clock[0] accumulates the seconds spent converting."""
     t0 = time.perf_counter()
     n_t = len(d["tr_ts"])
-    tr_px = (np.round(d["tr_px"] * 10 ** PX_PREC).astype(np.int64) * PX_UNIT)
-    tr_sz = (np.round(d["tr_qty"] * 10 ** SZ_PREC).astype(np.int64) * SZ_UNIT)
+    # Ticks (price x 10^PX_PREC) and steps (quantity x 10^SZ_PREC) as int64. They become raw integers
+    # (x PX_UNIT, x SZ_UNIT) one by one as Python ints: on the high-precision build a raw price is
+    # 128 bits wide and an int64 array would wrap around without a word.
+    tr_px = np.round(d["tr_px"] * 10 ** PX_PREC).astype(np.int64)
+    tr_sz = np.round(d["tr_qty"] * 10 ** SZ_PREC).astype(np.int64)
     if tier == "l2":
         n_d = len(d["d25_ts"])
         ts_d = d["d25_ts"]
-        px_d = d["d25_px"] * PX_UNIT          # ticks (= price x 10^PX_PREC) -> raw
-        sz_d = (np.round(d["d25_qty"] * 10 ** SZ_PREC).astype(np.int64) * SZ_UNIT)
+        px_d = d["d25_px"]
+        sz_d = np.round(d["d25_qty"] * 10 ** SZ_PREC).astype(np.int64)
         side_d, last_d = d["d25_side"], d["d25_last"]
     else:
         n_d = len(d["q_ts"])
@@ -87,10 +117,10 @@ def stream(d, tier, iid, feed_ns, conv_clock):
     F_LAST = int(RecordFlag.F_LAST)
     feed = int(feed_ns)
     if tier != "l2":
-        q_bp = d["q_bpx"] * PX_UNIT
-        q_ap = d["q_apx"] * PX_UNIT
-        q_bq = (np.round(d["q_bqty"] * 10 ** SZ_PREC).astype(np.int64) * SZ_UNIT)
-        q_aq = (np.round(d["q_aqty"] * 10 ** SZ_PREC).astype(np.int64) * SZ_UNIT)
+        q_bp, q_ap = d["q_bpx"], d["q_apx"]
+        q_bq = np.round(d["q_bqty"] * 10 ** SZ_PREC).astype(np.int64)
+        q_aq = np.round(d["q_aqty"] * 10 ** SZ_PREC).astype(np.int64)
+    pu, su = PX_UNIT, SZ_UNIT
     for a in range(0, len(order), CHUNK):
         t0 = time.perf_counter()
         out = []
@@ -102,14 +132,14 @@ def stream(d, tier, iid, feed_ns, conv_clock):
                 if tier == "l2":
                     q = int(sz_d[j])
                     push(Delta(iid, dele if q == 0 else upd, buy if side_d[j] == 0 else sell,
-                               int(px_d[j]), PX_PREC, q, SZ_PREC, 0, F_LAST if last_d[j] else 0, 0, t, t + feed))
+                               int(px_d[j]) * pu, PX_PREC, q * su, SZ_PREC, 0, F_LAST if last_d[j] else 0, 0, t, t + feed))
                 else:
-                    push(Quote(iid, int(q_bp[j]), int(q_ap[j]), PX_PREC, PX_PREC, int(q_bq[j]), int(q_aq[j]),
-                               SZ_PREC, SZ_PREC, t, t + feed))
+                    push(Quote(iid, int(q_bp[j]) * pu, int(q_ap[j]) * pu, PX_PREC, PX_PREC, int(q_bq[j]) * su,
+                               int(q_aq[j]) * su, SZ_PREC, SZ_PREC, t, t + feed))
             else:
                 i = j - n_d
                 t = int(d["tr_ts"][i])
-                push(Trade(iid, int(tr_px[i]), PX_PREC, int(tr_sz[i]), SZ_PREC,
+                push(Trade(iid, int(tr_px[i]) * pu, PX_PREC, int(tr_sz[i]) * su, SZ_PREC,
                            a_buy if d["tr_side"][i] == 0 else a_sell, TradeId(str(i)), t, t + feed))
         conv_clock[0] += time.perf_counter() - t0
         yield out
@@ -380,7 +410,10 @@ def _make_taker_class():
                     self.sent_pos = target
 
         def on_order_filled(self, event):
-            self.fills.append((event.ts_event, event.last_px.as_double(), event.last_qty.as_double(),
+            # as_double() of a 128-bit raw price is off by one unit in the last place on some prices
+            # (high-precision build); the price is a whole number of ticks, so round it back to one
+            # and both builds hand over the same double.
+            self.fills.append((event.ts_event, round(event.last_px.as_double(), PX_PREC), event.last_qty.as_double(),
                                1 if event.order_side == OrderSide.BUY else -1))
 
         def on_order_rejected(self, event):
