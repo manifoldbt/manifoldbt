@@ -1,0 +1,420 @@
+# Market-making and HFT benchmark: manifoldbt against hftbacktest and
+# NautilusTrader, on public data, on standard GitHub-hosted runners.
+#
+# Nothing here has access to the engine source. Every engine is installed from
+# PyPI at a pinned version (manifoldbt is the version being released), the data
+# comes from public archives that need no key, and each archive is checked
+# against a pinned SHA-256 before anything runs. Fork the repository, add your own
+# licence key as the MANIFOLDBT_CI_LICENSE secret and press "Run workflow" to
+# reproduce the numbers on your own runner.
+#
+# This is a separate workflow from the vectorbt benchmark on purpose: it downloads
+# gigabytes from third parties, it runs for over an hour, and an outage at one
+# of those archives must not turn the other benchmark red.
+
+name: Benchmark vs hftbacktest and NautilusTrader
+
+on:
+  workflow_dispatch:
+    inputs:
+      manifoldbt_version:
+        description: "manifoldbt version to install from PyPI (blank = latest)"
+        required: false
+        default: ""
+      reps:
+        description: "Interleaved repetitions per point"
+        required: false
+        default: "3"
+      day:
+        description: "Pinned crypto day (YYYY-MM-DD, must be listed in spec.DAYS)"
+        required: false
+        default: "2025-08-13"
+  release:
+    types: [published]
+  schedule:
+    # Weekly, on a different day from the vectorbt benchmark so the two never
+    # compete for runners or for the same release window.
+    - cron: "41 4 * * 3"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bench-vs-hft-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+
+env:
+  PYTHONUNBUFFERED: "1"
+  BENCH_PUBLIC: "1"
+  BENCH_DIR: benchmarks/vs_hft
+  BENCH_HFT_DATA: ${{ github.workspace }}/bench-data
+
+jobs:
+  # ------------------------------------------------------------------------ #
+  # Order books by price: 25 levels and best bid/ask, Bybit spot BTCUSDT
+  # ------------------------------------------------------------------------ #
+  books:
+    name: books and best bid/ask (ubuntu-latest)
+    runs-on: ubuntu-latest
+    if: github.event_name != 'release' || github.event.release.prerelease == false
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install the engines from PyPI
+        shell: bash
+        run: |
+          set -e
+          VERSION="${{ inputs.manifoldbt_version }}"
+          if [ -z "$VERSION" ] && [ "${{ github.event_name }}" = "release" ]; then
+            VERSION="$(echo '${{ github.event.release.tag_name }}' | sed 's/^v//')"
+          fi
+          python -m pip install --upgrade pip
+          # PyPI accepts an upload well before its index serves it, and a release
+          # event fires right after the upload: wait for the version to appear.
+          if [ -n "$VERSION" ]; then
+            ok=0
+            for try in $(seq 1 20); do
+              if pip install --no-cache-dir "manifoldbt==${VERSION}"; then ok=1; break; fi
+              echo "attempt ${try}/20: ${VERSION} is not on the index yet, retrying in 30 s"
+              sleep 30
+            done
+            [ "$ok" -eq 1 ] || { echo "::error::manifoldbt==${VERSION} still missing after ten minutes"; exit 1; }
+          else
+            pip install manifoldbt
+          fi
+          pip install -r ${BENCH_DIR}/requirements-lock.txt
+
+      - name: Record the resolved environment
+        shell: bash
+        run: pip freeze | grep -iE '^(manifoldbt|hftbacktest|nautilus.trader|numpy|numba|pandas|pyarrow|psutil)=' || true
+
+      - name: Activate the benchmark licence
+        env:
+          MANIFOLDBT_CI_LICENSE: ${{ secrets.MANIFOLDBT_CI_LICENSE }}
+        shell: bash
+        working-directory: ${{ env.BENCH_DIR }}
+        run: python ci_activate.py
+
+      # The archives are the slow, flaky part. They are cached by day and by the
+      # version of the preparation code, so a run only downloads what changed.
+      - name: Restore the prepared data
+        uses: actions/cache@v4
+        with:
+          path: bench-data
+          key: bench-data-books-${{ inputs.day || '2025-08-13' }}-${{ hashFiles('benchmarks/vs_hft/data.py', 'benchmarks/vs_hft/spec.py') }}
+
+      - name: Download and fingerprint the day
+        shell: bash
+        working-directory: ${{ env.BENCH_DIR }}
+        run: python prep_cli.py "${{ inputs.day || '2025-08-13' }}"
+
+      - name: Run the benchmark
+        shell: bash
+        working-directory: ${{ env.BENCH_DIR }}
+        run: |
+          python bench.py \
+            --day "${{ inputs.day || '2025-08-13' }}" \
+            --reps "${{ inputs.reps || '3' }}" \
+            --workloads mm_ladder_l2 mm_touch_bbo flow_taker_bbo probe_l2_zero probe_l2_nominal \
+            --fail-on-blocked \
+            --out "results-books.json"
+
+      - name: Render the report
+        if: always()
+        shell: bash
+        working-directory: ${{ env.BENCH_DIR }}
+        run: |
+          if [ -f results-books.json ]; then python report.py results-books.json
+          else echo "no result file: the benchmark did not get far enough to write one"; fi
+
+      - name: Upload the raw result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-hft-books
+          path: benchmarks/vs_hft/results-books.json
+          if-no-files-found: warn
+
+  # ------------------------------------------------------------------------ #
+  # Order by order: Nasdaq TotalView-ITCH, one symbol, regular session
+  # ------------------------------------------------------------------------ #
+  orders:
+    name: order by order (ubuntu-latest)
+    runs-on: ubuntu-latest
+    if: github.event_name != 'release' || github.event.release.prerelease == false
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install the engines from PyPI
+        shell: bash
+        run: |
+          set -e
+          VERSION="${{ inputs.manifoldbt_version }}"
+          if [ -z "$VERSION" ] && [ "${{ github.event_name }}" = "release" ]; then
+            VERSION="$(echo '${{ github.event.release.tag_name }}' | sed 's/^v//')"
+          fi
+          python -m pip install --upgrade pip
+          if [ -n "$VERSION" ]; then
+            ok=0
+            for try in $(seq 1 20); do
+              if pip install --no-cache-dir "manifoldbt==${VERSION}"; then ok=1; break; fi
+              echo "attempt ${try}/20: ${VERSION} is not on the index yet, retrying in 30 s"
+              sleep 30
+            done
+            [ "$ok" -eq 1 ] || { echo "::error::manifoldbt==${VERSION} still missing after ten minutes"; exit 1; }
+          else
+            pip install manifoldbt
+          fi
+          pip install -r ${BENCH_DIR}/requirements-lock.txt
+
+      - name: Activate the benchmark licence
+        env:
+          MANIFOLDBT_CI_LICENSE: ${{ secrets.MANIFOLDBT_CI_LICENSE }}
+        shell: bash
+        working-directory: ${{ env.BENCH_DIR }}
+        run: python ci_activate.py
+
+      # The day file is 4.7 GB compressed. Only the extract of one symbol is kept
+      # (tens of megabytes) and cached; the raw file is deleted as soon as it has
+      # been read, so the runner's disk never holds more than the download.
+      - name: Restore the extract
+        id: extract-cache
+        uses: actions/cache@v4
+        with:
+          path: bench-data/itch-extract
+          key: bench-data-itch-S112825-AAPL-${{ hashFiles('benchmarks/vs_hft/itch.py') }}
+
+      - name: Download the Nasdaq day file and extract AAPL
+        if: steps.extract-cache.outputs.cache-hit != 'true'
+        shell: bash
+        working-directory: ${{ env.BENCH_DIR }}
+        run: python itch_cli.py --day 2025-11-28 --symbols AAPL --out "${BENCH_HFT_DATA}/itch-extract"
+
+      - name: Run the benchmark
+        shell: bash
+        working-directory: ${{ env.BENCH_DIR }}
+        run: |
+          python bench.py \
+            --day "2025-08-13" \
+            --reps "${{ inputs.reps || '3' }}" \
+            --itch "${BENCH_HFT_DATA}/itch-extract/AAPL.itch" \
+            --workloads mbo_join_mbo \
+            --fail-on-blocked \
+            --out "results-orders.json"
+
+      # Every quote that the three engines sent at one price and at least one of
+      # them served is judged against an exact replay of the same messages, so no
+      # engine is trusted to be the reference. The journals are the ones the run
+      # above has just written.
+      - name: Judge the quotes against an exact replay
+        shell: bash
+        working-directory: ${{ env.BENCH_DIR }}
+        run: |
+          python fifo_truth.py "${BENCH_HFT_DATA}/itch-extract/AAPL.itch" \
+            manifoldbt="${BENCH_HFT_DATA}/tmp/mbo_join_mbo_manifoldbt.npz" \
+            hftbacktest="${BENCH_HFT_DATA}/tmp/mbo_join_mbo_hftbacktest.npz" \
+            nautilus="${BENCH_HFT_DATA}/tmp/mbo_join_mbo_nautilus.npz" \
+            --json results-orders-exact-replay.json | tee exact-replay.md
+          cat exact-replay.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Render the report
+        if: always()
+        shell: bash
+        working-directory: ${{ env.BENCH_DIR }}
+        run: |
+          if [ -f results-orders.json ]; then python report.py results-orders.json
+          else echo "no result file: the benchmark did not get far enough to write one"; fi
+
+      - name: Upload the raw result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-hft-orders
+          path: benchmarks/vs_hft/results-orders*.json
+          if-no-files-found: warn
+
+  # ------------------------------------------------------------------------ #
+  # Parameter sweeps of the maker
+  # ------------------------------------------------------------------------ #
+  sweeps:
+    name: sweeps (ubuntu-latest)
+    runs-on: ubuntu-latest
+    if: github.event_name != 'release' || github.event.release.prerelease == false
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install the engines from PyPI
+        shell: bash
+        run: |
+          set -e
+          VERSION="${{ inputs.manifoldbt_version }}"
+          if [ -z "$VERSION" ] && [ "${{ github.event_name }}" = "release" ]; then
+            VERSION="$(echo '${{ github.event.release.tag_name }}' | sed 's/^v//')"
+          fi
+          python -m pip install --upgrade pip
+          if [ -n "$VERSION" ]; then
+            ok=0
+            for try in $(seq 1 20); do
+              if pip install --no-cache-dir "manifoldbt==${VERSION}"; then ok=1; break; fi
+              echo "attempt ${try}/20: ${VERSION} is not on the index yet, retrying in 30 s"
+              sleep 30
+            done
+            [ "$ok" -eq 1 ] || { echo "::error::manifoldbt==${VERSION} still missing after ten minutes"; exit 1; }
+          else
+            pip install manifoldbt
+          fi
+          pip install -r ${BENCH_DIR}/requirements-lock.txt
+
+      - name: Activate the benchmark licence
+        env:
+          MANIFOLDBT_CI_LICENSE: ${{ secrets.MANIFOLDBT_CI_LICENSE }}
+        shell: bash
+        working-directory: ${{ env.BENCH_DIR }}
+        run: python ci_activate.py
+
+      - name: Restore the prepared data
+        uses: actions/cache@v4
+        with:
+          path: bench-data
+          key: bench-data-sweeps-${{ inputs.day || '2025-08-13' }}-${{ hashFiles('benchmarks/vs_hft/data.py', 'benchmarks/vs_hft/spec.py') }}
+
+      # Nested grids (each contains the smaller ones). manifoldbt sweeps in its own
+      # process per call (peak memory) and checks a sample of combinations against single
+      # runs. hftbacktest and NautilusTrader have no sweep call: they are timed as the loop of runs, and
+      # as a pool of four processes, that a user would write. Nautilus runs a
+      # bounded number of combinations per grid and the rest is projected, said so
+      # in the result.
+      - name: Run the sweeps
+        shell: bash
+        working-directory: ${{ env.BENCH_DIR }}
+        run: |
+          python sweep.py --family maker \
+            --day "${{ inputs.day || '2025-08-13' }}" \
+            --window 36000 43200 \
+            --grids 4 16 64 256 \
+            --workers 4 \
+            --nt-max-combos 8 \
+            --out "results-sweeps-maker.json"
+          python sweep_mbt.py --family maker \
+            --day "${{ inputs.day || '2025-08-13' }}" \
+            --window 36000 43200 \
+            --grids 4 16 64 256 \
+            --workers 4 \
+            --identity 8 \
+            --out "results-sweeps-mbt-maker.json"
+          python sweep.py --family latency \
+            --day "${{ inputs.day || '2025-08-13' }}" \
+            --window 36000 43200 \
+            --grids 16 \
+            --workers 4 \
+            --nt-max-combos 8 \
+            --out "results-sweeps-latency.json"
+          python sweep_mbt.py --family latency \
+            --day "${{ inputs.day || '2025-08-13' }}" \
+            --window 36000 43200 \
+            --grids 16 \
+            --workers 4 \
+            --out "results-sweeps-mbt-latency.json"
+          python sweep.py --family taker \
+            --day "${{ inputs.day || '2025-08-13' }}" \
+            --grids 12 \
+            --workers 4 \
+            --nt-max-combos 6 \
+            --out "results-sweeps-taker.json"
+          python sweep_mbt.py --family taker \
+            --day "${{ inputs.day || '2025-08-13' }}" \
+            --grids 12 \
+            --workers 4 \
+            --calls full \
+            --identity 4 \
+            --out "results-sweeps-mbt-taker.json"
+
+      - name: Upload the raw result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-hft-sweeps
+          path: benchmarks/vs_hft/results-sweeps-*.json
+          if-no-files-found: warn
+
+  # ------------------------------------------------------------------------ #
+  # Publish, so the numbers live somewhere that is not an artifact
+  # ------------------------------------------------------------------------ #
+  publish:
+    name: publish results
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # A partial result is worse than a stale one: the website renders whatever
+    # this file says, and a missing table reads as a choice rather than a crash.
+    needs: [books, orders, sweeps]
+    # A dispatch that pins an old version is a question somebody asked, not the
+    # current state of the engine: it measures and reports without publishing.
+    if: github.event_name != 'workflow_dispatch' || inputs.manifoldbt_version == ''
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: bench-hft-*
+          path: artifacts
+          merge-multiple: true
+
+      # publish.py records GITHUB_RUN_STARTED_AT, which Actions never sets; the
+      # run's own record has it. Re-printed through `date`, so only a date can
+      # reach $GITHUB_ENV; a failed lookup leaves the field empty.
+      - name: Read when this run started
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          started="$(gh run view "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --json startedAt --jq .startedAt 2>/dev/null)" || started=""
+          if [ -n "$started" ] && stamp="$(date -u -d "$started" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null)"; then
+            echo "GITHUB_RUN_STARTED_AT=$stamp" >> "$GITHUB_ENV"
+          else
+            echo "::warning::could not read when this run started; publishing without it"
+          fi
+
+      - name: Merge the run into one published result
+        shell: bash
+        run: |
+          python benchmarks/vs_hft/publish.py artifacts \
+            --out benchmarks/vs_hft/results/latest.json
+
+      - name: Commit it, if it moved
+        shell: bash
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add benchmarks/vs_hft/results/latest.json
+          if git diff --cached --quiet; then
+            echo "identical to the published result: nothing to commit"
+            exit 0
+          fi
+          git commit -m "bench: publish hft results from run ${GITHUB_RUN_ID} [skip ci]"
+          git pull --rebase origin master
+          git push origin HEAD:master
