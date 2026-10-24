@@ -508,7 +508,7 @@ paid tiers add scale and depth. See [pricing](https://www.manifoldbt.com/#pricin
 | | Community | Pro | Researcher |
 |---|:---:|:---:|:---:|
 | Single backtests (`mbt.run`) | Unlimited, full speed | Unlimited | Unlimited |
-| Parameter sweeps and batches | Up to 256 backtests per sweep | Unlimited | Unlimited |
+| Parameter sweeps and batches | 256 backtests per session, batches included | Unlimited | Unlimited |
 | Simulation resolution (`bar_interval`) | 1 minute and coarser | Down to 1 second | Down to 1 second |
 | Output resolution | Daily | Down to 1 second | Down to 1 second |
 | Monte Carlo | 1,000 simulations | Unlimited | Unlimited |
