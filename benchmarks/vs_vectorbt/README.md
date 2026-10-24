@@ -551,6 +551,10 @@ because manifoldbt is the only one of the four that fans out across cores. The
 same point measured x13 on a four-vCPU cloud runner and x32 on two fast desktop
 cores; the CI numbers are the conservative ones, and they are the ones published.
 
+These runners have no GPU, so this job measures the CPU path of a sweep only. The
+same three points on a GPU, with the CPU of that machine beside it, are in
+[`../gpu`](../gpu/README.md).
+
 ### NautilusTrader and the grid
 
 A grid on NautilusTrader is a loop of full replays, so its cost is the number of

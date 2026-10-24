@@ -1,0 +1,18 @@
+# What the Modal image installs beside manifoldbt. Pinned for the reason
+# ../vs_vectorbt/requirements-lock.txt gives, and to the same versions where the
+# two files overlap: the GPU numbers are read next to the CPU job's, and the
+# libraries under the harness should not differ between the two.
+#
+# manifoldbt itself is not pinned here: modal_app.py installs the version under
+# test, with its [gpu] extra, so the same lock serves every release.
+numpy==2.4.3
+pandas==2.3.3
+psutil==7.2.2
+pyarrow==26.0.0
+python-dateutil==2.9.0.post0
+pytz==2026.5
+six==1.17.0
+tzdata==2026.5
+# The NVIDIA runtime compiler the [gpu] extra brings. It compiles the kernels
+# for the card at run time, so its version is part of what is measured.
+nvidia-cuda-nvrtc-cu12==12.9.86
