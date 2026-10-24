@@ -132,7 +132,11 @@ def tier() -> dict:
     return {"pro": name == "Pro"}
 
 
-def run_mbt(df, fast_vals, slow_vals, workdir, metrics=False):
+def run_mbt(df, fast_vals, slow_vals, workdir, metrics=False, device="auto",
+            max_parallelism=0):
+    # `device` and `max_parallelism` are for the GPU benchmark (benchmarks/gpu),
+    # which times this same sweep on a card and on the CPU beside it. Their
+    # defaults are the engine's own, so the call this job times is unchanged.
     import manifoldbt as mbt
     from manifoldbt.expr import col, lit, when
     from manifoldbt.helpers import Interval, Slippage
@@ -175,7 +179,8 @@ def run_mbt(df, fast_vals, slow_vals, workdir, metrics=False):
 
     def call():
         batch = mbt.run_sweep_lite(
-            strategy, {"fast": fast_vals, "slow": slow_vals}, config, store
+            strategy, {"fast": fast_vals, "slow": slow_vals}, config, store,
+            max_parallelism=max_parallelism, device=device,
         )
         # Alphabetical key order: "fast" is the outer loop, "slow" the inner one.
         # Keyed by the pair rather than by position, so a change to that order
