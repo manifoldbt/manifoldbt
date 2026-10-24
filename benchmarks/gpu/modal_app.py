@@ -1,7 +1,7 @@
 """Run bench.py on a Modal GPU, from the workflow or from a laptop.
 
-    MANIFOLDBT_VERSION=0.28.1 MANIFOLDBT_CI_LICENSE=<key> \\
-        modal run modal_app.py --gpu L4 --reps 5 --out results-gpu.json
+    BENCH_GPU=L4 MANIFOLDBT_VERSION=0.28.1 MANIFOLDBT_CI_LICENSE=<key> \\
+        modal run modal_app.py --out results-gpu.json
 
 GitHub's hosted runners have no GPU, and its GPU runners are billed by the minute
 on paid plans only, so the card comes from Modal. Modal bills by the second for
@@ -40,7 +40,11 @@ MEMORY_MIB = 8192
 # The whole run, image pull included, measured at a few minutes. The ceiling on
 # what a stuck run can cost.
 TIMEOUT_S = 15 * 60
-DEFAULT_GPU = "L4"
+# The card is read when the function is declared, not passed at call time: Modal
+# checks the declared card when the app starts, so a function declared on an L4
+# and called `with_options(gpu="T4")` still fails wherever an L4 cannot be had.
+# Passed into the container too, so both sides declare the same function.
+GPU = os.environ.get("BENCH_GPU", "").strip() or "L4"
 
 VERSION = os.environ.get("MANIFOLDBT_VERSION", "").strip()
 if modal.is_local() and not VERSION:
@@ -68,7 +72,8 @@ app = modal.App("manifoldbt-gpu-bench")
 
 @app.function(
     image=image,
-    gpu=DEFAULT_GPU,
+    gpu=GPU,
+    env={"BENCH_GPU": GPU},
     cpu=(CPU_CORES, CPU_CORES),
     memory=MEMORY_MIB,
     timeout=TIMEOUT_S,
@@ -94,16 +99,15 @@ def measure(argv: list) -> dict:
 
 
 @app.local_entrypoint()
-def main(gpu: str = DEFAULT_GPU, reps: int = 5, sweep: str = "",
-         out: str = "results-gpu.json") -> None:
+def main(reps: int = 7, sweep: str = "", out: str = "results-gpu.json") -> None:
     argv = [
         "--reps", str(reps),
         "--cpu-threads", str(CPU_CORES),
-        "--platform", "Modal {}, CPU side on {} reserved cores".format(gpu, CPU_CORES),
+        "--platform", "Modal {}, CPU side on {} reserved cores".format(GPU, CPU_CORES),
     ]
     if sweep.strip():
         argv += ["--sweep", *sweep.split()]
-    reply = measure.with_options(gpu=gpu).remote(argv)
+    reply = measure.remote(argv)
     if reply["result"] is not None:
         pathlib.Path(out).write_text(reply["result"], encoding="utf-8")
         print("wrote " + out)

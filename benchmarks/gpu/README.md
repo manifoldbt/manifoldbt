@@ -28,10 +28,10 @@ and publishes it.
 Inside the container nothing differs from a user's machine: the published wheel
 from PyPI with its `[gpu]` extra, the libraries pinned in `requirements-lock.txt`,
 and an NVIDIA L4. Modal bills by the second for the life of the container, card and
-reserved cores included, so a run costs its wall time. By the CPU job's timings
-the three default points should take about a minute of measurement, most of it
-the CPU side, and the function's 15-minute timeout is the ceiling on what a stuck
-run can cost.
+reserved cores included, so a run costs its wall time: two minutes from start to
+finish on the first runs, image already built, most of it the CPU side of the
+comparison. The function's 15-minute timeout is the ceiling on what a stuck run
+can cost.
 
 ## What the harness refuses to publish
 
@@ -58,15 +58,20 @@ run can cost.
 2. Per point, one untimed call on each side. It compiles the kernels on the GPU,
    which is why it is reported on its own (`first_call_s`): it is what a user's
    first sweep costs, not what a sweep costs.
-3. `--reps` timed repetitions per side (5 by default), GPU and CPU interleaved, in
-   an order that alternates, so a clock that drifts over the run drifts on both
-   sides. Medians are published with min, max and IQR; a point whose IQR exceeds
-   15% of its median is flagged, as in the CPU benchmark.
+3. `--reps` timed repetitions per side (7 by default, as in the CPU benchmark),
+   GPU and CPU interleaved, in an order that alternates, so a clock that drifts
+   over the run drifts on both sides. Medians are published with min, max and
+   IQR; a point whose IQR exceeds 15% of its median is flagged, as in the CPU
+   benchmark. Seven rather than five because one slow repetition out of five is
+   enough to cross that line: it did on the first Modal run.
 
 The CPU side runs on 4 cores reserved for it as a hard limit, like the four vCPUs
 of the GitHub runner, and is told so (`max_parallelism`). A container can see
 more cores than it may use, and a sweep that spawned one thread per visible core
-on a 4-core quota would publish the cost of the oversubscription.
+on a 4-core quota would publish the cost of the oversubscription. What the
+container saw is recorded under `environment.cores`; on Modal it is the 4 cores
+reserved. The CPU model is not readable from inside Modal's sandbox, so it is
+recorded as unknown.
 
 ## Reading the numbers
 
@@ -74,13 +79,18 @@ The speedup is the GPU against the CPU of the **same machine**. It is not a rati
 against the CPU job, which runs on another machine: the two files are read side by
 side, never divided into each other.
 
-The ratio grows with the work per sweep. On a shared workstation (RTX 3090, CPU
-held to 4 threads, every point flagged noisy, so indicative only), the three
-default points ran roughly 5 to 9 times faster on the card, and a million bars by
-20,000 combinations about 20 times. That last point is not in the default set
-because its CPU side alone costs 37 s a call there, so a run would be minutes of
-reserved card mostly waiting for the CPU. It can be asked for on a manual run
-(`sweep: 1000000:20000`).
+The ratio grows with the work per sweep. On the first Modal runs (manifoldbt
+0.28.1, L4 against its 4 reserved cores), the three default points ran 9.1, 10.3
+and 18.8 times faster on the card: 33 ms against 296 ms, 111 ms against 1.15 s,
+and 233 ms against 4.39 s. The published file is the reference; these are what
+the harness was validated on.
+
+Larger grids widen the gap. On a shared workstation (RTX 3090, CPU held to 4
+threads, flagged noisy, so indicative only), a million bars by 20,000
+combinations ran about 20 times faster on the card. That point is not in the
+default set because its CPU side alone costs 37 s a call there, so a run would be
+minutes of reserved card mostly waiting for the CPU. It can be asked for on a
+manual run (`sweep: 1000000:20000`).
 
 The numbers depend on the card. The published file is always an L4; a manual run
 can name another one, and is then reported without being published.
@@ -100,8 +110,8 @@ On Modal, as the workflow does:
 ```bash
 pip install -r requirements-ci.txt
 modal token new
-MANIFOLDBT_VERSION=0.28.1 MANIFOLDBT_CI_LICENSE=<key> \
-    modal run modal_app.py --gpu L4 --out results-gpu.json
+BENCH_GPU=L4 MANIFOLDBT_VERSION=0.28.1 MANIFOLDBT_CI_LICENSE=<key> \
+    modal run modal_app.py --out results-gpu.json
 ```
 
 In a fork, the workflow needs three repository secrets: `MODAL_TOKEN_ID` and

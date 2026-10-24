@@ -6,7 +6,7 @@ measure the CPU path. This one runs the *same* sweep -- same generator, same see
 same grid, same strategy, imported from ``../vs_vectorbt`` rather than copied --
 on a GPU, and on the CPU of the same machine beside it.
 
-    python bench.py --sweep 20000:5000 20000:20000 200000:10000 --reps 5 \\
+    python bench.py --sweep 20000:5000 20000:20000 200000:10000 --reps 7 \\
         --out results-gpu.json
 
 It runs on any machine with an NVIDIA card, its driver, ``manifoldbt[gpu]`` and a
@@ -109,13 +109,35 @@ def cgroup_quota(path: str = "/sys/fs/cgroup/cpu.max") -> Optional[float]:
 
 
 def cpu_model() -> str:
+    """The CPU's name, from whichever source this kernel fills in.
+
+    A sandboxed kernel (Modal runs gVisor) can leave ``model name`` out of
+    /proc/cpuinfo, so lscpu and the vendor/family/model numbers are tried next.
+    """
+    info: Dict[str, str] = {}
     try:
         with open("/proc/cpuinfo", encoding="utf-8") as fh:
             for line in fh:
-                if line.startswith("model name"):
-                    return line.split(":", 1)[1].strip()
+                key, sep, value = line.partition(":")
+                if sep and key.strip() not in info:
+                    info[key.strip()] = value.strip()
     except OSError:
         pass
+    if info.get("model name"):
+        return info["model name"]
+    exe = shutil.which("lscpu")
+    if exe:
+        try:
+            out = subprocess.run([exe], capture_output=True, text=True, timeout=30).stdout
+            for line in out.splitlines():
+                key, _, value = line.partition(":")
+                if key.strip() == "Model name" and value.strip():
+                    return value.strip()
+        except (OSError, subprocess.SubprocessError):
+            pass
+    if info.get("vendor_id"):
+        return "{} family {} model {}".format(
+            info["vendor_id"], info.get("cpu family", "?"), info.get("model", "?"))
     return platform.processor() or "unknown"
 
 
@@ -315,8 +337,8 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser.add_argument("--sweep", nargs="+", type=parse_point,
                         default=[parse_point(p) for p in DEFAULT_POINTS],
                         metavar="BARS:COMBOS", help="grid points (default: the CPU job's)")
-    parser.add_argument("--reps", type=int, default=5,
-                        help="timed repetitions per side and point (default 5)")
+    parser.add_argument("--reps", type=int, default=7,
+                        help="timed repetitions per side and point (default 7)")
     parser.add_argument("--cpu-threads", type=int, default=0,
                         help="threads for the CPU side (default: the usable cores)")
     parser.add_argument("--platform", default="",

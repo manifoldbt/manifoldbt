@@ -33,7 +33,7 @@ on:
       reps:
         description: "Interleaved repetitions per side and point"
         required: false
-        default: "5"
+        default: "7"
   release:
     types: [published]
   schedule:
@@ -61,7 +61,8 @@ jobs:
       measured: ${{ steps.measured.outputs.measured }}
     env:
       PYTHONUNBUFFERED: "1"
-      GPU: ${{ inputs.gpu || 'L4' }}
+      # Read by modal_app.py when it declares the function.
+      BENCH_GPU: ${{ inputs.gpu || 'L4' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -117,7 +118,7 @@ jobs:
             exit 1
           fi
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "benchmarking manifoldbt ${VERSION} on a Modal ${GPU}"
+          echo "benchmarking manifoldbt ${VERSION} on a Modal ${BENCH_GPU}"
 
       - name: Install the Modal client
         if: steps.token.outputs.present == 'true'
@@ -137,8 +138,7 @@ jobs:
           MANIFOLDBT_VERSION: ${{ steps.version.outputs.version }}
         run: |
           modal run modal_app.py \
-            --gpu "$GPU" \
-            --reps "${{ inputs.reps || '5' }}" \
+            --reps "${{ inputs.reps || '7' }}" \
             --sweep "${{ inputs.sweep }}" \
             --out results-gpu.json
 
