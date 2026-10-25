@@ -132,7 +132,11 @@ def tier() -> dict:
     return {"pro": name == "Pro"}
 
 
-def run_mbt(df, fast_vals, slow_vals, workdir, metrics=False):
+def run_mbt(df, fast_vals, slow_vals, workdir, metrics=False, device="auto",
+            max_parallelism=0):
+    # `device` and `max_parallelism` are for the GPU benchmark (benchmarks/gpu),
+    # which times this same sweep on a card and on the CPU beside it. Their
+    # defaults are the engine's own, so the call this job times is unchanged.
     import manifoldbt as mbt
     from manifoldbt.expr import col, lit, when
     from manifoldbt.helpers import Interval, Slippage
@@ -175,7 +179,8 @@ def run_mbt(df, fast_vals, slow_vals, workdir, metrics=False):
 
     def call():
         batch = mbt.run_sweep_lite(
-            strategy, {"fast": fast_vals, "slow": slow_vals}, config, store
+            strategy, {"fast": fast_vals, "slow": slow_vals}, config, store,
+            max_parallelism=max_parallelism, device=device,
         )
         # Alphabetical key order: "fast" is the outer loop, "slow" the inner one.
         # Keyed by the pair rather than by position, so a change to that order
@@ -339,7 +344,12 @@ def run_nt(df, fast_vals, slow_vals, metrics=False):
 def builder(name: str, df, fast_vals, slow_vals, workdir: str, metrics: bool = False):
     """The grid closure for one engine, ready to be timed."""
     if name == "manifoldbt":
-        return run_mbt(df, fast_vals, slow_vals, workdir, metrics)
+        # The CPU path, by name. The engine's default ("auto") sends a grid this
+        # size to the GPU wherever there is one and a licence that covers it, so
+        # on a workstation this job timed the card and called it the CPU. The
+        # GitHub runner has no GPU, which is why the published numbers were not
+        # affected; the GPU has its own benchmark, ../gpu.
+        return run_mbt(df, fast_vals, slow_vals, workdir, metrics, device="cpu")
     if name == "vectorbt":
         return run_vbt(df, fast_vals, slow_vals, metrics)
     if name == "raptorbt":
@@ -438,6 +448,18 @@ def oos_reason(name: str, bars: int, combos: int, anchor_cells: int, anchor_s: f
     if name == "vectorbt":
         return OOS_VBT_REASON
     per_cell = anchor_s / anchor_cells
+    if name == "raptorbt":
+        # Declared out of scope by the point (`:oos=...,raptorbt`), never held
+        # back by a ceiling, so no loop limit to quote.
+        return (
+            "raptorbt has no fan-out API for a parameter grid on one instrument, so "
+            "a grid is a Python loop of full backtests. Measured: {per:.1f} ms per "
+            "backtest at {bars:,} bars (mean over {cells} cells spread across this "
+            "grid), which puts this grid of {combos:,} combinations at about {total} "
+            "per call. That is past the time budget of the job. It is not run.".format(
+                per=per_cell * 1e3, bars=bars, cells=anchor_cells, combos=combos,
+                total=_duration(per_cell * combos))
+        )
     held = (
         "Looped grids are held to {:,} combinations, so that a point stays inside "
         "the time budget of the job.".format(loop_limit)

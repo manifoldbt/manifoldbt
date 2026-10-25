@@ -1,0 +1,233 @@
+# The GPU half of the sweep benchmark.
+#
+# GitHub's hosted runners have no GPU, and its GPU runners are paid, so the card
+# comes from Modal (benchmarks/gpu/modal_app.py). The runner here only resolves
+# the version, starts the run and publishes what comes back. Everything that is
+# measured runs in a container built from the published wheel on PyPI, as in the
+# CPU workflow, on the same grids and the same data as its sweeps job.
+#
+# Three repository secrets:
+#   MODAL_TOKEN_ID, MODAL_TOKEN_SECRET  a Modal token (modal.com, Settings > API tokens)
+#   MANIFOLDBT_CI_LICENSE               a licence that covers GPU acceleration
+# Without the Modal token the job measures nothing and says so in a warning,
+# rather than going red on every fork that never asked for a GPU.
+
+name: Benchmark GPU sweeps (Modal)
+
+on:
+  workflow_dispatch:
+    inputs:
+      manifoldbt_version:
+        description: "manifoldbt version to install from PyPI (blank = latest)"
+        required: false
+        default: ""
+      gpu:
+        description: "Modal GPU type. Only an L4 run with the latest version is published."
+        type: choice
+        options: [L4, T4, A10G, L40S, A100, H100]
+        default: L4
+      sweep:
+        description: "Grid points as bars:combos, space-separated (blank = the CPU job's)"
+        required: false
+        default: ""
+      reps:
+        description: "Interleaved repetitions per side and point"
+        required: false
+        default: "7"
+  release:
+    types: [published]
+  schedule:
+    # Weekly, half an hour after the CPU benchmark.
+    - cron: "47 5 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bench-gpu-${{ github.ref }}
+  # Same rule as the CPU workflow: a manual run is never cancelled by another.
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+
+jobs:
+  gpu:
+    name: sweeps (Modal ${{ inputs.gpu || 'L4' }})
+    runs-on: ubuntu-latest
+    # Pre-releases never reach PyPI, see the CPU workflow.
+    if: github.event_name != 'release' || github.event.release.prerelease == false
+    # The Modal function has its own 15-minute timeout (modal_app.py), which is
+    # the ceiling on what a run can cost. This one adds the wait for PyPI.
+    timeout-minutes: 30
+    outputs:
+      measured: ${{ steps.measured.outputs.measured }}
+    env:
+      PYTHONUNBUFFERED: "1"
+      # Read by modal_app.py when it declares the function.
+      BENCH_GPU: ${{ inputs.gpu || 'L4' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for a Modal token
+        id: token
+        shell: bash
+        env:
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+        run: |
+          if [ -n "$MODAL_TOKEN_ID" ] && [ -n "$MODAL_TOKEN_SECRET" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::MODAL_TOKEN_ID and MODAL_TOKEN_SECRET are not set: there is no GPU to run on, so nothing is measured or published."
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-python@v5
+        if: steps.token.outputs.present == 'true'
+        with:
+          python-version: "3.12"
+
+      # The image pins the version (modal_app.py says why), so "latest" is
+      # resolved here. And as in the CPU workflow, a release run starts seconds
+      # after the upload, before PyPI's index serves the new version: wait for
+      # it rather than fail on propagation.
+      - name: Resolve the version under test
+        id: version
+        if: steps.token.outputs.present == 'true'
+        shell: bash
+        run: |
+          set -e
+          VERSION="${{ inputs.manifoldbt_version }}"
+          if [ -z "$VERSION" ] && [ "${{ github.event_name }}" = "release" ]; then
+            VERSION="$(echo '${{ github.event.release.tag_name }}' | sed 's/^v//')"
+          fi
+          if [ -z "$VERSION" ]; then
+            VERSION="$(curl -fsSL https://pypi.org/pypi/manifoldbt/json \
+              | python -c 'import json, sys; print(json.load(sys.stdin)["info"]["version"])')"
+          fi
+          served=0
+          for attempt in $(seq 1 20); do
+            if python -m pip download --quiet --no-deps --no-cache-dir \
+                 --dest "$RUNNER_TEMP/probe" "manifoldbt==${VERSION}"; then
+              served=1
+              break
+            fi
+            echo "attempt ${attempt}/20: ${VERSION} not served by the index yet, retrying in 30 s"
+            sleep 30
+          done
+          if [ "$served" -ne 1 ]; then
+            echo "::error::manifoldbt==${VERSION} still not on PyPI after ten minutes"
+            exit 1
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "benchmarking manifoldbt ${VERSION} on a Modal ${BENCH_GPU}"
+
+      - name: Install the Modal client
+        if: steps.token.outputs.present == 'true'
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r benchmarks/gpu/requirements-ci.txt
+
+      - name: Run the sweeps on a GPU
+        if: steps.token.outputs.present == 'true'
+        shell: bash
+        working-directory: benchmarks/gpu
+        env:
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+          MANIFOLDBT_CI_LICENSE: ${{ secrets.MANIFOLDBT_CI_LICENSE }}
+          MANIFOLDBT_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          modal run modal_app.py \
+            --reps "${{ inputs.reps || '7' }}" \
+            --sweep "${{ inputs.sweep }}" \
+            --out results-gpu.json
+
+      - name: Mark the result as measured
+        id: measured
+        if: steps.token.outputs.present == 'true'
+        shell: bash
+        run: echo "measured=true" >> "$GITHUB_OUTPUT"
+
+      - name: Render the report
+        # A parity failure is the most interesting thing that can happen here,
+        # so the report renders whenever there is a file to render.
+        if: always() && steps.token.outputs.present == 'true'
+        shell: bash
+        working-directory: benchmarks/gpu
+        run: |
+          if [ -f results-gpu.json ]; then
+            python report.py results-gpu.json
+          else
+            echo "no result file: the run did not get far enough to write one"
+          fi
+
+      - name: Upload the raw result
+        if: always() && steps.token.outputs.present == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-gpu
+          path: benchmarks/gpu/results-gpu.json
+          if-no-files-found: warn
+
+  publish:
+    name: publish results
+    runs-on: ubuntu-latest
+    needs: [gpu]
+    # Published: a green run of the latest version, on the reference card, on the
+    # CPU job's grids. A dispatch that changes any of the three answers a
+    # question without replacing the published number.
+    if: >-
+      needs.gpu.outputs.measured == 'true' &&
+      (github.event_name != 'workflow_dispatch' ||
+       (inputs.manifoldbt_version == '' && inputs.gpu == 'L4' && inputs.sweep == ''))
+    permissions:
+      contents: write
+      # `gh run view` below reads this run's own record.
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: bench-gpu
+          path: artifacts
+
+      - name: Read when this run started
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          started="$(gh run view "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --json startedAt --jq .startedAt 2>/dev/null)" || started=""
+          if [ -n "$started" ] && stamp="$(date -u -d "$started" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null)"; then
+            echo "GITHUB_RUN_STARTED_AT=$stamp" >> "$GITHUB_ENV"
+          else
+            echo "::warning::could not read when this run started; publishing without it"
+          fi
+
+      - name: Wrap the run into the published result
+        shell: bash
+        run: |
+          python benchmarks/gpu/publish.py artifacts \
+            --out benchmarks/gpu/results/latest.json
+
+      - name: Commit it, if it moved
+        shell: bash
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add benchmarks/gpu/results/latest.json
+          if git diff --cached --quiet; then
+            echo "identical to the published result: nothing to commit"
+            exit 0
+          fi
+          git commit -m "bench: publish gpu results from run ${GITHUB_RUN_ID} [skip ci]"
+          # The CPU workflow publishes on the same events.
+          git pull --rebase origin master
+          git push origin HEAD:master

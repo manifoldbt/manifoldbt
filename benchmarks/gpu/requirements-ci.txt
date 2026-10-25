@@ -1,0 +1,3 @@
+# The runner only needs the Modal client: everything that is measured is
+# installed in the Modal image (requirements-lock.txt), not here.
+modal==1.6.2
