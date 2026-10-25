@@ -20,6 +20,10 @@ import manifoldbt as mbt
 # of getting it wrong is a benchmark job that dies at the first step.
 VARS = ("MANIFOLDBT_CI_LICENSE", "MANIFOLDBT_CI_LICENCE")
 
+# The paid tiers `license_info()` can report. Since 0.29.0 a Researcher licence
+# reports "Researcher" instead of "Pro". Kept in step with sweep_child.PAID_TIERS.
+PAID_TIERS = ("Pro", "Researcher")
+
 
 def main() -> int:
     key = ""
@@ -41,8 +45,8 @@ def main() -> int:
         return 1
 
     tier, _ = mbt.license_info()
-    if tier != "Pro":
-        print("activation did not yield a licensed tier: refusing to continue.")
+    if tier not in PAID_TIERS:
+        print(f"activation yielded the {tier} tier, not a licensed one: refusing to continue.")
         return 1
     print("licensed tier active")
     return 0

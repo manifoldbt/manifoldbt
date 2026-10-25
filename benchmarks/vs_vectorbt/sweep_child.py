@@ -120,16 +120,22 @@ def grid(combos: int) -> tuple[list[int], list[int]]:
 # The Community limit on a single sweep, as published on the pricing page.
 COMMUNITY_SWEEP_LIMIT = 256
 
+# The paid tiers `license_info()` can report. Since 0.29.0 a Researcher licence
+# reports "Researcher" instead of "Pro"; both lift the sweep limit.
+PAID_TIERS = ("Pro", "Researcher")
+
 
 def tier() -> dict:
     """The licence tier the engine reports, read before and after the sweep.
 
     A number measured across a tier change is not a measurement of anything.
+    `pro` is true for any paid tier: the key predates the Researcher tier and is
+    kept so the published results keep their shape.
     """
     import manifoldbt as mbt
 
     name, _ = mbt.license_info()
-    return {"pro": name == "Pro"}
+    return {"pro": name in PAID_TIERS}
 
 
 def run_mbt(df, fast_vals, slow_vals, workdir, metrics=False, device="auto",
