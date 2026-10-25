@@ -99,7 +99,7 @@ def _entry(**changes):
         "tier_before": {"pro": True},
         "tier_after": {"pro": True},
         "parity": {"status": "exact"},
-        "unstable_reps": {"gpu": 0, "cpu": 0},
+        "unstable_reps": 0,
     }
     entry.update(changes)
     return entry
@@ -110,7 +110,7 @@ def _entry(**changes):
      "fell back to the CPU"),
     ({"tier_after": {"pro": False}}, "tier changed"),
     ({"parity": {"status": "failed"}}, "differ"),
-    ({"unstable_reps": {"gpu": 1, "cpu": 0}}, "did not reproduce"),
+    ({"unstable_reps": 1}, "did not reproduce"),
 ])
 def test_verdict_fails(changes, reason):
     status, why = bench.verdict(_entry(**changes))
@@ -127,30 +127,59 @@ SAMPLE = {
     "status": "exact",
     "reps": 5,
     "environment": {
-        "platform": "Modal L4, CPU side on 4 reserved cores",
-        "cpu": "AMD EPYC", "cpu_threads": 4,
+        "platform": "Modal L4",
+        "cpu": "unknown", "cpu_threads": 4,
         "gpus": [{"name": "NVIDIA L4", "driver_version": "570.0",
                   "memory.total": "23034 MiB"}],
         "versions": {"manifoldbt": "0.28.1"},
     },
     "sweeps": [
-        {"bars": 20000, "combos": 5000, "status": "exact", "reason": None,
+        {"bars": 20000, "combos": 5000, "data_digest": "554df142406ad3f0",
+         "status": "exact", "reason": None,
          "parity": {"status": "exact", "identical_cells": 5000},
-         "timings": {"seconds": {"gpu": 0.02, "cpu": 0.2}, "speedup": 10.0,
-                     "per_combo_us": {"gpu": 4.0, "cpu": 40.0},
-                     "first_call_s": {"gpu": 0.03, "cpu": 0.21}, "noisy": False}},
+         "timings": {"seconds": 0.02, "per_combo_us": 4.0, "first_call_s": 0.03,
+                     "noisy": False}},
         {"bars": 200000, "requested_combos": 10000, "status": "failed",
          "reason": "RuntimeError: out of memory"},
     ],
 }
 
 
-def test_report_renders_both_kinds_of_row():
-    text = report.render(SAMPLE)
+CPU_PUBLISHED = {
+    "run_url": "https://github.com/manifoldbt/manifoldbt/actions/runs/1",
+    "sweeps": {
+        "environment": {"versions": {"manifoldbt": "0.28.1"}, "logical_cores": 4},
+        "sweeps": [
+            {"bars": 20000, "combos": 5000, "data_digest": "554df142406ad3f0",
+             "timings": {"seconds": {"manifoldbt": 0.228}}},
+            # Same grid, other data: must not be matched.
+            {"bars": 200000, "combos": 10000, "data_digest": "other",
+             "timings": {"seconds": {"manifoldbt": 3.5}}},
+        ],
+    },
+}
+
+
+def test_report_reads_the_cpu_column_from_the_cpu_job():
+    text = report.render(SAMPLE, report.cpu_reference(CPU_PUBLISHED))
     assert "NVIDIA L4" in text
-    assert "| 20,000 | 5,000 | 20.0 ms | 0.200 s | x10.0 |" in text
+    assert "| 20,000 | 5,000 | 20.0 ms | 4.00 us | 30.0 ms | 0.228 s | x11.4 |" in text
     assert "5,000/5,000 bit-identical" in text
     assert "failed: RuntimeError: out of memory" in text
+    assert "4-vCPU GitHub runner" in text
+
+
+def test_report_gives_no_ratio_across_versions():
+    older = json.loads(json.dumps(CPU_PUBLISHED))
+    older["sweeps"]["environment"]["versions"]["manifoldbt"] = "0.27.2"
+    text = report.render(SAMPLE, report.cpu_reference(older))
+    assert "| 0.228 s |  |" in text
+    assert "no ratio" in text
+
+
+def test_report_without_a_cpu_file():
+    text = report.render(SAMPLE, report.cpu_reference(None))
+    assert "| 20,000 | 5,000 | 20.0 ms |" in text
 
 
 def test_publish_refuses_a_failed_result(tmp_path):

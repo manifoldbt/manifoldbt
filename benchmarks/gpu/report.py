@@ -1,12 +1,14 @@
 """Render a GPU sweep result as Markdown, and into the GitHub job summary.
 
-    python report.py results-gpu.json
+    python report.py results-gpu.json [--cpu-results ../vs_vectorbt/results/latest.json]
 
-The speedup in the table is GPU against the CPU of the same machine, on the cores
-named in the header. It is not a comparison with the CPU sweeps job, which runs
-on another machine: that job's numbers for the same grids are in
-../vs_vectorbt/results/latest.json, and they are read side by side, not divided
-by these.
+The CPU column is not measured here. It is the CPU sweeps job's published number
+for the same grid, read from its results file and matched on bars, combinations
+and the digest of the data, so both columns are about the same work. The two
+come from different machines (a GitHub runner and a Modal GPU), which is what
+the ratio says: what the sweep costs on the runner the CPU numbers are published
+from, against what it costs on the card. It is only computed when both runs
+measured the same manifoldbt version.
 """
 from __future__ import annotations
 
@@ -14,11 +16,32 @@ import argparse
 import json
 import os
 import sys
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Tuple
 
+HERE = os.path.dirname(os.path.abspath(__file__))
+CPU_RESULTS = os.path.join(HERE, "..", "vs_vectorbt", "results", "latest.json")
 METHOD_LINK = (
     "https://github.com/manifoldbt/manifoldbt/blob/master/benchmarks/gpu/README.md"
 )
+
+Key = Tuple[int, int, str]
+
+
+def cpu_reference(published: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """The CPU sweeps job's points, keyed by (bars, combos, data digest)."""
+    payload = (published or {}).get("sweeps") or {}
+    env = payload.get("environment") or {}
+    points: Dict[Key, float] = {}
+    for row in payload.get("sweeps") or []:
+        seconds = ((row.get("timings") or {}).get("seconds") or {}).get("manifoldbt")
+        if seconds is not None:
+            points[(row["bars"], row["combos"], row.get("data_digest", ""))] = seconds
+    return {
+        "points": points,
+        "version": (env.get("versions") or {}).get("manifoldbt"),
+        "cores": env.get("logical_cores"),
+        "run_url": (published or {}).get("run_url", ""),
+    }
 
 
 def _card(env: Dict[str, Any]) -> str:
@@ -35,56 +58,61 @@ def _seconds(value: float) -> str:
     return "{:.3f} s".format(value) if value >= 0.1 else "{:.1f} ms".format(value * 1e3)
 
 
-def render(payload: Dict[str, Any]) -> str:
+def render(payload: Dict[str, Any], cpu: Optional[Dict[str, Any]] = None) -> str:
+    cpu = cpu or cpu_reference(None)
     env = payload.get("environment") or {}
-    versions = env.get("versions") or {}
-    lines: List[str] = [
-        "## GPU parameter sweeps",
-        "",
-        "manifoldbt {} on {}. CPU side: {}, {} threads. {}".format(
-            versions.get("manifoldbt", "?"), _card(env), env.get("cpu", "?"),
-            env.get("cpu_threads", "?"), env.get("platform", "")).rstrip(),
-        "",
-    ]
+    version = (env.get("versions") or {}).get("manifoldbt", "?")
+    same_version = cpu["version"] == version
+    lines: List[str] = ["## GPU parameter sweeps", "",
+                        "manifoldbt {} on {}. {}".format(
+                            version, _card(env), env.get("platform", "")).rstrip()]
+    if cpu["points"]:
+        lines.append(
+            "CPU column: the CPU sweeps job's published run{}, manifoldbt {} on a "
+            "{}-vCPU GitHub runner.{}".format(
+                " ({})".format(cpu["run_url"]) if cpu["run_url"] else "",
+                cpu["version"] or "?", cpu["cores"] or "?",
+                "" if same_version else
+                " Not the version measured here, so no ratio is given."))
+    lines.append("")
     if payload.get("status") != "exact" and payload.get("reason"):
         lines += ["**Failed: {}**".format(payload["reason"]), ""]
 
     rows = payload.get("sweeps") or []
     if rows:
         lines += [
-            "| bars | combos | GPU | CPU | GPU vs CPU | per combo (GPU) | first GPU call "
-            "| parity |",
+            "| bars | combos | GPU | per combo | first GPU call | CPU (runner) "
+            "| GPU vs runner CPU | parity |",
             "|---:|---:|---:|---:|---:|---:|---:|:---|",
         ]
         for row in rows:
-            if row.get("status") != "exact" and "timings" not in row:
+            if "timings" not in row:
                 lines.append("| {:,} | {:,} | | | | | | failed: {} |".format(
                     row["bars"], row.get("requested_combos", 0), row.get("reason", "")))
                 continue
             t = row["timings"]
-            noisy = " ~" if t.get("noisy") else ""
+            cpu_s = cpu["points"].get((row["bars"], row["combos"], row.get("data_digest", "")))
+            ratio = "x{:.1f}".format(cpu_s / t["seconds"]) if cpu_s and same_version else ""
             parity = row["parity"]
             verdict = "{} ({:,}/{:,} bit-identical)".format(
                 row["status"], parity.get("identical_cells", 0), row["combos"])
             if row.get("reason"):
                 verdict += ": " + row["reason"]
-            lines.append(
-                "| {:,} | {:,} | {}{} | {}{} | x{:.1f} | {:.2f} us | {} | {} |".format(
-                    row["bars"], row["combos"],
-                    _seconds(t["seconds"]["gpu"]), noisy,
-                    _seconds(t["seconds"]["cpu"]), noisy,
-                    t["speedup"], t["per_combo_us"]["gpu"],
-                    _seconds(t["first_call_s"]["gpu"]), verdict))
+            lines.append("| {:,} | {:,} | {}{} | {:.2f} us | {} | {} | {} | {} |".format(
+                row["bars"], row["combos"], _seconds(t["seconds"]),
+                " ~" if t.get("noisy") else "", t["per_combo_us"],
+                _seconds(t["first_call_s"]), _seconds(cpu_s) if cpu_s else "",
+                ratio, verdict))
         lines.append("")
 
     lines += [
         "---",
         "",
-        "Medians of {} interleaved repetitions per side, after an untimed first call "
-        "(reported apart: it compiles the kernels) and a calibration of the card. "
-        "`~` = IQR above 15% of the median, indicative only. Parity: every cell of the "
-        "GPU grid against the CPU grid, keyed by parameter pair. Method: {}".format(
-            payload.get("reps", "?"), METHOD_LINK),
+        "GPU: medians of {} repetitions, after an untimed first call (reported apart: "
+        "it compiles the kernels) and a calibration of the card. `~` = IQR above 15% of "
+        "the median, indicative only. Parity: every cell of the GPU grid against the "
+        "same grid run once on the CPU of the GPU machine, keyed by parameter pair. "
+        "Method: {}".format(payload.get("reps", "?"), METHOD_LINK),
         "",
     ]
     return "\n".join(lines)
@@ -93,12 +121,18 @@ def render(payload: Dict[str, Any]) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser(description="render a GPU sweep result")
     parser.add_argument("results", nargs="?", default="results-gpu.json")
+    parser.add_argument("--cpu-results", default=CPU_RESULTS,
+                        help="the CPU benchmark's published results file")
     args = parser.parse_args()
 
     with open(args.results, encoding="utf-8") as fh:
         payload = json.load(fh)
+    published = None
+    if os.path.exists(args.cpu_results):
+        with open(args.cpu_results, encoding="utf-8") as fh:
+            published = json.load(fh)
 
-    text = render(payload)
+    text = render(payload, cpu_reference(published))
     sys.stdout.write(text + "\n")
 
     summary = os.environ.get("GITHUB_STEP_SUMMARY")

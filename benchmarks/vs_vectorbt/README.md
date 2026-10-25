@@ -552,7 +552,7 @@ same point measured x13 on a four-vCPU cloud runner and x32 on two fast desktop
 cores; the CI numbers are the conservative ones, and they are the ones published.
 
 These runners have no GPU, so this job measures the CPU path of a sweep only. The
-same three points on a GPU, with the CPU of that machine beside it, are in
+same three points timed on a GPU, and read against this job's numbers, are in
 [`../gpu`](../gpu/README.md).
 
 ### NautilusTrader and the grid

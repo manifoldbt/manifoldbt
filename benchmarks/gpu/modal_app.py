@@ -6,8 +6,10 @@
 GitHub's hosted runners have no GPU, and its GPU runners are billed by the minute
 on paid plans only, so the card comes from Modal. Modal bills by the second for
 the life of the container, card and reserved cores included, and nothing while no
-container runs, so a run costs its wall time: a few minutes of an L4, which is a
-few cents. The function's timeout below is the ceiling on that cost.
+container runs, so a run costs its wall time: about half a minute of an L4, a
+cent or two. The function's timeout below is the ceiling on that cost. Only the
+GPU is timed here; the CPU number the GPU is read against is the one the CPU
+sweeps job publishes from its GitHub runner.
 
 The image is the published wheel from PyPI with its ``[gpu]`` extra (the NVIDIA
 runtime compiler that compiles the kernels; the driver comes with the card), plus
@@ -31,9 +33,9 @@ HERE = pathlib.Path(__file__).resolve().parent
 BENCHMARKS = HERE.parent
 REMOTE = "/root/benchmarks"
 
-# Cores reserved for the CPU side of the comparison, as both the request and the
-# hard limit, so the CPU number is not a measure of how idle the host was. Four,
-# like the GitHub runner the CPU sweeps job runs on.
+# Cores for the untimed CPU run every GPU cell is checked against, as both the
+# request and the hard limit. The card is billed while that run goes, so it gets
+# enough cores to be short; four of them cost a fraction of the card.
 CPU_CORES = 4
 # Room for the 1M-bar point; the sweeps themselves stay well under it.
 MEMORY_MIB = 8192
@@ -103,7 +105,7 @@ def main(reps: int = 7, sweep: str = "", out: str = "results-gpu.json") -> None:
     argv = [
         "--reps", str(reps),
         "--cpu-threads", str(CPU_CORES),
-        "--platform", "Modal {}, CPU side on {} reserved cores".format(GPU, CPU_CORES),
+        "--platform", "Modal {}".format(GPU),
     ]
     if sweep.strip():
         argv += ["--sweep", *sweep.split()]

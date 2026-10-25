@@ -2,9 +2,11 @@
 
 The sweeps job of ``bench-vs-vectorbt.yml`` times manifoldbt's parameter sweep on
 a four-vCPU GitHub runner. Those runners have no GPU, so that job can only ever
-measure the CPU path. This one runs the *same* sweep -- same generator, same seed,
-same grid, same strategy, imported from ``../vs_vectorbt`` rather than copied --
-on a GPU, and on the CPU of the same machine beside it.
+measure the CPU path. This one times the *same* sweep -- same generator, same
+seed, same grid, same strategy, imported from ``../vs_vectorbt`` rather than
+copied -- on a GPU. The CPU number it is read against is that job's, published
+from the runner: the CPU path runs here once per point, untimed, only so that
+every GPU cell can be checked against it.
 
     python bench.py --sweep 20000:5000 20000:20000 200000:10000 --reps 7 \\
         --out results-gpu.json
@@ -34,15 +36,11 @@ The card is calibrated first (``calibrate_gpu``, untimed, a few seconds: it
 brings the card to its steady clocks and measures the costs the sweep uses to
 pick its path), and every point is run once untimed before it is timed, so that
 compiling kernels is not counted as sweep time. That first call is still
-reported on its own, because it is what a user's first sweep costs. GPU and CPU
-repetitions are interleaved, and their order alternates, so a clock that drifts
-over the run drifts on both sides.
+reported on its own, because it is what a user's first sweep costs.
 
-The CPU side is given the cores the machine lets this process use, read from its
-CPU affinity and cgroup quota rather than from ``os.cpu_count()``: a container
-that sees 64 host cores and may use 4 of them would otherwise run 64 threads on
-4 cores and publish the cost of the oversubscription. ``--cpu-threads`` sets it
-outright, which is what ``modal_app.py`` does with the cores it reserved.
+The parity run on the CPU is given the cores the machine lets this process use,
+read from its CPU affinity and cgroup quota rather than from ``os.cpu_count()``,
+or ``--cpu-threads``. It is not timed: the CPU number is the runner's.
 """
 from __future__ import annotations
 
@@ -72,8 +70,8 @@ SCHEMA_VERSION = 1
 # Same flag as the CPU benchmark: a point whose interquartile range exceeds 15%
 # of its median is indicative only.
 NOISE_THRESHOLD = 0.15
-# The CPU sweeps job's three points, so that every GPU number has a CPU number
-# for the same grid on the same data in the published CPU results.
+# The CPU sweeps job's three points: the GPU number of each is read against the
+# CPU number that job publishes for the same grid on the same data.
 DEFAULT_POINTS = ("20000:5000", "20000:20000", "200000:10000")
 
 
@@ -257,41 +255,38 @@ def measure_point(bars: int, combos: int, reps: int, threads: int) -> Dict[str, 
         cpu = run_mbt(df, fast_vals, slow_vals, os.path.join(work, "cpu"),
                       metrics=True, device="cpu", max_parallelism=threads)
 
-        # The untimed first calls: kernels compile here, and the results they
-        # return are the ones every repetition must reproduce.
+        # The untimed first GPU call: kernels compile here, and the results it
+        # returns are the ones every repetition must reproduce.
         gpu_first, gpu_ref, fallbacks = timed(gpu)
-        cpu_first, cpu_ref, _ = timed(cpu)
+        # The CPU path, once and untimed: the reference every GPU cell is
+        # checked against. Its timing is the CPU job's, not this machine's.
+        _, cpu_ref, _ = timed(cpu)
 
-        samples: Dict[str, List[float]] = {"gpu": [], "cpu": []}
-        unstable = {"gpu": 0, "cpu": 0}
-        for rep in range(reps):
-            order = (("gpu", gpu), ("cpu", cpu)) if rep % 2 == 0 else (("cpu", cpu), ("gpu", gpu))
-            for side, call in order:
-                elapsed, out, caught = timed(call)
-                samples[side].append(elapsed)
-                if side == "gpu":
-                    fallbacks.extend(caught)
-                ref = gpu_ref if side == "gpu" else cpu_ref
-                if len(out) != len(ref) or identical_cells(ref, out) != len(ref):
-                    unstable[side] += 1
+        samples: List[float] = []
+        unstable = 0
+        for _rep in range(reps):
+            elapsed, out, caught = timed(gpu)
+            samples.append(elapsed)
+            fallbacks.extend(caught)
+            if len(out) != len(gpu_ref) or identical_cells(gpu_ref, out) != len(gpu_ref):
+                unstable += 1
     finally:
         shutil.rmtree(work, ignore_errors=True)
 
     parity = compare(cpu_ref, gpu_ref)
     parity["reference"] = "cpu"
+    parity["reference_threads"] = threads
     parity["identical_cells"] = identical_cells(cpu_ref, gpu_ref)
-    stats = {side: summarise(values) for side, values in samples.items()}
-    gpu_s, cpu_s = stats["gpu"]["median_s"], stats["cpu"]["median_s"]
+    stats = summarise(samples)
+    gpu_s = stats["median_s"]
     entry.update({
         "parity": parity,
         "timings": {
-            "seconds": {"gpu": gpu_s, "cpu": cpu_s},
-            "speedup": cpu_s / gpu_s if gpu_s else None,
-            "per_combo_us": {"gpu": gpu_s / entry["combos"] * 1e6,
-                             "cpu": cpu_s / entry["combos"] * 1e6},
-            "first_call_s": {"gpu": gpu_first, "cpu": cpu_first},
+            "seconds": gpu_s,
+            "per_combo_us": gpu_s / entry["combos"] * 1e6,
+            "first_call_s": gpu_first,
             "stats": stats,
-            "noisy": any(s["iqr_over_median"] > NOISE_THRESHOLD for s in stats.values()),
+            "noisy": stats["iqr_over_median"] > NOISE_THRESHOLD,
             "reps": reps,
         },
         "fallbacks": [{"category": c, "message": m} for c, m in fallbacks],
@@ -310,7 +305,7 @@ def verdict(entry: Dict[str, Any]) -> Tuple[str, Optional[str]]:
         return "failed", "the licence tier changed during the point"
     if entry["parity"]["status"] != "exact":
         return "failed", "GPU and CPU results differ beyond the gate"
-    if any(entry["unstable_reps"].values()):
+    if entry["unstable_reps"]:
         return "failed", "a repetition did not reproduce the first call"
     return "exact", None
 
@@ -338,9 +333,10 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
                         default=[parse_point(p) for p in DEFAULT_POINTS],
                         metavar="BARS:COMBOS", help="grid points (default: the CPU job's)")
     parser.add_argument("--reps", type=int, default=7,
-                        help="timed repetitions per side and point (default 7)")
+                        help="timed GPU repetitions per point (default 7)")
     parser.add_argument("--cpu-threads", type=int, default=0,
-                        help="threads for the CPU side (default: the usable cores)")
+                        help="threads for the untimed CPU parity run "
+                             "(default: the usable cores)")
     parser.add_argument("--platform", default="",
                         help="where this ran, as the report should name it")
     parser.add_argument("--out", required=True, help="results JSON")
@@ -374,7 +370,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     env = result["environment"]
     card = env["gpus"][0]["name"] if env["gpus"] else "no GPU visible"
     print(f"manifoldbt {env['versions']['manifoldbt']} | {card} | "
-          f"CPU {env['cpu']} x {threads} threads", flush=True)
+          f"CPU parity run on {threads} threads", flush=True)
 
     if not tier()["pro"]:
         result["reason"] = "no licensed tier: GPU sweeps are not run unlicensed"
@@ -399,10 +395,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         write(args.out, result)  # a crash further on still leaves this point
         if entry["status"] == "exact":
             t = entry["timings"]
-            print("{:>9,} bars x {:>6,} combos | GPU {:8.3f} s | CPU {:8.3f} s | "
-                  "x{:.1f} | first GPU call {:.3f} s | {}/{} cells bit-identical{}".format(
-                      bars, entry["combos"], t["seconds"]["gpu"], t["seconds"]["cpu"],
-                      t["speedup"], t["first_call_s"]["gpu"],
+            print("{:>9,} bars x {:>6,} combos | GPU {:8.3f} s | first call {:.3f} s | "
+                  "{}/{} cells bit-identical to the CPU{}".format(
+                      bars, entry["combos"], t["seconds"], t["first_call_s"],
                       entry["parity"]["identical_cells"], entry["combos"],
                       " | NOISY" if t["noisy"] else ""), flush=True)
         else:
