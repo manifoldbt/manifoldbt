@@ -1,0 +1,448 @@
+{
+  "repo": "manifoldbt/manifoldbt",
+  "run_id": "40212420753",
+  "run_url": "https://github.com/manifoldbt/manifoldbt/actions/runs/40212420753",
+  "commit": "5f2ca4d964c983a2c8ddf79e00ae05dccdae2060",
+  "run_started_at": "2026-10-25T16:35:38Z",
+  "conclusion": "success",
+  "synced_at": "2026-10-25T16:38:17.593132+00:00",
+  "gpu": {
+    "schema_version": 1,
+    "generated_at": "2026-10-25T16:36:01.755379+00:00",
+    "environment": {
+      "platform": "Modal L4",
+      "os": "Linux",
+      "os_release": "4.19.0-gvisor",
+      "arch": "x86_64",
+      "cpu": "unknown",
+      "cores": {
+        "os_cpu_count": 4,
+        "affinity": 4,
+        "cgroup_quota": null,
+        "usable": 4
+      },
+      "cpu_threads": 4,
+      "ram_gb": 364.6,
+      "gpus": [
+        {
+          "name": "NVIDIA L4",
+          "driver_version": "610.57.04",
+          "memory.total": "23034 MiB",
+          "compute_cap": "8.9"
+        }
+      ],
+      "python": "3.12.10",
+      "versions": {
+        "manifoldbt": "0.29.0",
+        "numpy": "2.4.3",
+        "pandas": "2.3.3"
+      }
+    },
+    "reps": 7,
+    "calibration": {
+      "sans_bracket": {
+        "sweep_u": [
+          [
+            2.0,
+            310.2213541666667
+          ],
+          [
+            58.0,
+            12.20141882183908
+          ],
+          [
+            232.0,
+            3.259417654454023
+          ],
+          [
+            928.0,
+            1.6083114448635059
+          ],
+          [
+            3712.0,
+            0.4175120386584052
+          ],
+          [
+            14848.0,
+            0.17286543785368236
+          ],
+          [
+            59392.0,
+            0.1641327987352127
+          ],
+          [
+            118784.0,
+            0.15041307471264367
+          ]
+        ],
+        "sweep_ev_lat": 1665.5027932960893,
+        "sweep_ev_debit": 0.6986849432908122,
+        "scan_nk": [
+          [
+            2048.0,
+            0.14963297319151367
+          ],
+          [
+            8192.0,
+            0.11085374221638822
+          ]
+        ],
+        "scan_lat": [
+          [
+            2.0,
+            1619.3081754636664
+          ],
+          [
+            3712.0,
+            3246.751370983176
+          ]
+        ],
+        "scan_ev_debit": 0.6986849432908122,
+        "scan_fixe": 785000.0,
+        "aux_barre": 0.0,
+        "scan_octet": 0.06372348219156265
+      },
+      "un_ordre": {
+        "sweep_u": [
+          [
+            2.0,
+            455.078125
+          ],
+          [
+            58.0,
+            18.263628445018604
+          ],
+          [
+            232.0,
+            4.919536536392285
+          ],
+          [
+            928.0,
+            2.4477202316810347
+          ],
+          [
+            3712.0,
+            0.6885421904415936
+          ],
+          [
+            14848.0,
+            0.308915467369621
+          ],
+          [
+            59392.0,
+            0.29401034662762215
+          ],
+          [
+            118784.0,
+            0.2697557471264368
+          ]
+        ],
+        "sweep_ev_lat": 1665.5027932960893,
+        "sweep_ev_debit": 0.6986849432908122,
+        "scan_nk": [
+          [
+            2048.0,
+            0.14963297319151367
+          ],
+          [
+            8192.0,
+            0.11085374221638822
+          ]
+        ],
+        "scan_lat": [
+          [
+            2.0,
+            582.9753625650472
+          ],
+          [
+            3712.0,
+            6538.83538532289
+          ]
+        ],
+        "scan_ev_debit": 0.6986849432908122,
+        "scan_fixe": 2097000.0,
+        "aux_barre": 28.29140853881836,
+        "scan_octet": 0.06372348219156265
+      },
+      "avec_bracket": {
+        "sweep_u": [
+          [
+            2.0,
+            525.390625
+          ],
+          [
+            58.0,
+            21.672804273536578
+          ],
+          [
+            232.0,
+            5.904245887306137
+          ],
+          [
+            928.0,
+            2.9710791576867814
+          ],
+          [
+            3712.0,
+            0.8298336487144506
+          ],
+          [
+            14848.0,
+            0.369664866872939
+          ],
+          [
+            59392.0,
+            0.3594112333601601
+          ],
+          [
+            118784.0,
+            0.33329591714559387
+          ]
+        ],
+        "sweep_ev_lat": 1665.5027932960893,
+        "sweep_ev_debit": 0.6986849432908122,
+        "scan_nk": [
+          [
+            2048.0,
+            0.14963297319151367
+          ],
+          [
+            8192.0,
+            0.11085374221638822
+          ]
+        ],
+        "scan_lat": [
+          [
+            2.0,
+            5888.517574740362
+          ],
+          [
+            3712.0,
+            7784.776843881097
+          ]
+        ],
+        "scan_ev_debit": 0.6986849432908122,
+        "scan_fixe": 1090000.0,
+        "aux_barre": 37.07809829711914,
+        "scan_octet": 0.06372348219156265
+      },
+      "mesure_ms": 4223.565471
+    },
+    "sweeps": [
+      {
+        "bars": 20000,
+        "combos": 5000,
+        "requested_combos": 5000,
+        "grid": {
+          "fast": 50,
+          "slow": 100
+        },
+        "data_digest": "554df142406ad3f0",
+        "tier_before": {
+          "pro": true
+        },
+        "parity": {
+          "status": "exact",
+          "combos_compared": 5000,
+          "worst_abs_return_delta": 0.0,
+          "worst_component": null,
+          "worst_pair": null,
+          "reference": "cpu",
+          "reference_threads": 4,
+          "identical_cells": 5000
+        },
+        "timings": {
+          "seconds": 0.042198139999999995,
+          "per_combo_us": 8.439627999999999,
+          "first_call_s": 0.45559741399999965,
+          "stats": {
+            "samples_s": [
+              0.042198139999999995,
+              0.05681549500000038,
+              0.0378438999999986,
+              0.037414006000000555,
+              0.044332730999999015,
+              0.03774127900000046,
+              0.04268206499999927
+            ],
+            "min_s": 0.037414006000000555,
+            "median_s": 0.042198139999999995,
+            "max_s": 0.05681549500000038,
+            "iqr_s": 0.006591451999998554,
+            "iqr_over_median": 0.15620242977530657
+          },
+          "noisy": true,
+          "reps": 7
+        },
+        "fallbacks": [],
+        "unstable_reps": 0,
+        "tier_after": {
+          "pro": true
+        },
+        "status": "exact",
+        "reason": null
+      },
+      {
+        "bars": 20000,
+        "combos": 20000,
+        "requested_combos": 20000,
+        "grid": {
+          "fast": 125,
+          "slow": 160
+        },
+        "data_digest": "554df142406ad3f0",
+        "tier_before": {
+          "pro": true
+        },
+        "parity": {
+          "status": "exact",
+          "combos_compared": 20000,
+          "worst_abs_return_delta": 0.0,
+          "worst_component": null,
+          "worst_pair": null,
+          "reference": "cpu",
+          "reference_threads": 4,
+          "identical_cells": 20000
+        },
+        "timings": {
+          "seconds": 0.12063377399999986,
+          "per_combo_us": 6.031688699999993,
+          "first_call_s": 0.137131707,
+          "stats": {
+            "samples_s": [
+              0.11604119999999973,
+              0.12910606099999988,
+              0.12184568200000001,
+              0.11852273500000088,
+              0.11760395199999962,
+              0.12063377399999986,
+              0.1294862410000004
+            ],
+            "min_s": 0.11604119999999973,
+            "median_s": 0.12063377399999986,
+            "max_s": 0.1294862410000004,
+            "iqr_s": 0.01150210900000026,
+            "iqr_over_median": 0.09534733614485337
+          },
+          "noisy": false,
+          "reps": 7
+        },
+        "fallbacks": [],
+        "unstable_reps": 0,
+        "tier_after": {
+          "pro": true
+        },
+        "status": "exact",
+        "reason": null
+      },
+      {
+        "bars": 200000,
+        "combos": 10000,
+        "requested_combos": 10000,
+        "grid": {
+          "fast": 100,
+          "slow": 100
+        },
+        "data_digest": "116ce87b2230b7dd",
+        "tier_before": {
+          "pro": true
+        },
+        "parity": {
+          "status": "exact",
+          "combos_compared": 10000,
+          "worst_abs_return_delta": 0.0,
+          "worst_component": null,
+          "worst_pair": null,
+          "reference": "cpu",
+          "reference_threads": 4,
+          "identical_cells": 10000
+        },
+        "timings": {
+          "seconds": 0.2583072770000001,
+          "per_combo_us": 25.83072770000001,
+          "first_call_s": 0.29587006700000096,
+          "stats": {
+            "samples_s": [
+              0.251256798,
+              0.26600892200000104,
+              0.25734589600000035,
+              0.2630853600000016,
+              0.2583072770000001,
+              0.2770728560000002,
+              0.25811716399999796
+            ],
+            "min_s": 0.251256798,
+            "median_s": 0.2583072770000001,
+            "max_s": 0.2770728560000002,
+            "iqr_s": 0.008663026000000684,
+            "iqr_over_median": 0.033537676911830405
+          },
+          "noisy": false,
+          "reps": 7
+        },
+        "fallbacks": [],
+        "unstable_reps": 0,
+        "tier_after": {
+          "pro": true
+        },
+        "status": "exact",
+        "reason": null
+      },
+      {
+        "bars": 200000,
+        "combos": 150000,
+        "requested_combos": 150000,
+        "grid": {
+          "fast": 375,
+          "slow": 400
+        },
+        "data_digest": "116ce87b2230b7dd",
+        "tier_before": {
+          "pro": true
+        },
+        "parity": {
+          "status": "exact",
+          "combos_compared": 150000,
+          "worst_abs_return_delta": 0.0,
+          "worst_component": null,
+          "worst_pair": null,
+          "reference": "cpu",
+          "reference_threads": 4,
+          "identical_cells": 150000
+        },
+        "timings": {
+          "seconds": 2.7092378510000117,
+          "per_combo_us": 18.06158567333341,
+          "first_call_s": 2.833607830000002,
+          "stats": {
+            "samples_s": [
+              2.74325919799999,
+              2.694388220999997,
+              2.6849061299999875,
+              2.7008382169999976,
+              2.720419826000011,
+              2.725783843000002,
+              2.7092378510000117
+            ],
+            "min_s": 2.6849061299999875,
+            "median_s": 2.7092378510000117,
+            "max_s": 2.74325919799999,
+            "iqr_s": 0.03139562200000512,
+            "iqr_over_median": 0.011588359430463673
+          },
+          "noisy": false,
+          "reps": 7
+        },
+        "fallbacks": [],
+        "unstable_reps": 0,
+        "tier_after": {
+          "pro": true
+        },
+        "status": "exact",
+        "reason": null
+      }
+    ],
+    "status": "exact",
+    "reason": null
+  }
+}
