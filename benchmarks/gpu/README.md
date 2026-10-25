@@ -7,7 +7,7 @@ they are read against stays the CPU job's, published from its runner.
 
 Same sweeps means the same code, not a copy of it: the data generator, the seed,
 the grid and the strategy are imported from `../vs_vectorbt` (`data.py`,
-`sweep_child.py`), and the default points are the CPU job's three. Each point
+`sweep_child.py`), and the default points are the CPU job's four. Each point
 records the digest of its data, and the report matches a GPU point with a CPU
 point only when bars, combinations and digest all agree.
 
@@ -16,6 +16,7 @@ point only when bars, combinations and digest all agree.
 | 20,000 | 5,000 | 50 x 100 |
 | 20,000 | 20,000 | 125 x 160 |
 | 200,000 | 10,000 | 100 x 100 |
+| 200,000 | 150,000 | 375 x 400 |
 
 ## Where the card comes from
 
@@ -28,9 +29,9 @@ and publishes it.
 Inside the container nothing differs from a user's machine: the published wheel
 from PyPI with its `[gpu]` extra, the libraries pinned in `requirements-lock.txt`,
 and an NVIDIA L4. Modal bills by the second for the life of the container, card and
-reserved cores included, so a run costs its wall time: about 30 seconds from
-start to finish, image already built. The function's 15-minute timeout is the
-ceiling on what a stuck run can cost.
+reserved cores included, so a run costs its wall time: about two and a half
+minutes from start to finish, image already built, which is a few cents on an L4.
+The function's 15-minute timeout is the ceiling on what a stuck run can cost.
 
 ## What the harness refuses to publish
 
@@ -87,9 +88,16 @@ published run of the same version: 7.1, 8.4 and 15.9 times faster on the card.
 The published files are the reference; these are what the harness was validated
 on.
 
-Larger grids widen the gap, and a manual run can ask for one
-(`sweep: 1000000:20000`). The CPU job has no number for it, so the report shows the
-GPU alone, and the untimed CPU parity run then costs about a minute of the run.
+The fourth point, 150,000 combinations on 200,000 bars, is the size a GPU sweep is
+for, and the reason the CPU job carries it. On the validation run it took 2.79 s on
+the L4, every cell identical to the bit; its CPU number comes with the first run of
+the CPU job that carries the point. On a workstation it took 1.75 s on an RTX 3090
+against 42 s on four CPU threads, with 1.2 GB of RAM and 1.7 GB of VRAM. It is also
+most of a Modal run, which it takes from about 30 seconds to about two and a half
+minutes: its untimed CPU parity run alone takes about a minute there.
+
+A manual run can ask for other grids (`sweep: 1000000:20000`). Where the CPU job
+has no number for a grid, the report shows the GPU alone.
 
 The numbers depend on the card. The published file is always an L4; a manual run
 can name another one, and is then reported without being published.

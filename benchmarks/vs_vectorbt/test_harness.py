@@ -235,6 +235,19 @@ def test_a_grid_held_back_by_the_sweep_ceiling_says_so_even_when_it_is_cheap():
     assert "past the time budget" not in text
 
 
+def test_the_raptorbt_reason_names_raptorbt_and_no_ceiling():
+    # The loop limit passed to the child is NautilusTrader's: it must not end up
+    # in raptorbt's sentence, which no ceiling held back.
+    text = sweep_child.oos_reason("raptorbt", 200_000, 150_000, anchor_cells=16,
+                                  anchor_s=0.24, loop_limit=64)
+
+    assert text.startswith("raptorbt has no fan-out API")
+    assert "15.0 ms per backtest at 200,000 bars" in text
+    assert "about 38 minutes" in text
+    assert "NautilusTrader" not in text
+    assert "64" not in text
+
+
 def test_the_vectorbt_reason_is_the_memory_one():
     text = sweep_child.oos_reason("vectorbt", 20_000, 20_000, anchor_cells=250, anchor_s=1.0)
 

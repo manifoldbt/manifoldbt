@@ -70,9 +70,9 @@ SCHEMA_VERSION = 1
 # Same flag as the CPU benchmark: a point whose interquartile range exceeds 15%
 # of its median is indicative only.
 NOISE_THRESHOLD = 0.15
-# The CPU sweeps job's three points: the GPU number of each is read against the
-# CPU number that job publishes for the same grid on the same data.
-DEFAULT_POINTS = ("20000:5000", "20000:20000", "200000:10000")
+# The CPU sweeps job's points: the GPU number of each is read against the CPU
+# number that job publishes for the same grid on the same data.
+DEFAULT_POINTS = ("20000:5000", "20000:20000", "200000:10000", "200000:150000")
 
 
 # --------------------------------------------------------------------------- #

@@ -528,9 +528,13 @@ Sweeps run in their own CI job, because they need a licence: sweep timings are
 published from a licensed run only, and the harness refuses to produce a number
 without one.
 
-Three points, sized from what the runner actually did rather than guessed.
-Measured there: 87.5 us per combination for manifoldbt at 20,000 bars, 1.16 ms
-for vectorbt, 1.34 ms for raptorbt, and 15.0 ms for raptorbt at 200,000 bars.
+Four points. The first three are sized from what the runner actually did rather
+than guessed. Measured there: 87.5 us per combination for manifoldbt at 20,000
+bars, 1.16 ms for vectorbt, 1.34 ms for raptorbt, and 15.0 ms for raptorbt at
+200,000 bars. The fourth, 150,000 combinations on 200,000 bars, is the size a GPU
+sweep is for: manifoldbt alone runs it, vectorbt and raptorbt are declared out of
+scope (memory for one, a 38-minute loop per call for the other), and it gives the
+GPU benchmark the CPU number it is read against.
 
 Only the first point is one vectorbt can hold. It materialises the simulation
 per combination -- 1.57 MB of it at 20,000 bars -- so 5,000 combinations already
@@ -552,7 +556,7 @@ same point measured x13 on a four-vCPU cloud runner and x32 on two fast desktop
 cores; the CI numbers are the conservative ones, and they are the ones published.
 
 These runners have no GPU, so this job measures the CPU path of a sweep only. The
-same three points timed on a GPU, and read against this job's numbers, are in
+same four points timed on a GPU, and read against this job's numbers, are in
 [`../gpu`](../gpu/README.md).
 
 ### NautilusTrader and the grid

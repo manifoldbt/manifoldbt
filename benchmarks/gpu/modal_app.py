@@ -6,8 +6,8 @@
 GitHub's hosted runners have no GPU, and its GPU runners are billed by the minute
 on paid plans only, so the card comes from Modal. Modal bills by the second for
 the life of the container, card and reserved cores included, and nothing while no
-container runs, so a run costs its wall time: about half a minute of an L4, a
-cent or two. The function's timeout below is the ceiling on that cost. Only the
+container runs, so a run costs its wall time: about two and a half minutes of an
+L4, a few cents. The function's timeout below is the ceiling on that cost. Only the
 GPU is timed here; the CPU number the GPU is read against is the one the CPU
 sweeps job publishes from its GitHub runner.
 

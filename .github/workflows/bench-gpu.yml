@@ -27,7 +27,7 @@ on:
         options: [L4, T4, A10G, L40S, A100, H100]
         default: L4
       sweep:
-        description: "Grid points as bars:combos, space-separated (blank = the CPU job's three)"
+        description: "Grid points as bars:combos, space-separated (blank = the CPU job's)"
         required: false
         default: ""
       reps:
