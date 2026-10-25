@@ -120,7 +120,7 @@ def test_a_parameter_baked_at_research_time_flatters_the_result(tmp_path):
 # two run plain backtests on daily data and measure the same leak without
 # it, which is exactly what a Community wheel can still verify.
 @pytest.mark.skipif(
-    bt.license_info()[0] != "Pro",
+    bt.license_info()[0] not in ("Pro", "Researcher"),
     reason="requires Pro: the look-ahead detector is gated",
 )
 def test_re_running_alone_returns_a_clean_verdict(tmp_path):

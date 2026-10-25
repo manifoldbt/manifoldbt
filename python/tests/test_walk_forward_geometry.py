@@ -26,7 +26,7 @@ import manifoldbt as bt
 # every assertion below about folds and warmup would fail on the gate,
 # not on what it tests. The suite skips, and names why.
 pytestmark = pytest.mark.skipif(
-    bt.license_info()[0] != "Pro",
+    bt.license_info()[0] not in ("Pro", "Researcher"),
     reason="requires Pro: skipped on a Community wheel",
 )
 

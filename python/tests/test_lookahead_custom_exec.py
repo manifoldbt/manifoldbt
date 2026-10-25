@@ -34,7 +34,7 @@ from manifoldbt.helpers import ExecutionPrice, Interval, Slippage  # noqa: E402
 # assertions count sub-daily bars: coarsened to the Community daily
 # floor they compare 4 bars and conclude nothing.
 pytestmark = pytest.mark.skipif(
-    bt.license_info()[0] != "Pro",
+    bt.license_info()[0] not in ("Pro", "Researcher"),
     reason="requires Pro: skipped on a Community wheel",
 )
 

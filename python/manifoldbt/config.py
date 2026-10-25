@@ -1074,6 +1074,66 @@ class AccountRules:
 
 
 @dataclass
+class Liquidation:
+    """How the venue liquidates a leveraged position, enforced DURING the run.
+
+    The account is cross-margined: one balance carries every position, and
+    the book is closed the moment equity falls to the maintenance margin,
+    ``rate * |position| * price`` summed over the symbols held. Without it a
+    3x long survives every wick that would have closed it on the venue, and
+    the curve reads a recovery the account never traded.
+
+        import manifoldbt as mbt
+        cfg.execution.max_position_pct = 3.0          # 3x
+        cfg.liquidation = mbt.Liquidation(
+            maintenance_margin_rate=0.005,            # 0.5 % of notional
+            fee_bps=50,                               # liquidation fee
+        )
+
+    Inside a bar the rule walks every position from its open toward its
+    adverse extreme (the low for a long, the high for a short) and closes the
+    book where equity meets the margin: on one symbol, at the venue's
+    liquidation price exactly; on several, as if their adverse extremes
+    coincided. A bar that opens past that point fills at the open. A stop
+    placed before the liquidation price fires first; one placed beyond it
+    never does. A gap through the bankruptcy price leaves the account at zero
+    rather than in debt, as a venue's insurance fund does.
+
+    Liquidations land in the trade log with ``exit_reason == 7``
+    ("liquidation") and are counted in ``result.warnings``. The full run and
+    the lite sweep apply the same rule; the fast kernels and the GPU sweep
+    refuse the configuration by name, as does ``fill_resolution="ticks"``.
+    Option positions keep their own margin call (``option_margin_model``).
+    """
+
+    maintenance_margin_rate: float = 0.005
+    """Maintenance margin as a fraction of notional, in ``[0, 1)``."""
+    per_symbol: Dict[Any, float] = field(default_factory=dict)
+    """Per-symbol overrides of ``maintenance_margin_rate``, keyed by symbol
+    name or integer id: ``{"BTCUSDT": 0.004, "DOGEUSDT": 0.01}``."""
+    fee_bps: float = 0.0
+    """Liquidation fee in basis points of the notional closed. It replaces the
+    trading fee on a liquidation, as venues charge it."""
+
+    def to_json_dict(self) -> dict:
+        d: dict = {"maintenance_margin_rate": float(self.maintenance_margin_rate)}
+        if self.per_symbol:
+            for key in self.per_symbol:
+                if not isinstance(key, int):
+                    raise ValueError(
+                        f"Liquidation.per_symbol key {key!r} is not a symbol id: "
+                        "names are resolved by mbt.run against the store; pass "
+                        "integer ids when serialising the config yourself."
+                    )
+            d["per_symbol"] = {
+                str(sid): float(r) for sid, r in self.per_symbol.items()
+            }
+        if self.fee_bps:
+            d["fee_bps"] = float(self.fee_bps)
+        return d
+
+
+@dataclass
 class BacktestConfig:
     universe: List[int] = field(default_factory=lambda: [1])
     time_range_start: int = 0
@@ -1161,6 +1221,9 @@ class BacktestConfig:
     sells an option. ``"deribit"`` applies the venue's published per-contract
     formula, refuses a short that does not fit initial margin, and force-closes
     the book when maintenance margin passes equity."""
+    liquidation: Any = None
+    """Liquidation of leveraged positions (see :class:`Liquidation`).
+    ``None`` == nothing is ever liquidated, the default."""
     account_rules: Any = None
     """Prop-firm limits enforced *during* the run (see :class:`AccountRules`).
     ``None`` == no limits.
@@ -1265,6 +1328,11 @@ class BacktestConfig:
             rules = self.account_rules
             d["account_rules"] = (
                 rules.to_json_dict() if hasattr(rules, "to_json_dict") else rules
+            )
+        if self.liquidation is not None:
+            liq = self.liquidation
+            d["liquidation"] = (
+                liq.to_json_dict() if hasattr(liq, "to_json_dict") else liq
             )
         if self.book_levels is not None:
             d["book_levels"] = int(self.book_levels)

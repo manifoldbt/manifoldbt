@@ -18,7 +18,7 @@ import pytest
 import manifoldbt as bt
 
 pytestmark = pytest.mark.skipif(
-    bt.license_info()[0] != "Pro",
+    bt.license_info()[0] not in ("Pro", "Researcher"),
     reason="requires Pro: skipped on a Community wheel",
 )
 

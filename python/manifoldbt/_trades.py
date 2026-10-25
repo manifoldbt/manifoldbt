@@ -28,6 +28,7 @@ EXIT_REASON_LABELS: Dict[int, str] = {
     4: "limit expiry",
     5: "option expiry",
     6: "margin call",
+    7: "liquidation",
 }
 
 # ``exit_reason`` of a round trip still open at the end of the run.

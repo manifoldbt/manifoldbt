@@ -20,7 +20,7 @@ from manifoldbt.diagnostics import detect_lookahead
 from manifoldbt.indicators import close
 
 pro_only = pytest.mark.skipif(
-    bt.license_info()[0] != "Pro",
+    bt.license_info()[0] not in ("Pro", "Researcher"),
     reason="requires Pro: the detector is a Pro feature",
 )
 

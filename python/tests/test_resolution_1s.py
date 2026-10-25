@@ -20,7 +20,7 @@ import pytest
 
 import manifoldbt as bt
 
-IS_PRO = bt.license_info()[0] == "Pro"
+IS_PRO = bt.license_info()[0] in ("Pro", "Researcher")
 N_BARS = 3 * 3600  # three hours of one-second bars
 
 

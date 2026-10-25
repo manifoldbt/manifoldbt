@@ -80,6 +80,7 @@ from manifoldbt.config import (
     BacktestConfig,
     ExecutionConfig,
     FeeConfig,
+    Liquidation,
     OrderConfig,
     VenueFees,
     account_sessions,
@@ -128,10 +129,15 @@ __version__ = _update.installed_version() or "0.1.0"
 # ---------------------------------------------------------------------------
 # License banner
 # ---------------------------------------------------------------------------
+# Every tier that includes Pro. Researcher carries all of Pro, so a Pro gate
+# opens on either. Defined before the banner, which reads it at import.
+_PAID_TIERS = ("Pro", "Researcher")
+
+
 def _print_banner():
     try:
         tier, email = _license_info()
-        if tier == "Pro" and email:
+        if tier in _PAID_TIERS:
             # A trial shows its end date up front. Without this the banner is
             # identical to a paid licence, and the expiry is discovered the day
             # everything stops working, mid-session.
@@ -142,7 +148,8 @@ def _print_banner():
                     trial = f" (trial ends {expiry[:10]})"
             except Exception:
                 pass
-            print(f"manifoldbt v{__version__} | \033[38;5;214mPro\033[0m{trial} | {email}")
+            who = f" | {email}" if email else ""
+            print(f"manifoldbt v{__version__} | \033[38;5;214m{tier}\033[0m{trial}{who}")
         else:
             print(f"manifoldbt v{__version__} | \033[36mCommunity\033[0m | upgrade: www.manifoldbt.com")
     except Exception:
@@ -206,15 +213,19 @@ def check_for_update() -> Optional[str]:
 
 
 def license_info() -> tuple:
-    """Get license info: (tier, email). tier is "Pro" or "Community", email is str or None."""
+    """Get license info: ``(tier, email)``.
+
+    ``tier`` is ``"Researcher"``, ``"Pro"`` or ``"Community"``; ``email`` is a
+    str, or ``None`` on Community.
+    """
     return _license_info()
 
 
 def _is_pro() -> bool:
-    """Check if current license is Pro."""
+    """Check if the current license includes Pro (Pro or Researcher)."""
     try:
         tier, _ = _license_info()
-        return tier == "Pro"
+        return tier in _PAID_TIERS
     except Exception:
         return False
 
@@ -242,10 +253,9 @@ def _require_grant_for_gpu(device, feature: str) -> None:
     ``LicenseError``, instead of each surfacing its own error type from deeper in
     the run. No-op for CPU, and no-op for a licence that carries it.
 
-    GPU acceleration is a Researcher feature. Note that
-    ``license_info()`` reports ``"Pro"`` for a Researcher licence, because
-    Researcher includes everything Pro has: the tier string is not the way to
-    tell whether a given feature is covered.
+    GPU acceleration is a Researcher feature. The grant is asked directly
+    rather than read from the tier: a Pro licence may carry the GPU grant on
+    its own.
     """
     if isinstance(device, str) and device.lower() in ("cuda", "gpu"):
         if _grant_couvre("gpu_sweep"):
@@ -668,6 +678,19 @@ def _prepare_config(config: BacktestConfig, strategy, store: DataStore) -> Backt
             else:
                 resolved_sv[int(store.resolve_symbol(key))] = venue
         fees.symbol_venue = resolved_sv
+
+    # --- Liquidation overrides may be keyed by symbol name, like symbol_venue ---
+    liq = getattr(cfg, "liquidation", None)
+    if liq is not None and getattr(liq, "per_symbol", None):
+        resolved_liq = {}
+        for key, rate in liq.per_symbol.items():
+            if isinstance(key, int):
+                resolved_liq[key] = rate
+            elif cfg.symbol_names and key in cfg.symbol_names:
+                resolved_liq[int(cfg.symbol_names[key])] = rate
+            else:
+                resolved_liq[int(store.resolve_symbol(key))] = rate
+        liq.per_symbol = resolved_liq
 
     # Per-strategy SL/TP/trailing orders are NOT merged into the config anymore:
     # they travel inside the strategy JSON (Strategy.to_json -> StrategyDef.orders)
@@ -2579,15 +2602,15 @@ def run_sweep_lite(
             path. ``"auto"`` picks per sweep: small grids run on the CPU (the
             GPU has a ~50 ms fixed launch floor, so the CPU wins below ~1,000
             combos -- override with ``MBT_GPU_AUTO_MIN_COMBOS``), large grids
-            run on the GPU when the build, a device, and a Pro license are
-            available, and the CPU otherwise. This is the default because it is
-            never slower than the better of the two by more than the launch
+            run on the GPU when the build, a device, and a Researcher licence
+            are available, and the CPU otherwise. This is the default because it
+            is never slower than the better of the two by more than the launch
             floor and its results match the CPU bit-for-bit, so it is safe to
-            leave on: with no GPU, no Pro license, or a Community build it is
-            simply the CPU sweep. **Pro-only**: a Community license raises
-            ``PermissionError`` for ``device="cuda"`` (``"auto"`` simply stays
-            on the CPU; Community keeps the full-speed CPU sweep with no
-            restriction). ``"cuda"`` requires a build with ``--features cuda``
+            leave on: with no GPU or a CPU-only build it is simply the CPU
+            sweep. **Researcher**: without it, ``device="cuda"`` raises
+            ``LicenseError``, and ``"auto"`` runs a large grid on the CPU with a
+            ``UserWarning`` saying so when a GPU is present; the CPU sweep
+            itself is full speed on every tier. ``"cuda"`` requires a build with ``--features cuda``
             and a CUDA device; for any unsupported strategy/config (or when no
             GPU is present at runtime) it falls back to the CPU sweep with a
             ``UserWarning`` naming the reason, so results are never affected.
@@ -3380,6 +3403,7 @@ __all__ = [
     "calibrate_gpu",
     "AccountPhase",
     "AccountRules",
+    "Liquidation",
     "account_sessions",
     # Core types
     "BacktestResult",

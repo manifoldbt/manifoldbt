@@ -24,7 +24,7 @@ import manifoldbt as bt
 from manifoldbt.expr import col
 from manifoldbt.helpers import Interval, Slippage
 
-IS_PRO = bt.license_info()[0] == "Pro"
+IS_PRO = bt.license_info()[0] in ("Pro", "Researcher")
 
 
 def _locked():

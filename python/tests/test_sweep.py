@@ -13,7 +13,7 @@ from manifoldbt import run_sweep, run_with_parquet
 # comparison passes vacuously. Sub-daily output is a Pro feature, so the suite
 # skips rather than assert on an empty result.
 pytestmark = pytest.mark.skipif(
-    bt.license_info()[0] != "Pro",
+    bt.license_info()[0] not in ("Pro", "Researcher"),
     reason="requires Pro: these assertions are only meaningful at sub-daily resolution",
 )
 

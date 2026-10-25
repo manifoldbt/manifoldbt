@@ -74,7 +74,7 @@ def test_un_param_declare_mais_lu_par_rien_ne_bloque_pas(monte):
 
 def test_un_balayage_fixe_les_valeurs_et_passe(monte):
     store, cfg = monte
-    if bt.license_info()[0] != "Pro":
+    if bt.license_info()[0] not in ("Pro", "Researcher"):
         pytest.skip("requires Pro beyond the Community combination limit")
     b = bt.run_sweep_lite(_croisement(bt.param("fast"), bt.param("slow")),
                           {"fast": [8, 12], "slow": [26]}, cfg, store)

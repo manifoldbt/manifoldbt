@@ -22,7 +22,7 @@ import manifoldbt as bt
 # Walk-forward optimization is a Pro feature: on a Community wheel the
 # gate raises before the exogenous columns are ever loaded.
 pytestmark = pytest.mark.skipif(
-    bt.license_info()[0] != "Pro",
+    bt.license_info()[0] not in ("Pro", "Researcher"),
     reason="requires Pro: skipped on a Community wheel",
 )
 

@@ -40,8 +40,7 @@ included. Python stays out of the hot loop.
   vectorbt in CI, on the wheel published to PyPI. A benchmark workload the
   engines disagree on gets no timing at all.
 - **Explicit.** Every fill rule is [written down](#execution-semantics),
-  pessimistic wherever a choice existed, and so is
-  [what the engine does not model](#what-is-not-covered).
+  pessimistic wherever a choice existed.
 
 ```bash
 pip install manifoldbt
@@ -273,32 +272,17 @@ was available, the pessimistic one was taken.
 | Trailing stops | Never trigger on the bar they ratchet on, which would require reading the intra-bar path. |
 | An execution-price expression evaluates to NaN | Falls back to the close and warns, rather than dropping the trade silently. |
 | A short option's maintenance margin exceeds equity | The position is force-closed on that bar. |
+| A leveraged position's equity reaches its maintenance margin (`cfg.liquidation`) | The book is liquidated inside the bar, at the liquidation price; a stop placed before that price fires first. |
 | Fees, funding and borrow rates | Resolved per symbol, so venues inside one portfolio keep their own rates. |
 
-### What is not covered
+**Prices and margin.** Prices are used as the data source supplies them: Yahoo
+defaults to dividend-adjusted (`dataset="raw"` opts out) and splits follow the
+provider. Margin force-close applies to short options; leveraged spot and
+perpetual positions are held as sized, so leverage limits belong in the
+strategy.
 
-The edges, stated rather than left to be discovered:
-
-- **No general liquidation model.** Margin force-close exists for short options
-  only. A leveraged spot or perpetual position is not liquidated by the engine.
-- **No corporate actions.** Yahoo prices arrive dividend-adjusted from the
-  source (`dataset="raw"` opts out) and splits are whatever the provider
-  returns. Nothing in the engine reconstructs either.
-- The cross-engine scenarios run on short synthetic series, each built to
-  isolate one behaviour. They are not a long backtest over market data compared
-  trade for trade.
-- Perpetual funding is exercised by the engine's own tests, but has no
-  cross-engine parity test.
-- The largest universe under test is a handful of instruments. Cross-sectional
-  research across thousands of assets is exercised by the sweep benchmarks, not
-  by the correctness suite.
-- Look-ahead coverage is a set of regression tests and one worked example, not
-  a systematic battery of leak archetypes.
-
-The engine's own Rust suite is not published, which is why the rules above are
-written out rather than linked. Independent verification is welcome, and a
-reproduction showing a fill this engine gets wrong is the most useful report
-this project can receive.
+Independent verification is welcome, and a reproduction showing a fill this
+engine gets wrong is the most useful report this project can receive.
 
 ## Look-ahead
 

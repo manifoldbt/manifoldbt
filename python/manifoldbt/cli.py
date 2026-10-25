@@ -87,14 +87,14 @@ def _cmd_activate(args: argparse.Namespace) -> None:
         sys.exit(1)
 
     tier, email = bt.license_info()
-    if tier == "Pro":
+    if tier in ("Pro", "Researcher"):
         print(f"Activated: {tier}" + (f" ({email})" if email else ""))
         # A trial activation is the one moment the user is certainly reading:
         # say when it ends here, not only in the import banner.
         try:
             expiry = bt._license_expiry()
             if expiry:
-                print(f"Trial license: Pro features stop on {expiry[:10]}.")
+                print(f"Trial license: {tier} features stop on {expiry[:10]}.")
         except Exception:
             pass
     else:

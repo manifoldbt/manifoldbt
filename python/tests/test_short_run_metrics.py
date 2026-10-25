@@ -212,7 +212,7 @@ def _wf_config(metric, train_days, test_days):
     }
 
 
-@pytest.mark.skipif(bt.license_info()[0] != "Pro",
+@pytest.mark.skipif(bt.license_info()[0] not in ("Pro", "Researcher"),
                     reason="walk-forward: skipped on a Community wheel")
 def test_walk_forward_on_windows_under_two_days(tmp_path):
     # Four days of minutes; one-day training windows, one-day tests.
