@@ -12,6 +12,14 @@ Two properties are deliberate, not incidental:
   the gate.
 * the intrabar range is wide enough that percentage stops and targets actually
   trigger, otherwise the bracket workload would measure an empty branch.
+
+The bars are also the same on every machine, which is what lets two runs on two
+machines be joined on the digest. The walk is built from additions and
+multiplications only, each rounded exactly by IEEE 754 whatever the CPU. It
+used to be ``exp(cumsum(log returns))``, and numpy's ``exp`` is not that: its
+AVX-512 kernel, glibc's and the Windows runtime's each round some values
+differently, so the same seed gave three datasets (and two GitHub runners of
+different generations, two digests).
 """
 from __future__ import annotations
 
@@ -35,8 +43,9 @@ def make_ohlcv(
     """A gap-free random walk of ``rows`` bars, reproducible from ``seed``."""
     rng = np.random.default_rng(seed)
 
-    log_ret = rng.normal(drift, vol, size=rows)
-    close = 100.0 * np.exp(np.cumsum(log_ret))
+    ret = rng.normal(drift, vol, size=rows)
+    # A sequential product: no transcendental function, no reassociation.
+    close = 100.0 * np.cumprod(1.0 + ret)
 
     open_ = np.empty(rows, dtype=np.float64)
     open_[0] = 100.0
