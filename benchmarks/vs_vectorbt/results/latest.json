@@ -1,19 +1,19 @@
 {
   "repo": "manifoldbt/manifoldbt",
-  "run_id": "40313008491",
-  "run_url": "https://github.com/manifoldbt/manifoldbt/actions/runs/40313008491",
-  "commit": "c9c5b3760e83f963daa913c6d630d5d9d7328529",
-  "run_started_at": "2026-10-26T11:10:04Z",
+  "run_id": "40324928426",
+  "run_url": "https://github.com/manifoldbt/manifoldbt/actions/runs/40324928426",
+  "commit": "5bdb2c29898fe36237497ed3d23acfe5be6141f4",
+  "run_started_at": "2026-10-26T12:45:04Z",
   "conclusion": "success",
-  "synced_at": "2026-10-26T11:57:08.235335+00:00",
+  "synced_at": "2026-10-26T13:07:22.545782+00:00",
   "backtests": {
     "schema_version": 2,
-    "generated_at": "2026-10-26T11:56:56.675168+00:00",
+    "generated_at": "2026-10-26T13:04:01.085409+00:00",
     "environment": {
       "os": "Linux",
       "os_release": "6.17.0-1022-azure",
       "arch": "x86_64",
-      "cpu": "AMD EPYC 7763 64-Core Processor",
+      "cpu": "AMD EPYC 9V74 80-Core Processor",
       "logical_cores": 4,
       "ram_gb": 16.8,
       "python": "3.12.15",
@@ -26,10 +26,10 @@
         "numba": "0.64.0",
         "pandas": "2.3.3"
       },
-      "runner": "GitHub Actions 1000001190",
+      "runner": "GitHub Actions 1000001222",
       "ci": true,
-      "run_url": "https://github.com/manifoldbt/manifoldbt/actions/runs/40313008491",
-      "commit": "c9c5b3760e83f963daa913c6d630d5d9d7328529",
+      "run_url": "https://github.com/manifoldbt/manifoldbt/actions/runs/40324928426",
+      "commit": "5bdb2c29898fe36237497ed3d23acfe5be6141f4",
       "pinned_cores": null,
       "engines": [
         "manifoldbt",
@@ -51,13 +51,13 @@
       "raptorbt",
       "nautilus_trader"
     ],
-    "reps": 7,
+    "reps": 3,
     "results": [
       {
         "workload": "sma_cross",
         "title": "SMA 30/150 crossover, long-only, no cost",
         "bars": 100000,
-        "data_digest": "b7c2ad8cea687ce0",
+        "data_digest": "f6e413e413e61a53",
         "engines": [
           "manifoldbt",
           "vectorbt",
@@ -70,22 +70,22 @@
             "expected": "exact",
             "publishable": true,
             "diffs": {
-              "final_equity_vs_capital": 1.8917489796876906e-15,
+              "final_equity_vs_capital": 2.037268131971359e-15,
               "round_trips_delta": 0,
               "total_fees_vs_capital": 0.0
             },
             "metrics": {
               "manifoldbt": {
-                "total_return": 0.06675521397166517,
-                "final_equity": 106675.52139716652,
-                "round_trips": 450,
-                "fills": 900,
+                "total_return": 0.06552457977030235,
+                "final_equity": 106552.45797703024,
+                "round_trips": 451,
+                "fills": 902,
                 "total_fees": 0.0
               },
               "vectorbt": {
-                "total_return": 0.06675521397166725,
-                "final_equity": 106675.52139716671,
-                "round_trips": 450,
+                "total_return": 0.06552457977030426,
+                "final_equity": 106552.45797703044,
+                "round_trips": 451,
                 "fills": null,
                 "total_fees": 0.0
               }
@@ -103,16 +103,16 @@
             },
             "metrics": {
               "manifoldbt": {
-                "total_return": 0.06675521397166517,
-                "final_equity": 106675.52139716652,
-                "round_trips": 450,
-                "fills": 900,
+                "total_return": 0.06552457977030235,
+                "final_equity": 106552.45797703024,
+                "round_trips": 451,
+                "fills": 902,
                 "total_fees": 0.0
               },
               "raptorbt": {
-                "total_return": 0.06675521397166521,
-                "final_equity": 106675.52139716652,
-                "round_trips": 450,
+                "total_return": 0.06552457977030238,
+                "final_equity": 106552.45797703024,
+                "round_trips": 451,
                 "fills": null,
                 "total_fees": 0.0
               }
@@ -124,23 +124,23 @@
             "expected": "exact",
             "publishable": true,
             "diffs": {
-              "final_equity_vs_capital": 5.593479727394879e-11,
+              "final_equity_vs_capital": 4.330242518335581e-11,
               "round_trips_delta": 0,
               "total_fees_vs_capital": 0.0
             },
             "metrics": {
               "manifoldbt": {
-                "total_return": 0.06675521397166517,
-                "final_equity": 106675.52139716652,
-                "round_trips": 450,
-                "fills": 900,
+                "total_return": 0.06552457977030235,
+                "final_equity": 106552.45797703024,
+                "round_trips": 451,
+                "fills": 902,
                 "total_fees": 0.0
               },
               "nautilus_trader": {
-                "total_return": 0.06675521402759999,
-                "final_equity": 106675.52140276,
-                "round_trips": 450,
-                "fills": 900,
+                "total_return": 0.06552457972699988,
+                "final_equity": 106552.4579727,
+                "round_trips": 451,
+                "fills": 902,
                 "total_fees": 0.0
               }
             },
@@ -154,99 +154,83 @@
         "timings": {
           "manifoldbt": {
             "samples_s": [
-              0.005010210000023108,
-              0.005582488000015928,
-              0.005068478999987747,
-              0.005544880000002195,
-              0.005511513999977069,
-              0.005347411000002467,
-              0.006132057000002078
+              0.0039019539999998187,
+              0.004314839000002735,
+              0.004319796000004317
             ],
-            "min_s": 0.005010210000023108,
-            "median_s": 0.005511513999977069,
-            "max_s": 0.006132057000002078,
-            "iqr_s": 0.0005140090000281816,
-            "iqr_over_median": 0.09326094427598663
+            "min_s": 0.0039019539999998187,
+            "median_s": 0.004314839000002735,
+            "max_s": 0.004319796000004317,
+            "iqr_s": 0.000417842000004498,
+            "iqr_over_median": 0.09683837566227457
           },
           "vectorbt": {
             "samples_s": [
-              0.2049910270000055,
-              0.2004791190000219,
-              0.19603375999997752,
-              0.20219334799998023,
-              0.2056414269999891,
-              0.197499874000016,
-              0.19777685100001463
+              0.1425071150000008,
+              0.14125029500000608,
+              0.13883218799998076
             ],
-            "min_s": 0.19603375999997752,
-            "median_s": 0.2004791190000219,
-            "max_s": 0.2056414269999891,
-            "iqr_s": 0.007491152999989481,
-            "iqr_over_median": 0.037366250596844765
+            "min_s": 0.13883218799998076,
+            "median_s": 0.14125029500000608,
+            "max_s": 0.1425071150000008,
+            "iqr_s": 0.003674927000020034,
+            "iqr_over_median": 0.026017127964369037
           },
           "raptorbt": {
             "samples_s": [
-              0.010893440000018018,
-              0.009670475000007173,
-              0.008760365999989972,
-              0.010025549999966188,
-              0.011407325999982731,
-              0.008470806999980596,
-              0.010290715999985878
+              0.008818880000006857,
+              0.008272918999992385,
+              0.006911585000011655
             ],
-            "min_s": 0.008470806999980596,
-            "median_s": 0.010025549999966188,
-            "max_s": 0.011407325999982731,
-            "iqr_s": 0.0021330740000280457,
-            "iqr_over_median": 0.21276378852384553
+            "min_s": 0.006911585000011655,
+            "median_s": 0.008272918999992385,
+            "max_s": 0.008818880000006857,
+            "iqr_s": 0.0019072949999952016,
+            "iqr_over_median": 0.23054679974467987
           },
           "nautilus_trader": {
             "samples_s": [
-              6.971876523999981,
-              6.8332912939999915,
-              7.110773477000009,
-              6.967030024000053,
-              6.901479478999988,
-              6.887518665000016,
-              7.006123418000016
+              4.201948703999989,
+              4.183992243000006,
+              4.36794079400002
             ],
-            "min_s": 6.8332912939999915,
-            "median_s": 6.967030024000053,
-            "max_s": 7.110773477000009,
-            "iqr_s": 0.11860475299999962,
-            "iqr_over_median": 0.01702371779530582
+            "min_s": 4.183992243000006,
+            "median_s": 4.201948703999989,
+            "max_s": 4.36794079400002,
+            "iqr_s": 0.1839485510000145,
+            "iqr_over_median": 0.04377696253762145
           }
         },
         "speedup": {
           "vectorbt": {
-            "median_of_ratios": 36.933737466584276,
-            "min": 32.252937472686185,
-            "max": 40.914657668852215
+            "median_of_ratios": 32.73593638138446,
+            "min": 32.13859821154564,
+            "max": 36.521987445266504
           },
           "raptorbt": {
-            "median_of_ratios": 1.7322876466513821,
-            "min": 1.5840949947510465,
-            "max": 2.174248185199378
+            "median_of_ratios": 1.9173181200937373,
+            "min": 1.5999794897733015,
+            "max": 2.260118904530209
           },
           "nautilus_trader": {
-            "median_of_ratios": 1256.4798560108236,
-            "min": 1142.5404913877417,
-            "max": 1402.940305566463
+            "median_of_ratios": 1011.1451545386994,
+            "min": 969.6751704982165,
+            "max": 1076.8831985205832
           }
         },
         "noisy": true,
         "cpu_over_wall": {
           "manifoldbt": null,
-          "vectorbt": 0.9967141140697419,
+          "vectorbt": null,
           "raptorbt": null,
-          "nautilus_trader": 1.0002446093980932
+          "nautilus_trader": 0.9996956423872475
         }
       },
       {
         "workload": "sma_cross_metrics",
         "title": "SMA 30/150 crossover, with a performance summary",
         "bars": 100000,
-        "data_digest": "b7c2ad8cea687ce0",
+        "data_digest": "f6e413e413e61a53",
         "engines": [
           "manifoldbt",
           "vectorbt",
@@ -259,38 +243,38 @@
             "expected": "exact",
             "publishable": true,
             "diffs": {
-              "final_equity_vs_capital": 1.8917489796876906e-15,
+              "final_equity_vs_capital": 2.037268131971359e-15,
               "round_trips_delta": 0,
               "total_fees_vs_capital": 0.0,
-              "max_drawdown_rel": 2.806945912450058e-15,
+              "max_drawdown_rel": 1.4217536369471578e-15,
               "advisory_ratio_rel": {
-                "sharpe": 0.0191599205412123,
-                "sortino": 0.026757853601622573,
-                "volatility": 0.006633443246116591
+                "sharpe": 0.019738981745476065,
+                "sortino": 0.028733597705797927,
+                "volatility": 0.006628159308143959
               }
             },
             "metrics": {
               "manifoldbt": {
-                "total_return": 0.06675521397166517,
-                "final_equity": 106675.52139716652,
-                "round_trips": 450,
-                "fills": 900,
+                "total_return": 0.06552457977030235,
+                "final_equity": 106552.45797703024,
+                "round_trips": 451,
+                "fills": 902,
                 "total_fees": 0.0,
-                "max_drawdown": -0.07910540917093023,
-                "sharpe": 2.0737338994486025,
-                "sortino": 3.9123948298469102,
-                "volatility": 0.16947108402059763
+                "max_drawdown": -0.07808828448007843,
+                "sharpe": 2.046447206847637,
+                "sortino": 3.9171646026603506,
+                "volatility": 0.16872364573866735
               },
               "vectorbt": {
-                "total_return": 0.06675521397166725,
-                "final_equity": 106675.52139716671,
-                "round_trips": 450,
+                "total_return": 0.06552457977030426,
+                "final_equity": 106552.45797703044,
+                "round_trips": 451,
                 "fills": null,
                 "total_fees": 0.0,
-                "max_drawdown": -0.07910540917093001,
-                "sharpe": 2.1142426200536755,
-                "sortino": 4.019960340111955,
-                "volatility": 0.17060276779841885
+                "max_drawdown": -0.07808828448007832,
+                "sharpe": 2.087655398652483,
+                "sortino": 4.03304859862106,
+                "volatility": 0.16984943485125972
               }
             },
             "note": ""
@@ -303,30 +287,30 @@
               "final_equity_vs_capital": 0.0,
               "round_trips_delta": 0,
               "total_fees_vs_capital": 0.0,
-              "max_drawdown_rel": 5.263023585843841e-16,
+              "max_drawdown_rel": 3.554384092367891e-16,
               "ratio_basis": "native"
             },
             "metrics": {
               "manifoldbt": {
-                "total_return": 0.06675521397166517,
-                "final_equity": 106675.52139716652,
-                "round_trips": 450,
-                "fills": 900,
+                "total_return": 0.06552457977030235,
+                "final_equity": 106552.45797703024,
+                "round_trips": 451,
+                "fills": 902,
                 "total_fees": 0.0,
-                "max_drawdown": -0.07910540917093023,
-                "sharpe": 2.0737338994486025,
-                "sortino": 3.9123948298469102,
-                "volatility": 0.16947108402059763
+                "max_drawdown": -0.07808828448007843,
+                "sharpe": 2.046447206847637,
+                "sortino": 3.9171646026603506,
+                "volatility": 0.16872364573866735
               },
               "raptorbt": {
-                "total_return": 0.06675521397166521,
-                "final_equity": 106675.52139716652,
-                "round_trips": 450,
+                "total_return": 0.06552457977030238,
+                "final_equity": 106552.45797703024,
+                "round_trips": 451,
                 "fills": null,
                 "total_fees": 0.0,
-                "max_drawdown": -0.07910540917093027,
-                "sharpe": 0.9692748979846307,
-                "sortino": 1.3742016523326603,
+                "max_drawdown": -0.0780882844800784,
+                "sharpe": 0.9530483357635315,
+                "sortino": 1.3508000365056292,
                 "volatility": null
               }
             },
@@ -337,7 +321,7 @@
             "expected": "exact",
             "publishable": true,
             "diffs": {
-              "final_equity_vs_capital": 5.593479727394879e-11,
+              "final_equity_vs_capital": 4.330242518335581e-11,
               "round_trips_delta": 0,
               "total_fees_vs_capital": 0.0,
               "max_drawdown_absent": true,
@@ -345,26 +329,26 @@
             },
             "metrics": {
               "manifoldbt": {
-                "total_return": 0.06675521397166517,
-                "final_equity": 106675.52139716652,
-                "round_trips": 450,
-                "fills": 900,
+                "total_return": 0.06552457977030235,
+                "final_equity": 106552.45797703024,
+                "round_trips": 451,
+                "fills": 902,
                 "total_fees": 0.0,
-                "max_drawdown": -0.07910540917093023,
-                "sharpe": 2.0737338994486025,
-                "sortino": 3.9123948298469102,
-                "volatility": 0.16947108402059763
+                "max_drawdown": -0.07808828448007843,
+                "sharpe": 2.046447206847637,
+                "sortino": 3.9171646026603506,
+                "volatility": 0.16872364573866735
               },
               "nautilus_trader": {
-                "total_return": 0.06675521402759999,
-                "final_equity": 106675.52140276,
-                "round_trips": 450,
-                "fills": 900,
+                "total_return": 0.06552457972699988,
+                "final_equity": 106552.4579727,
+                "round_trips": 451,
+                "fills": 902,
                 "total_fees": 0.0,
                 "max_drawdown": null,
-                "sharpe": 1.8073037844666644,
-                "sortino": 3.1983278806115383,
-                "volatility": 0.1483467646183893
+                "sharpe": 1.7883767980329837,
+                "sortino": 3.1735725831042556,
+                "volatility": 0.14751974319351674
               }
             },
             "note": ""
@@ -377,99 +361,83 @@
         "timings": {
           "manifoldbt": {
             "samples_s": [
-              0.00523276500001657,
-              0.008509149000019534,
-              0.005107915999985835,
-              0.005077534999998079,
-              0.005413978999968094,
-              0.005444613000008758,
-              0.005366584999990209
+              0.004068546000013384,
+              0.004496192000004839,
+              0.004396861999993007
             ],
-            "min_s": 0.005077534999998079,
-            "median_s": 0.005366584999990209,
-            "max_s": 0.008509149000019534,
-            "iqr_s": 0.000336697000022923,
-            "iqr_over_median": 0.06273952616487716
+            "min_s": 0.004068546000013384,
+            "median_s": 0.004396861999993007,
+            "max_s": 0.004496192000004839,
+            "iqr_s": 0.00042764599999145503,
+            "iqr_over_median": 0.09726163795728299
           },
           "vectorbt": {
             "samples_s": [
-              0.9464914300000373,
-              0.9445428660000061,
-              0.7687239050000017,
-              0.9454913689999671,
-              0.9742284990000485,
-              0.931295815999988,
-              0.7662185730000033
+              0.705080940000002,
+              0.7010569290000035,
+              0.525093757999997
             ],
-            "min_s": 0.7662185730000033,
-            "median_s": 0.9445428660000061,
-            "max_s": 0.9742284990000485,
-            "iqr_s": 0.17776752500003568,
-            "iqr_over_median": 0.1882048252112197
+            "min_s": 0.525093757999997,
+            "median_s": 0.7010569290000035,
+            "max_s": 0.705080940000002,
+            "iqr_s": 0.17998718200000496,
+            "iqr_over_median": 0.25673689903720226
           },
           "raptorbt": {
             "samples_s": [
-              0.00861454299996467,
-              0.007837543999983154,
-              0.01182631000000356,
-              0.008735594999961904,
-              0.008235934000026646,
-              0.00969540500000221,
-              0.011839055999985248
+              0.007132355999999618,
+              0.006584271000008357,
+              0.009794524000000138
             ],
-            "min_s": 0.007837543999983154,
-            "median_s": 0.008735594999961904,
-            "max_s": 0.011839055999985248,
-            "iqr_s": 0.0035903759999769136,
-            "iqr_over_median": 0.4110053178967856
+            "min_s": 0.006584271000008357,
+            "median_s": 0.007132355999999618,
+            "max_s": 0.009794524000000138,
+            "iqr_s": 0.0032102529999917806,
+            "iqr_over_median": 0.45009713480257474
           },
           "nautilus_trader": {
             "samples_s": [
-              6.893138775000011,
-              6.89510124100002,
-              7.222115402000043,
-              6.936533166000004,
-              6.8996227950000275,
-              6.955907461000038,
-              7.023316763000025
+              4.234558469000007,
+              4.237362603000008,
+              4.415513110999996
             ],
-            "min_s": 6.893138775000011,
-            "median_s": 6.936533166000004,
-            "max_s": 7.222115402000043,
-            "iqr_s": 0.12821552200000497,
-            "iqr_over_median": 0.018484092691787888
+            "min_s": 4.234558469000007,
+            "median_s": 4.237362603000008,
+            "max_s": 4.415513110999996,
+            "iqr_s": 0.180954641999989,
+            "iqr_over_median": 0.042704545009170335
           }
         },
         "speedup": {
           "vectorbt": {
-            "median_of_ratios": 171.04903801215806,
-            "min": 111.0032114842316,
-            "max": 186.21070440682828
+            "median_of_ratios": 155.92237364401896,
+            "min": 119.42466195228145,
+            "max": 173.3004714700737
           },
           "raptorbt": {
-            "median_of_ratios": 1.7204401348223517,
-            "min": 0.9210726007930008,
-            "max": 2.3152906195083
+            "median_of_ratios": 1.7530478947457284,
+            "min": 1.464410550083553,
+            "max": 2.2276168776767875
           },
           "nautilus_trader": {
-            "median_of_ratios": 1308.7124797264626,
-            "min": 810.3161950724087,
-            "max": 1413.906454612815
+            "median_of_ratios": 1004.241914121257,
+            "min": 942.433642290064,
+            "max": 1040.8038815306688
           }
         },
         "noisy": true,
         "cpu_over_wall": {
           "manifoldbt": null,
-          "vectorbt": 0.9988860177789248,
+          "vectorbt": 0.999362258269391,
           "raptorbt": null,
-          "nautilus_trader": 0.9998825291021354
+          "nautilus_trader": 0.9986471951862226
         }
       },
       {
         "workload": "sma_cross",
         "title": "SMA 30/150 crossover, long-only, no cost",
         "bars": 1000000,
-        "data_digest": "0ef03e7a3c4d011c",
+        "data_digest": "ac3e442a94f3cd06",
         "engines": [
           "manifoldbt",
           "vectorbt",
@@ -481,22 +449,22 @@
             "expected": "exact",
             "publishable": true,
             "diffs": {
-              "final_equity_vs_capital": 4.220055416226387e-15,
+              "final_equity_vs_capital": 6.257323548197746e-15,
               "round_trips_delta": 0,
               "total_fees_vs_capital": 0.0
             },
             "metrics": {
               "manifoldbt": {
-                "total_return": 0.20294254717538118,
-                "final_equity": 120294.25471753812,
-                "round_trips": 4534,
-                "fills": 9069,
+                "total_return": 0.1746603062593124,
+                "final_equity": 117466.03062593123,
+                "round_trips": 4539,
+                "fills": 9079,
                 "total_fees": 0.0
               },
               "vectorbt": {
-                "total_return": 0.20294254717537696,
-                "final_equity": 120294.2547175377,
-                "round_trips": 4534,
+                "total_return": 0.1746603062593186,
+                "final_equity": 117466.03062593186,
+                "round_trips": 4539,
                 "fills": null,
                 "total_fees": 0.0
               }
@@ -508,22 +476,22 @@
             "expected": "exact",
             "publishable": true,
             "diffs": {
-              "final_equity_vs_capital": 0.0,
+              "final_equity_vs_capital": 1.4551915228366853e-16,
               "round_trips_delta": 0,
               "total_fees_vs_capital": 0.0
             },
             "metrics": {
               "manifoldbt": {
-                "total_return": 0.20294254717538118,
-                "final_equity": 120294.25471753812,
-                "round_trips": 4534,
-                "fills": 9069,
+                "total_return": 0.1746603062593124,
+                "final_equity": 117466.03062593123,
+                "round_trips": 4539,
+                "fills": 9079,
                 "total_fees": 0.0
               },
               "raptorbt": {
-                "total_return": 0.20294254717538115,
-                "final_equity": 120294.25471753812,
-                "round_trips": 4534,
+                "total_return": 0.1746603062593125,
+                "final_equity": 117466.03062593125,
+                "round_trips": 4539,
                 "fills": null,
                 "total_fees": 0.0
               }
@@ -544,77 +512,65 @@
         "timings": {
           "manifoldbt": {
             "samples_s": [
-              0.033822932000020955,
-              0.028032524999957786,
-              0.028413848000013786,
-              0.028594284999996944,
-              0.02828014599998596,
-              0.02843152899998813,
-              0.028640275999975984
+              0.025727474999996502,
+              0.02455625999999711,
+              0.024761066999985815
             ],
-            "min_s": 0.028032524999957786,
-            "median_s": 0.02843152899998813,
-            "max_s": 0.033822932000020955,
-            "iqr_s": 0.00036012999999002204,
-            "iqr_over_median": 0.012666571677878189
+            "min_s": 0.02455625999999711,
+            "median_s": 0.024761066999985815,
+            "max_s": 0.025727474999996502,
+            "iqr_s": 0.0011712149999993926,
+            "iqr_over_median": 0.047300667616628295
           },
           "vectorbt": {
             "samples_s": [
-              2.42071622200001,
-              2.134523986999966,
-              2.421067708999999,
-              2.1676937610000095,
-              2.413326136999956,
-              2.134364698000013,
-              2.3822042959999976
+              1.8706202360000077,
+              1.5767389869999988,
+              1.846492522999995
             ],
-            "min_s": 2.134364698000013,
-            "median_s": 2.3822042959999976,
-            "max_s": 2.421067708999999,
-            "iqr_s": 0.2861922350000441,
-            "iqr_over_median": 0.1201375698467989
+            "min_s": 1.5767389869999988,
+            "median_s": 1.846492522999995,
+            "max_s": 1.8706202360000077,
+            "iqr_s": 0.2938812490000089,
+            "iqr_over_median": 0.1591564792921773
           },
           "raptorbt": {
             "samples_s": [
-              0.08030547700002444,
-              0.08324511000000712,
-              0.08096617500001457,
-              0.08214147099999991,
-              0.08213018600002897,
-              0.08190951099999211,
-              0.08051623099999006
+              0.07110272200000622,
+              0.0637944540000035,
+              0.06853501000000506
             ],
-            "min_s": 0.08030547700002444,
-            "median_s": 0.08190951099999211,
-            "max_s": 0.08324511000000712,
-            "iqr_s": 0.0016252400000098532,
-            "iqr_over_median": 0.01984189601632477
+            "min_s": 0.0637944540000035,
+            "median_s": 0.06853501000000506,
+            "max_s": 0.07110272200000622,
+            "iqr_s": 0.007308268000002727,
+            "iqr_over_median": 0.10663554291452189
           }
         },
         "speedup": {
           "vectorbt": {
-            "median_of_ratios": 76.14454948325847,
-            "min": 71.57026546363603,
-            "max": 85.33641010909753
+            "median_of_ratios": 72.70904882815985,
+            "min": 64.20924794737408,
+            "max": 74.57241333748068
           },
           "raptorbt": {
-            "median_of_ratios": 2.8726534340693846,
-            "min": 2.3742908213863507,
-            "max": 2.9695901457372273
+            "median_of_ratios": 2.763688313758575,
+            "min": 2.597889662351311,
+            "max": 2.767853663173898
           }
         },
-        "noisy": false,
+        "noisy": true,
         "cpu_over_wall": {
           "manifoldbt": null,
-          "vectorbt": 0.9997575690545952,
-          "raptorbt": 1.0153809894778754
+          "vectorbt": 1.0011613951986198,
+          "raptorbt": null
         }
       },
       {
         "workload": "sma_cross_metrics",
         "title": "SMA 30/150 crossover, with a performance summary",
         "bars": 1000000,
-        "data_digest": "0ef03e7a3c4d011c",
+        "data_digest": "ac3e442a94f3cd06",
         "engines": [
           "manifoldbt",
           "vectorbt",
@@ -626,38 +582,38 @@
             "expected": "exact",
             "publishable": true,
             "diffs": {
-              "final_equity_vs_capital": 4.220055416226387e-15,
+              "final_equity_vs_capital": 6.257323548197746e-15,
               "round_trips_delta": 0,
               "total_fees_vs_capital": 0.0,
-              "max_drawdown_rel": 1.464735645642113e-15,
+              "max_drawdown_rel": 1.1589115435726748e-14,
               "advisory_ratio_rel": {
-                "sharpe": 0.004351997254330881,
-                "sortino": 0.00576256739777853,
-                "volatility": 0.0003655041635125006
+                "sharpe": 0.0049912091455338835,
+                "sortino": 0.006381194164092784,
+                "volatility": 0.00036567995436717903
               }
             },
             "metrics": {
               "manifoldbt": {
-                "total_return": 0.20294254717538118,
-                "final_equity": 120294.25471753812,
-                "round_trips": 4534,
-                "fills": 9069,
+                "total_return": 0.1746603062593124,
+                "final_equity": 117466.03062593123,
+                "round_trips": 4539,
+                "fills": 9079,
                 "total_fees": 0.0,
-                "max_drawdown": -0.15159363779099633,
-                "sharpe": 0.682796489575399,
-                "sortino": 1.3440329806486555,
-                "volatility": 0.1611746170233167
+                "max_drawdown": -0.1532780348294871,
+                "sharpe": 0.6060293940216315,
+                "sortino": 1.1883562254598439,
+                "volatility": 0.1608771511259405
               },
               "vectorbt": {
-                "total_return": 0.20294254717537696,
-                "final_equity": 120294.2547175377,
-                "round_trips": 4534,
+                "total_return": 0.1746603062593186,
+                "final_equity": 117466.03062593186,
+                "round_trips": 4539,
                 "fills": null,
                 "total_fees": 0.0,
-                "max_drawdown": -0.1515936377909961,
-                "sharpe": 0.6857810066333395,
-                "sortino": 1.351822951516634,
-                "volatility": 0.16123354855661204
+                "max_drawdown": -0.15327803482948532,
+                "sharpe": 0.6090693867148674,
+                "sortino": 1.1959880574725121,
+                "volatility": 0.16093600219587953
               }
             },
             "note": ""
@@ -667,33 +623,33 @@
             "expected": "exact",
             "publishable": true,
             "diffs": {
-              "final_equity_vs_capital": 0.0,
+              "final_equity_vs_capital": 1.4551915228366853e-16,
               "round_trips_delta": 0,
               "total_fees_vs_capital": 0.0,
-              "max_drawdown_rel": 0.0,
+              "max_drawdown_rel": 1.810799286832283e-16,
               "ratio_basis": "native"
             },
             "metrics": {
               "manifoldbt": {
-                "total_return": 0.20294254717538118,
-                "final_equity": 120294.25471753812,
-                "round_trips": 4534,
-                "fills": 9069,
+                "total_return": 0.1746603062593124,
+                "final_equity": 117466.03062593123,
+                "round_trips": 4539,
+                "fills": 9079,
                 "total_fees": 0.0,
-                "max_drawdown": -0.15159363779099633,
-                "sharpe": 0.682796489575399,
-                "sortino": 1.3440329806486555,
-                "volatility": 0.1611746170233167
+                "max_drawdown": -0.1532780348294871,
+                "sharpe": 0.6060293940216315,
+                "sortino": 1.1883562254598439,
+                "volatility": 0.1608771511259405
               },
               "raptorbt": {
-                "total_return": 0.20294254717538115,
-                "final_equity": 120294.25471753812,
-                "round_trips": 4534,
+                "total_return": 0.1746603062593125,
+                "final_equity": 117466.03062593125,
+                "round_trips": 4539,
                 "fills": null,
                 "total_fees": 0.0,
-                "max_drawdown": -0.15159363779099633,
-                "sharpe": 0.3005175738027932,
-                "sortino": 0.42543548791233987,
+                "max_drawdown": -0.15327803482948713,
+                "sharpe": 0.2661390460797749,
+                "sortino": 0.37666881597859997,
                 "volatility": null
               }
             },
@@ -713,77 +669,65 @@
         "timings": {
           "manifoldbt": {
             "samples_s": [
-              0.030186458000002858,
-              0.028918750000002547,
-              0.02901501100001269,
-              0.02935624799999914,
-              0.02846695499999896,
-              0.028627705000019432,
-              0.02812851599998112
+              0.024523538000011058,
+              0.024659184999990202,
+              0.0248150580000015
             ],
-            "min_s": 0.02812851599998112,
-            "median_s": 0.028918750000002547,
-            "max_s": 0.030186458000002858,
-            "iqr_s": 0.0008892930000001797,
-            "iqr_over_median": 0.030751432893887234
+            "min_s": 0.024523538000011058,
+            "median_s": 0.024659184999990202,
+            "max_s": 0.0248150580000015,
+            "iqr_s": 0.00029151999999044165,
+            "iqr_over_median": 0.0118219641075144
           },
           "vectorbt": {
             "samples_s": [
-              8.940810077000037,
-              8.915515160999973,
-              8.96100077799997,
-              8.910423060000028,
-              8.850829879999992,
-              9.017586287000029,
-              9.04650118799998
+              6.68552828,
+              6.687282788999994,
+              6.701117345
             ],
-            "min_s": 8.850829879999992,
-            "median_s": 8.940810077000037,
-            "max_s": 9.04650118799998,
-            "iqr_s": 0.10716322700000092,
-            "iqr_over_median": 0.011985852073479904
+            "min_s": 6.68552828,
+            "median_s": 6.687282788999994,
+            "max_s": 6.701117345,
+            "iqr_s": 0.015589065000000346,
+            "iqr_over_median": 0.002331150856315366
           },
           "raptorbt": {
             "samples_s": [
-              0.0881665249999628,
-              0.08960964499999591,
-              0.08898629900005517,
-              0.08978260399999272,
-              0.09009198000001106,
-              0.08927328199996509,
-              0.09064234699997087
+              0.07246765599998639,
+              0.07489799700002209,
+              0.0744620029999794
             ],
-            "min_s": 0.0881665249999628,
-            "median_s": 0.08960964499999591,
-            "max_s": 0.09064234699997087,
-            "iqr_s": 0.0011056809999558936,
-            "iqr_over_median": 0.012338861513801825
+            "min_s": 0.07246765599998639,
+            "median_s": 0.0744620029999794,
+            "max_s": 0.07489799700002209,
+            "iqr_s": 0.002430341000035696,
+            "iqr_over_median": 0.0326386734457891
           }
         },
         "speedup": {
           "vectorbt": {
-            "median_of_ratios": 308.8401647683694,
-            "min": 296.1861268055759,
-            "max": 321.613169639168
+            "median_of_ratios": 271.1883133608289,
+            "min": 270.04238092047154,
+            "max": 272.6167928949316
           },
           "raptorbt": {
-            "median_of_ratios": 3.098669375404816,
-            "min": 2.920731044362822,
-            "max": 3.2224361569601365
+            "median_of_ratios": 3.000678176934944,
+            "min": 2.9550245156287693,
+            "max": 3.0373265377607512
           }
         },
         "noisy": false,
         "cpu_over_wall": {
           "manifoldbt": null,
-          "vectorbt": 0.9997977986614928,
-          "raptorbt": 1.0055020401301444
+          "vectorbt": 1.0003024612758797,
+          "raptorbt": null
         }
       },
       {
         "workload": "sma_cross",
         "title": "SMA 30/150 crossover, long-only, no cost",
         "bars": 10000000,
-        "data_digest": "f4e6a3a8823f3768",
+        "data_digest": "73123cc435bd1913",
         "engines": [
           "manifoldbt",
           "vectorbt",
@@ -795,22 +739,22 @@
             "expected": "exact",
             "publishable": true,
             "diffs": {
-              "final_equity_vs_capital": 1.2369127944111823e-14,
+              "final_equity_vs_capital": 1.367880031466484e-14,
               "round_trips_delta": 0,
               "total_fees_vs_capital": 0.0
             },
             "metrics": {
               "manifoldbt": {
-                "total_return": 0.3001352494374474,
-                "final_equity": 130013.52494374473,
-                "round_trips": 46127,
-                "fills": 92254,
+                "total_return": 0.03788615047806765,
+                "final_equity": 103788.61504780677,
+                "round_trips": 46112,
+                "fills": 92224,
                 "total_fees": 0.0
               },
               "vectorbt": {
-                "total_return": 0.30013524943743497,
-                "final_equity": 130013.5249437435,
-                "round_trips": 46127,
+                "total_return": 0.03788615047805419,
+                "final_equity": 103788.6150478054,
+                "round_trips": 46112,
                 "fills": null,
                 "total_fees": 0.0
               }
@@ -828,16 +772,16 @@
             },
             "metrics": {
               "manifoldbt": {
-                "total_return": 0.3001352494374474,
-                "final_equity": 130013.52494374473,
-                "round_trips": 46127,
-                "fills": 92254,
+                "total_return": 0.03788615047806765,
+                "final_equity": 103788.61504780677,
+                "round_trips": 46112,
+                "fills": 92224,
                 "total_fees": 0.0
               },
               "raptorbt": {
-                "total_return": 0.3001352494374475,
-                "final_equity": 130013.52494374475,
-                "round_trips": 46127,
+                "total_return": 0.03788615047806757,
+                "final_equity": 103788.61504780676,
+                "round_trips": 46112,
                 "fills": null,
                 "total_fees": 0.0
               }
@@ -858,77 +802,65 @@
         "timings": {
           "manifoldbt": {
             "samples_s": [
-              0.24273850700001276,
-              0.2446513249999498,
-              0.2444946360000131,
-              0.2416592719998789,
-              0.24226309999994555,
-              0.24171930400007113,
-              0.2475091839999095
+              0.19860871800000268,
+              0.20035327499999767,
+              0.19829509700002745
             ],
-            "min_s": 0.2416592719998789,
-            "median_s": 0.24273850700001276,
-            "max_s": 0.2475091839999095,
-            "iqr_s": 0.0029320209998786595,
-            "iqr_over_median": 0.012078928210094434
+            "min_s": 0.19829509700002745,
+            "median_s": 0.19860871800000268,
+            "max_s": 0.20035327499999767,
+            "iqr_s": 0.002058177999970212,
+            "iqr_over_median": 0.010362979131511157
           },
           "vectorbt": {
             "samples_s": [
-              27.35598177600002,
-              26.956965323999952,
-              27.83448178599997,
-              26.822808692999843,
-              27.531694771000048,
-              26.730044930000076,
-              27.867760323000084
+              20.352495836000003,
+              20.708821683999986,
+              20.48599981000001
             ],
-            "min_s": 26.730044930000076,
-            "median_s": 27.35598177600002,
-            "max_s": 27.867760323000084,
-            "iqr_s": 1.0116730930001268,
-            "iqr_over_median": 0.03698178706522202
+            "min_s": 20.352495836000003,
+            "median_s": 20.48599981000001,
+            "max_s": 20.708821683999986,
+            "iqr_s": 0.3563258479999831,
+            "iqr_over_median": 0.01739362741895793
           },
           "raptorbt": {
             "samples_s": [
-              0.9165763900000456,
-              0.9044599740000194,
-              0.9093914339999856,
-              0.9021153829999093,
-              0.9020275889999994,
-              0.9052261090000684,
-              0.9214506049997908
+              0.7480084540000007,
+              0.7356763999999885,
+              0.7358425959999977
             ],
-            "min_s": 0.9020275889999994,
-            "median_s": 0.9052261090000684,
-            "max_s": 0.9214506049997908,
-            "iqr_s": 0.014461007000136306,
-            "iqr_over_median": 0.015975021993245683
+            "min_s": 0.7356763999999885,
+            "median_s": 0.7358425959999977,
+            "max_s": 0.7480084540000007,
+            "iqr_s": 0.01233205400001225,
+            "iqr_over_median": 0.016759092320896694
           }
         },
         "speedup": {
           "vectorbt": {
-            "median_of_ratios": 112.59283341587144,
-            "min": 110.18524148195594,
-            "max": 113.84495889716975
+            "median_of_ratios": 103.31067242674777,
+            "min": 102.47533965754579,
+            "max": 103.36153319180946
           },
           "raptorbt": {
-            "median_of_ratios": 3.7233387544376426,
-            "min": 3.6969347049324384,
-            "max": 3.7759826462144197
+            "median_of_ratios": 3.7108461436134035,
+            "min": 3.6718960546065293,
+            "max": 3.76624179206469
           }
         },
         "noisy": false,
         "cpu_over_wall": {
-          "manifoldbt": 1.1202113930627935,
-          "vectorbt": 0.9997920583068383,
-          "raptorbt": 1.004519949282334
+          "manifoldbt": 1.1050517625500649,
+          "vectorbt": 0.9998811104964856,
+          "raptorbt": 1.0002129056795326
         }
       },
       {
         "workload": "sma_cross_metrics",
         "title": "SMA 30/150 crossover, with a performance summary",
         "bars": 10000000,
-        "data_digest": "f4e6a3a8823f3768",
+        "data_digest": "73123cc435bd1913",
         "engines": [
           "manifoldbt",
           "vectorbt",
@@ -940,38 +872,38 @@
             "expected": "exact",
             "publishable": true,
             "diffs": {
-              "final_equity_vs_capital": 1.2369127944111823e-14,
+              "final_equity_vs_capital": 1.367880031466484e-14,
               "round_trips_delta": 0,
               "total_fees_vs_capital": 0.0,
-              "max_drawdown_rel": 1.1043826616631323e-14,
+              "max_drawdown_rel": 5.4536763289837e-15,
               "advisory_ratio_rel": {
-                "sharpe": 0.001418190244680208,
-                "sortino": 0.0015630368843009169,
-                "volatility": 0.00027126004230981933
+                "sharpe": 0.0029322134925119526,
+                "sortino": 0.0030751996753319386,
+                "volatility": 0.00027124700216687384
               }
             },
             "metrics": {
               "manifoldbt": {
-                "total_return": 0.3001352494374474,
-                "final_equity": 130013.52494374473,
-                "round_trips": 46127,
-                "fills": 92254,
+                "total_return": 0.03788615047806765,
+                "final_equity": 103788.61504780677,
+                "round_trips": 46112,
+                "fills": 92224,
                 "total_fees": 0.0,
-                "max_drawdown": -0.6232787775126734,
-                "sharpe": 0.16628266067296482,
-                "sortino": 0.3236304628541403,
-                "volatility": 0.15595531092911707
+                "max_drawdown": -0.6717919730204706,
+                "sharpe": 0.09022600140504972,
+                "sortino": 0.17523697483973677,
+                "volatility": 0.15574452123910787
               },
               "vectorbt": {
-                "total_return": 0.30013524943743497,
-                "final_equity": 130013.5249437435,
-                "round_trips": 46127,
+                "total_return": 0.03788615047805419,
+                "final_equity": 103788.6150478054,
+                "round_trips": 46112,
                 "fills": null,
                 "total_fees": 0.0,
-                "max_drawdown": -0.6232787775126802,
-                "sharpe": 0.16651881603341911,
-                "sortino": 0.324137101098728,
-                "volatility": 0.15591301795726933
+                "max_drawdown": -0.6717919730204742,
+                "sharpe": 0.09049134133707379,
+                "sortino": 0.17577752583010015,
+                "volatility": 0.1557022874604037
               }
             },
             "note": ""
@@ -989,25 +921,25 @@
             },
             "metrics": {
               "manifoldbt": {
-                "total_return": 0.3001352494374474,
-                "final_equity": 130013.52494374473,
-                "round_trips": 46127,
-                "fills": 92254,
+                "total_return": 0.03788615047806765,
+                "final_equity": 103788.61504780677,
+                "round_trips": 46112,
+                "fills": 92224,
                 "total_fees": 0.0,
-                "max_drawdown": -0.6232787775126734,
-                "sharpe": 0.16628266067296482,
-                "sortino": 0.3236304628541403,
-                "volatility": 0.15595531092911707
+                "max_drawdown": -0.6717919730204706,
+                "sharpe": 0.09022600140504972,
+                "sortino": 0.17523697483973677,
+                "volatility": 0.15574452123910787
               },
               "raptorbt": {
-                "total_return": 0.3001352494374475,
-                "final_equity": 130013.52494374475,
-                "round_trips": 46127,
+                "total_return": 0.03788615047806757,
+                "final_equity": 103788.61504780676,
+                "round_trips": 46112,
                 "fills": null,
                 "total_fees": 0.0,
-                "max_drawdown": -0.6232787775126734,
-                "sharpe": 0.07064081213793068,
-                "sortino": 0.09993197026250207,
+                "max_drawdown": -0.6717919730204706,
+                "sharpe": 0.037977702535686,
+                "sortino": 0.0537122315884283,
                 "volatility": null
               }
             },
@@ -1027,77 +959,65 @@
         "timings": {
           "manifoldbt": {
             "samples_s": [
-              0.24029610100001264,
-              0.24070884800005388,
-              0.2429748040000277,
-              0.24152974300000096,
-              0.24090639199994257,
-              0.24204003699992427,
-              0.24266619500008346
+              0.21450741700004983,
+              0.19759070099996734,
+              0.197639089000063
             ],
-            "min_s": 0.24029610100001264,
-            "median_s": 0.24152974300000096,
-            "max_s": 0.2429748040000277,
-            "iqr_s": 0.0019573470000295856,
-            "iqr_over_median": 0.008103958443037709
+            "min_s": 0.19759070099996734,
+            "median_s": 0.197639089000063,
+            "max_s": 0.21450741700004983,
+            "iqr_s": 0.016916716000082488,
+            "iqr_over_median": 0.08559397883116682
           },
           "vectorbt": {
             "samples_s": [
-              106.24939890100006,
-              105.41496990299993,
-              105.86435780699992,
-              104.66249439299986,
-              105.40513900999986,
-              105.47917007199999,
-              105.82800317500005
+              81.35151773799998,
+              80.993171749,
+              81.53833149799993
             ],
-            "min_s": 104.66249439299986,
-            "median_s": 105.47917007199999,
-            "max_s": 106.24939890100006,
-            "iqr_s": 0.4592187970000623,
-            "iqr_over_median": 0.004353644389566205
+            "min_s": 80.993171749,
+            "median_s": 81.35151773799998,
+            "max_s": 81.53833149799993,
+            "iqr_s": 0.5451597489999358,
+            "iqr_over_median": 0.006701285534163883
           },
           "raptorbt": {
             "samples_s": [
-              0.9241378549999126,
-              0.9269472799999221,
-              0.9178592690000187,
-              0.9194710860001578,
-              0.9174686060000568,
-              0.9215934689998448,
-              0.9185422350001318
+              0.7424175660000287,
+              0.7448926689999666,
+              0.7430384989999084
             ],
-            "min_s": 0.9174686060000568,
-            "median_s": 0.9194710860001578,
-            "max_s": 0.9269472799999221,
-            "iqr_s": 0.006278585999893949,
-            "iqr_over_median": 0.0068284757351172115
+            "min_s": 0.7424175660000287,
+            "median_s": 0.7430384989999084,
+            "max_s": 0.7448926689999666,
+            "iqr_s": 0.002475102999937917,
+            "iqr_over_median": 0.003331056201353333
           }
         },
         "speedup": {
           "vectorbt": {
-            "median_of_ratios": 436.10525633767674,
-            "min": 433.33170106921136,
-            "max": 442.1603116273388
+            "median_of_ratios": 409.90376236892536,
+            "min": 379.2480412832582,
+            "max": 412.5617655421087
           },
           "raptorbt": {
-            "median_of_ratios": 3.8076075364346984,
-            "min": 3.777590325785031,
-            "max": 3.8509065524658848
+            "median_of_ratios": 3.7595725762512067,
+            "min": 3.4610344778887354,
+            "max": 3.76987715125364
           }
         },
         "noisy": false,
         "cpu_over_wall": {
-          "manifoldbt": 1.0998614340162791,
-          "vectorbt": 0.999859882574194,
-          "raptorbt": 0.9990661213916946
+          "manifoldbt": 1.1316350586424144,
+          "vectorbt": 0.9999056064464555,
+          "raptorbt": 0.9998436414922163
         }
       },
       {
         "workload": "ema_rsi_fees",
         "title": "EMA 12/26 crossover + RSI(14) filter, 5 bps taker fee",
         "bars": 100000,
-        "data_digest": "b7c2ad8cea687ce0",
+        "data_digest": "f6e413e413e61a53",
         "engines": [
           "manifoldbt",
           "vectorbt",
@@ -1109,24 +1029,24 @@
             "expected": "exact",
             "publishable": true,
             "diffs": {
-              "final_equity_vs_capital": 1.3096723705530167e-15,
+              "final_equity_vs_capital": 0.0,
               "round_trips_delta": 0,
-              "total_fees_vs_capital": 4.7748471843078734e-17
+              "total_fees_vs_capital": 1.1368683772161604e-17
             },
             "metrics": {
               "manifoldbt": {
-                "total_return": -0.01570110342278974,
-                "final_equity": 98429.88965772103,
+                "total_return": -0.01566350876078959,
+                "final_equity": 98433.64912392104,
                 "round_trips": 3176,
                 "fills": 6352,
-                "total_fees": 1542.3890014306103
+                "total_fees": 1539.0168535292935
               },
               "vectorbt": {
-                "total_return": -0.01570110342278846,
-                "final_equity": 98429.88965772116,
+                "total_return": -0.015663508760789594,
+                "final_equity": 98433.64912392104,
                 "round_trips": 3176,
                 "fills": null,
-                "total_fees": 1542.3890014306055
+                "total_fees": 1539.0168535292923
               }
             },
             "note": ""
@@ -1136,24 +1056,24 @@
             "expected": "exact",
             "publishable": true,
             "diffs": {
-              "final_equity_vs_capital": 3.1024683266878126e-13,
+              "final_equity_vs_capital": 3.71044734492898e-12,
               "round_trips_delta": 0,
-              "total_fees_vs_capital": 1.0607209333102218e-13
+              "total_fees_vs_capital": 4.071057446708437e-13
             },
             "metrics": {
               "manifoldbt": {
-                "total_return": -0.01570110342278974,
-                "final_equity": 98429.88965772103,
+                "total_return": -0.01566350876078959,
+                "final_equity": 98433.64912392104,
                 "round_trips": 3176,
                 "fills": 6352,
-                "total_fees": 1542.3890014306103
+                "total_fees": 1539.0168535292935
               },
               "nautilus_trader": {
-                "total_return": -0.01570110342310005,
-                "final_equity": 98429.88965769,
+                "total_return": -0.015663508764499956,
+                "final_equity": 98433.64912355,
                 "round_trips": 3176,
                 "fills": 6352,
-                "total_fees": 1542.389001420003
+                "total_fees": 1539.016853570004
               }
             },
             "note": ""
@@ -1166,77 +1086,65 @@
         "timings": {
           "manifoldbt": {
             "samples_s": [
-              0.007160709000118004,
-              0.006842674999916198,
-              0.00668306600005053,
-              0.006985680000070715,
-              0.006982725999932882,
-              0.007268332999956328,
-              0.0072932460000174615
+              0.0057717899999261135,
+              0.005275022000091667,
+              0.006058032000055391
             ],
-            "min_s": 0.00668306600005053,
-            "median_s": 0.006985680000070715,
-            "max_s": 0.0072932460000174615,
-            "iqr_s": 0.00042565800004013,
-            "iqr_over_median": 0.06093293709929758
+            "min_s": 0.005275022000091667,
+            "median_s": 0.0057717899999261135,
+            "max_s": 0.006058032000055391,
+            "iqr_s": 0.0007830099999637241,
+            "iqr_over_median": 0.13566155386348908
           },
           "vectorbt": {
             "samples_s": [
-              0.20594616300013513,
-              0.20482831599997553,
-              0.21172699700014164,
-              0.21095983500003967,
-              0.20675114200003009,
-              0.2024765330002083,
-              0.20487418600009732
+              0.14983014299991737,
+              0.14933185000006688,
+              0.14562651399990045
             ],
-            "min_s": 0.2024765330002083,
-            "median_s": 0.20594616300013513,
-            "max_s": 0.21172699700014164,
-            "iqr_s": 0.006131519000064145,
-            "iqr_over_median": 0.029772436207321434
+            "min_s": 0.14562651399990045,
+            "median_s": 0.14933185000006688,
+            "max_s": 0.14983014299991737,
+            "iqr_s": 0.004203629000016917,
+            "iqr_over_median": 0.028149580950179314
           },
           "nautilus_trader": {
             "samples_s": [
-              13.16046419700001,
-              14.098575313000083,
-              13.309162186999856,
-              13.41489353499992,
-              13.326326431000098,
-              13.192533193999907,
-              13.457986723999966
+              9.147484630000008,
+              9.121904057000052,
+              9.075521231000039
             ],
-            "min_s": 13.16046419700001,
-            "median_s": 13.326326431000098,
-            "max_s": 14.098575313000083,
-            "iqr_s": 0.2654535300000589,
-            "iqr_over_median": 0.019919482790287425
+            "min_s": 9.075521231000039,
+            "median_s": 9.121904057000052,
+            "max_s": 9.147484630000008,
+            "iqr_s": 0.07196339899996929,
+            "iqr_over_median": 0.007889076507524254
           }
         },
         "speedup": {
           "vectorbt": {
-            "median_of_ratios": 29.608943842564837,
-            "min": 27.857355049833966,
-            "max": 31.68111716965548
+            "median_of_ratios": 25.959042688981302,
+            "min": 24.0385844773631,
+            "max": 28.309237382796102
           },
           "nautilus_trader": {
-            "median_of_ratios": 1908.4704785964952,
-            "min": 1815.0700021695723,
-            "max": 2060.389440266087
+            "median_of_ratios": 1584.86095823256,
+            "min": 1498.0972749759424,
+            "max": 1729.2636991545314
           }
         },
         "noisy": false,
         "cpu_over_wall": {
           "manifoldbt": null,
-          "vectorbt": 1.0016834001073835,
-          "nautilus_trader": 0.9997877650766485
+          "vectorbt": null,
+          "nautilus_trader": 0.999454746128447
         }
       },
       {
         "workload": "ema_rsi_fees",
         "title": "EMA 12/26 crossover + RSI(14) filter, 5 bps taker fee",
         "bars": 1000000,
-        "data_digest": "0ef03e7a3c4d011c",
+        "data_digest": "ac3e442a94f3cd06",
         "engines": [
           "manifoldbt",
           "vectorbt"
@@ -1247,24 +1155,24 @@
             "expected": "exact",
             "publishable": true,
             "diffs": {
-              "final_equity_vs_capital": 8.294591680169105e-15,
+              "final_equity_vs_capital": 6.548361852765083e-15,
               "round_trips_delta": 0,
-              "total_fees_vs_capital": 2.1100277081131935e-15
+              "total_fees_vs_capital": 1.0913936421275139e-16
             },
             "metrics": {
               "manifoldbt": {
-                "total_return": -0.1532708157041739,
-                "final_equity": 84672.91842958261,
-                "round_trips": 31389,
-                "fills": 62779,
-                "total_fees": 15206.83039822937
+                "total_return": -0.14995537166228978,
+                "final_equity": 85004.46283377102,
+                "round_trips": 31383,
+                "fills": 62767,
+                "total_fees": 14870.28066032091
               },
               "vectorbt": {
-                "total_return": -0.15327081570418216,
-                "final_equity": 84672.91842958178,
-                "round_trips": 31389,
+                "total_return": -0.14995537166229642,
+                "final_equity": 85004.46283377036,
+                "round_trips": 31383,
                 "fills": null,
-                "total_fees": 15206.830398229158
+                "total_fees": 14870.2806603209
               }
             },
             "note": ""
@@ -1281,55 +1189,47 @@
         "timings": {
           "manifoldbt": {
             "samples_s": [
-              0.050284398000030706,
-              0.04363093699998899,
-              0.04854391499998201,
-              0.04528834400002779,
-              0.04748026799984473,
-              0.048747709000053874,
-              0.04716899799996099
+              0.042594253000061144,
+              0.036497162000046046,
+              0.03794724399995175
             ],
-            "min_s": 0.04363093699998899,
-            "median_s": 0.04748026799984473,
-            "max_s": 0.050284398000030706,
-            "iqr_s": 0.0034593650000260823,
-            "iqr_over_median": 0.0728590032397752
+            "min_s": 0.036497162000046046,
+            "median_s": 0.03794724399995175,
+            "max_s": 0.042594253000061144,
+            "iqr_s": 0.006097091000015098,
+            "iqr_over_median": 0.16067282778224554
           },
           "vectorbt": {
             "samples_s": [
-              2.54615611600002,
-              2.3377336390001346,
-              2.5587071299999025,
-              2.3297368279997954,
-              2.541700387999981,
-              2.294864749999988,
-              2.502262777999931
+              1.735358855999948,
+              1.9512852870000188,
+              1.73261301499997
             ],
-            "min_s": 2.294864749999988,
-            "median_s": 2.502262777999931,
-            "max_s": 2.5587071299999025,
-            "iqr_s": 0.2164192880002247,
-            "iqr_over_median": 0.08648943264592279
+            "min_s": 1.73261301499997,
+            "median_s": 1.735358855999948,
+            "max_s": 1.9512852870000188,
+            "iqr_s": 0.2186722720000489,
+            "iqr_over_median": 0.12600982859769694
           }
         },
         "speedup": {
           "vectorbt": {
-            "median_of_ratios": 52.70912183331012,
-            "min": 47.076361065449284,
-            "max": 53.57972575745335
+            "median_of_ratios": 45.658467713812705,
+            "min": 40.741619673373705,
+            "max": 53.464027887909666
           }
         },
-        "noisy": false,
+        "noisy": true,
         "cpu_over_wall": {
           "manifoldbt": null,
-          "vectorbt": 1.0005165266503684
+          "vectorbt": 1.00382761721678
         }
       },
       {
         "workload": "sma_cross_costs",
         "title": "SMA 30/150 with a 5 bps fee and 2 bps of slippage",
         "bars": 100000,
-        "data_digest": "b7c2ad8cea687ce0",
+        "data_digest": "f6e413e413e61a53",
         "engines": [
           "manifoldbt",
           "vectorbt",
@@ -1341,24 +1241,24 @@
             "expected": "exact",
             "publishable": true,
             "diffs": {
-              "final_equity_vs_capital": 8.731149137020111e-16,
+              "final_equity_vs_capital": 2.037268131971359e-15,
               "round_trips_delta": 0,
-              "total_fees_vs_capital": 1.4210854715202004e-18
+              "total_fees_vs_capital": 8.526512829121202e-19
             },
             "metrics": {
               "manifoldbt": {
-                "total_return": -0.002745042655159957,
-                "final_equity": 99725.49573448401,
-                "round_trips": 450,
-                "fills": 900,
-                "total_fees": 218.42799507745576
+                "total_return": -0.0027521446989833276,
+                "final_equity": 99724.78553010167,
+                "round_trips": 451,
+                "fills": 902,
+                "total_fees": 218.4336288899406
               },
               "vectorbt": {
-                "total_return": -0.0027450426551607985,
-                "final_equity": 99725.49573448392,
-                "round_trips": 450,
+                "total_return": -0.0027521446989813188,
+                "final_equity": 99724.78553010187,
+                "round_trips": 451,
                 "fills": null,
-                "total_fees": 218.4279950774559
+                "total_fees": 218.43362888994068
               }
             },
             "note": ""
@@ -1368,24 +1268,24 @@
             "expected": "exact",
             "publishable": true,
             "diffs": {
-              "final_equity_vs_capital": 1.599255483597517e-13,
+              "final_equity_vs_capital": 1.658918336033821e-14,
               "round_trips_delta": 0,
-              "total_fees_vs_capital": 3.7455606616276784e-13
+              "total_fees_vs_capital": 4.0059433104033813e-13
             },
             "metrics": {
               "manifoldbt": {
-                "total_return": -0.002745042655159957,
-                "final_equity": 99725.49573448401,
-                "round_trips": 450,
-                "fills": 900,
-                "total_fees": 218.42799507745576
+                "total_return": -0.0027521446989833276,
+                "final_equity": 99724.78553010167,
+                "round_trips": 451,
+                "fills": 902,
+                "total_fees": 218.4336288899406
               },
               "nautilus_trader": {
-                "total_return": -0.002745042654999974,
-                "final_equity": 99725.4957345,
-                "round_trips": 450,
-                "fills": 900,
-                "total_fees": 218.42799504000016
+                "total_return": -0.00275214469899987,
+                "final_equity": 99724.78553010001,
+                "round_trips": 451,
+                "fills": 902,
+                "total_fees": 218.43362893000003
               }
             },
             "note": ""
@@ -1398,77 +1298,65 @@
         "timings": {
           "manifoldbt": {
             "samples_s": [
-              0.004276019000144515,
-              0.004814526000018304,
-              0.0050956100001258164,
-              0.005055764999951862,
-              0.005555630999879213,
-              0.0052062670001760125,
-              0.0051652610000019195
+              0.004264804999934313,
+              0.003683870000031675,
+              0.003599111999960769
             ],
-            "min_s": 0.004276019000144515,
-            "median_s": 0.0050956100001258164,
-            "max_s": 0.005555630999879213,
-            "iqr_s": 0.0003917410001577082,
-            "iqr_over_median": 0.07687813630714196
+            "min_s": 0.003599111999960769,
+            "median_s": 0.003683870000031675,
+            "max_s": 0.004264804999934313,
+            "iqr_s": 0.0006656929999735439,
+            "iqr_over_median": 0.1807048022779903
           },
           "vectorbt": {
             "samples_s": [
-              0.19983047100004114,
-              0.2060995219999313,
-              0.21246216300005472,
-              0.46789064199992936,
-              0.20085832300014772,
-              0.20092818900002385,
-              0.4503271549999681
+              0.13886161400000674,
+              0.139830452999945,
+              0.3900687250001056
             ],
-            "min_s": 0.19983047100004114,
-            "median_s": 0.2060995219999313,
-            "max_s": 0.46789064199992936,
-            "iqr_s": 0.2494688319998204,
-            "iqr_over_median": 1.210428969359296
+            "min_s": 0.13886161400000674,
+            "median_s": 0.139830452999945,
+            "max_s": 0.3900687250001056,
+            "iqr_s": 0.25120711100009885,
+            "iqr_over_median": 1.7965121732116367
           },
           "nautilus_trader": {
             "samples_s": [
-              7.25242291099994,
-              7.102341847999924,
-              6.895962457999985,
-              6.956629915000121,
-              6.949211300000115,
-              6.998509334999881,
-              6.8642473930001415
+              4.214948959000026,
+              4.213684195000042,
+              4.217749531999971
             ],
-            "min_s": 6.8642473930001415,
-            "median_s": 6.956629915000121,
-            "max_s": 7.25242291099994,
-            "iqr_s": 0.2063793899999382,
-            "iqr_over_median": 0.029666575988890248
+            "min_s": 4.213684195000042,
+            "median_s": 4.214948959000026,
+            "max_s": 4.217749531999971,
+            "iqr_s": 0.004065336999929059,
+            "iqr_over_median": 0.0009645044434638987
           }
         },
         "speedup": {
           "vectorbt": {
-            "median_of_ratios": 42.807853150891226,
-            "min": 36.15400716939528,
-            "max": 92.5459632724987
+            "median_of_ratios": 37.95748845609175,
+            "min": 32.55989758081448,
+            "max": 108.37915713774882
           },
           "nautilus_trader": {
-            "median_of_ratios": 1353.3144133537921,
-            "min": 1250.8410476057898,
-            "max": 1696.0689161471994
+            "median_of_ratios": 1143.8200031390388,
+            "min": 988.3098896819304,
+            "max": 1171.8861574871648
           }
         },
         "noisy": true,
         "cpu_over_wall": {
           "manifoldbt": null,
-          "vectorbt": 1.0059861515481812,
-          "nautilus_trader": 1.0002177679918078
+          "vectorbt": 1.0018529914056555,
+          "nautilus_trader": 0.9994952955197828
         }
       },
       {
         "workload": "sma_cross_costs",
         "title": "SMA 30/150 with a 5 bps fee and 2 bps of slippage",
         "bars": 1000000,
-        "data_digest": "0ef03e7a3c4d011c",
+        "data_digest": "ac3e442a94f3cd06",
         "engines": [
           "manifoldbt",
           "vectorbt"
@@ -1479,24 +1367,24 @@
             "expected": "exact",
             "publishable": true,
             "diffs": {
-              "final_equity_vs_capital": 1.6007106751203538e-15,
+              "final_equity_vs_capital": 5.820766091346741e-15,
               "round_trips_delta": 0,
-              "total_fees_vs_capital": 6.821210263296961e-17
+              "total_fees_vs_capital": 3.1832314562052486e-17
             },
             "metrics": {
               "manifoldbt": {
-                "total_return": -0.02986364258908214,
-                "final_equity": 97013.63574109178,
-                "round_trips": 4534,
-                "fills": 9069,
-                "total_fees": 2195.9426086254202
+                "total_return": -0.029348513206911897,
+                "final_equity": 97065.14867930881,
+                "round_trips": 4539,
+                "fills": 9079,
+                "total_fees": 2150.1249884272365
               },
               "vectorbt": {
-                "total_return": -0.02986364258908383,
-                "final_equity": 97013.63574109162,
-                "round_trips": 4534,
+                "total_return": -0.029348513206906096,
+                "final_equity": 97065.1486793094,
+                "round_trips": 4539,
                 "fills": null,
-                "total_fees": 2195.9426086254134
+                "total_fees": 2150.1249884272397
               }
             },
             "note": ""
@@ -1513,55 +1401,47 @@
         "timings": {
           "manifoldbt": {
             "samples_s": [
-              0.03560026099989955,
-              0.03064107399995919,
-              0.030217678000099113,
-              0.029296345999910045,
-              0.030412112000021807,
-              0.030822368000144706,
-              0.030043732999956774
+              0.026658113000053163,
+              0.023691012999961458,
+              0.023874969999951645
             ],
-            "min_s": 0.029296345999910045,
-            "median_s": 0.030412112000021807,
-            "max_s": 0.03560026099989955,
-            "iqr_s": 0.0007786350001879327,
-            "iqr_over_median": 0.025602792735584246
+            "min_s": 0.023691012999961458,
+            "median_s": 0.023874969999951645,
+            "max_s": 0.026658113000053163,
+            "iqr_s": 0.0029671000000917047,
+            "iqr_over_median": 0.1242765959537421
           },
           "vectorbt": {
             "samples_s": [
-              2.5430630430000747,
-              2.334586253999987,
-              2.52289031600003,
-              2.2946154439998736,
-              2.518588379999983,
-              2.296101680999982,
-              2.503543800999978
+              1.9598797910000485,
+              1.6995984310000267,
+              1.9508150389999628
             ],
-            "min_s": 2.2946154439998736,
-            "median_s": 2.503543800999978,
-            "max_s": 2.5430630430000747,
-            "iqr_s": 0.2267886350000481,
-            "iqr_over_median": 0.09058704501573452
+            "min_s": 1.6995984310000267,
+            "median_s": 1.9508150389999628,
+            "max_s": 1.9598797910000485,
+            "iqr_s": 0.2602813600000218,
+            "iqr_over_median": 0.13342185435142462
           }
         },
         "speedup": {
           "vectorbt": {
-            "median_of_ratios": 78.3242880872215,
-            "min": 71.4338314263272,
-            "max": 83.49054205924608
+            "median_of_ratios": 73.51907432443325,
+            "min": 71.74021773584742,
+            "max": 81.70963310127358
           }
         },
         "noisy": false,
         "cpu_over_wall": {
           "manifoldbt": null,
-          "vectorbt": 0.9986252639546724
+          "vectorbt": 0.9981652900265359
         }
       },
       {
         "workload": "sma_cross_costs",
         "title": "SMA 30/150 with a 5 bps fee and 2 bps of slippage",
         "bars": 10000000,
-        "data_digest": "f4e6a3a8823f3768",
+        "data_digest": "73123cc435bd1913",
         "engines": [
           "manifoldbt",
           "vectorbt"
@@ -1572,24 +1452,24 @@
             "expected": "exact",
             "publishable": true,
             "diffs": {
-              "final_equity_vs_capital": 8.149072527885436e-15,
+              "final_equity_vs_capital": 7.275957614183426e-16,
               "round_trips_delta": 0,
-              "total_fees_vs_capital": 3.1650415621697903e-15
+              "total_fees_vs_capital": 4.729372449219226e-16
             },
             "metrics": {
               "manifoldbt": {
-                "total_return": -0.30242917768507427,
-                "final_equity": 69757.08223149258,
-                "round_trips": 46127,
-                "fills": 92254,
-                "total_fees": 21749.94829446186
+                "total_return": -0.24245832953095314,
+                "final_equity": 75754.16704690468,
+                "round_trips": 46112,
+                "fills": 92224,
+                "total_fees": 17373.010435196742
               },
               "vectorbt": {
-                "total_return": -0.30242917768506616,
-                "final_equity": 69757.08223149339,
-                "round_trips": 46127,
+                "total_return": -0.2424583295309525,
+                "final_equity": 75754.16704690475,
+                "round_trips": 46112,
                 "fills": null,
-                "total_fees": 21749.948294462178
+                "total_fees": 17373.01043519679
               }
             },
             "note": ""
@@ -1606,55 +1486,47 @@
         "timings": {
           "manifoldbt": {
             "samples_s": [
-              0.32284560400012197,
-              0.32410488599998644,
-              0.32250435299988567,
-              0.32129061299997375,
-              0.32193123899992315,
-              0.3224398580000525,
-              0.32011243700003433
+              0.20323112300002322,
+              0.2060924329999807,
+              0.20517852900002254
             ],
-            "min_s": 0.32011243700003433,
-            "median_s": 0.3224398580000525,
-            "max_s": 0.32410488599998644,
-            "iqr_s": 0.0015549910001482203,
-            "iqr_over_median": 0.004822576866870991
+            "min_s": 0.20323112300002322,
+            "median_s": 0.20517852900002254,
+            "max_s": 0.2060924329999807,
+            "iqr_s": 0.0028613099999574843,
+            "iqr_over_median": 0.01394546502454538
           },
           "vectorbt": {
             "samples_s": [
-              27.303022985000098,
-              27.47768277499995,
-              28.37877847699997,
-              27.669352032000006,
-              27.36012748500002,
-              27.227088127999878,
-              28.301180206000026
+              21.40745322800001,
+              21.053405535000024,
+              20.938171901000032
             ],
-            "min_s": 27.227088127999878,
-            "median_s": 27.47768277499995,
-            "max_s": 28.37877847699997,
-            "iqr_s": 0.9981572209999285,
-            "iqr_over_median": 0.03632610614123848
+            "min_s": 20.938171901000032,
+            "median_s": 21.053405535000024,
+            "max_s": 21.40745322800001,
+            "iqr_s": 0.46928132699997605,
+            "iqr_over_median": 0.022290043585576878
           }
         },
         "speedup": {
           "vectorbt": {
-            "median_of_ratios": 84.98748853945968,
-            "min": 84.4408265680214,
-            "max": 88.41012386531233
+            "median_of_ratios": 102.15516032557099,
+            "min": 102.04855256076884,
+            "max": 105.33550625510033
           }
         },
         "noisy": false,
         "cpu_over_wall": {
-          "manifoldbt": 1.0774959043071985,
-          "vectorbt": 0.9999626667802242
+          "manifoldbt": 1.1228603073007064,
+          "vectorbt": 1.0000152894451169
         }
       },
       {
         "workload": "multi_asset",
         "title": "Five assets in one book, SMA 30/150, 5 bps fee",
         "bars": 100000,
-        "data_digest": "b7c2ad8cea687ce0",
+        "data_digest": "f6e413e413e61a53",
         "engines": [
           "manifoldbt",
           "vectorbt",
@@ -1666,24 +1538,24 @@
             "expected": "exact",
             "publishable": true,
             "diffs": {
-              "final_equity_vs_capital": 1.4551915228366853e-16,
+              "final_equity_vs_capital": 2.473825588822365e-15,
               "round_trips_delta": 0,
-              "total_fees_vs_capital": 5.115907697472722e-18
+              "total_fees_vs_capital": 1.1368683772161604e-18
             },
             "metrics": {
               "manifoldbt": {
-                "total_return": -0.004784214364567441,
-                "final_equity": 99521.57856354325,
-                "round_trips": 2350,
-                "fills": 4700,
-                "total_fees": 464.09434549765643
+                "total_return": -0.004781171860802846,
+                "final_equity": 99521.88281391971,
+                "round_trips": 2353,
+                "fills": 4706,
+                "total_fees": 463.6046247237474
               },
               "vectorbt": {
-                "total_return": -0.004784214364567548,
-                "final_equity": 99521.57856354324,
-                "round_trips": 2350,
+                "total_return": -0.0047811718608004065,
+                "final_equity": 99521.88281391996,
+                "round_trips": 2353,
                 "fills": null,
-                "total_fees": 464.09434549765695
+                "total_fees": 463.6046247237473
               }
             },
             "note": ""
@@ -1693,24 +1565,24 @@
             "expected": "exact",
             "publishable": true,
             "diffs": {
-              "final_equity_vs_capital": 3.667519195005297e-12,
+              "final_equity_vs_capital": 2.1028972696512937e-12,
               "round_trips_delta": 0,
-              "total_fees_vs_capital": 2.576578026491916e-12
+              "total_fees_vs_capital": 2.6374698336439905e-12
             },
             "metrics": {
               "manifoldbt": {
-                "total_return": -0.004784214364567441,
-                "final_equity": 99521.57856354325,
-                "round_trips": 2350,
-                "fills": 4700,
-                "total_fees": 464.09434549765643
+                "total_return": -0.004781171860802846,
+                "final_equity": 99521.88281391971,
+                "round_trips": 2353,
+                "fills": 4706,
+                "total_fees": 463.6046247237474
               },
               "nautilus_trader": {
-                "total_return": -0.00478421436089993,
-                "final_equity": 99521.57856391,
-                "round_trips": 2350,
-                "fills": 4700,
-                "total_fees": 464.09434523999863
+                "total_return": -0.004781171858699973,
+                "final_equity": 99521.88281413,
+                "round_trips": 2353,
+                "fills": 4706,
+                "total_fees": 463.6046244600004
               }
             },
             "note": ""
@@ -1723,77 +1595,65 @@
         "timings": {
           "manifoldbt": {
             "samples_s": [
-              0.01890462400024262,
-              0.019419698000092467,
-              0.01913496600036524,
-              0.019433577000199875,
-              0.019375849999960337,
-              0.019157813000219903,
-              0.019063186000039423
+              0.016007397000066703,
+              0.01579311700004382,
+              0.015213523000056739
             ],
-            "min_s": 0.01890462400024262,
-            "median_s": 0.019157813000219903,
-            "max_s": 0.019433577000199875,
-            "iqr_s": 0.0003565120000530442,
-            "iqr_over_median": 0.01860922225563805
+            "min_s": 0.015213523000056739,
+            "median_s": 0.01579311700004382,
+            "max_s": 0.016007397000066703,
+            "iqr_s": 0.0007938740000099642,
+            "iqr_over_median": 0.05026708787174574
           },
           "vectorbt": {
             "samples_s": [
-              0.23894261800023742,
-              0.23956227700000454,
-              0.24091455500001757,
-              0.24128279000024122,
-              0.23862422699994568,
-              0.23073388800003158,
-              0.23377942199977042
+              0.1689620230000628,
+              0.16818891200000508,
+              0.49390019100007976
             ],
-            "min_s": 0.23073388800003158,
-            "median_s": 0.23894261800023742,
-            "max_s": 0.24128279000024122,
-            "iqr_s": 0.007135133000247151,
-            "iqr_over_median": 0.02986128242823581
+            "min_s": 0.16818891200000508,
+            "median_s": 0.1689620230000628,
+            "max_s": 0.49390019100007976,
+            "iqr_s": 0.3257112790000747,
+            "iqr_over_median": 1.9277188637825058
           },
           "nautilus_trader": {
             "samples_s": [
-              56.546734831999856,
-              57.33247631899985,
-              56.80366386500009,
-              58.01326026200013,
-              58.020108824999625,
-              56.95291688399993,
-              57.27499726099995
+              37.18105002499999,
+              37.06498862500007,
+              36.769756018000066
             ],
-            "min_s": 56.546734831999856,
-            "median_s": 57.27499726099995,
-            "max_s": 58.020108824999625,
-            "iqr_s": 1.2095963970000412,
-            "iqr_over_median": 0.02111910004094731
+            "min_s": 36.769756018000066,
+            "median_s": 37.06498862500007,
+            "max_s": 37.18105002499999,
+            "iqr_s": 0.411294006999924,
+            "iqr_over_median": 0.011096563691443012
           }
         },
         "speedup": {
           "vectorbt": {
-            "median_of_ratios": 12.336045442048784,
-            "min": 12.043853230918534,
-            "max": 12.639374260877702
+            "median_of_ratios": 10.649507123865314,
+            "min": 10.555246615009219,
+            "max": 32.464550847179694
           },
           "nautilus_trader": {
-            "median_of_ratios": 2985.207523113396,
-            "min": 2952.2846502930615,
-            "max": 3004.481898297667
+            "median_of_ratios": 2346.9077462604264,
+            "min": 2322.7417939871834,
+            "max": 2416.9126387006436
           }
         },
-        "noisy": false,
+        "noisy": true,
         "cpu_over_wall": {
           "manifoldbt": null,
-          "vectorbt": 0.9976922194953836,
-          "nautilus_trader": 0.9999148054727893
+          "vectorbt": 0.9987351849155589,
+          "nautilus_trader": 0.9998577259384804
         }
       },
       {
         "workload": "multi_asset",
         "title": "Five assets in one book, SMA 30/150, 5 bps fee",
         "bars": 1000000,
-        "data_digest": "0ef03e7a3c4d011c",
+        "data_digest": "ac3e442a94f3cd06",
         "engines": [
           "manifoldbt",
           "vectorbt"
@@ -1804,24 +1664,24 @@
             "expected": "exact",
             "publishable": true,
             "diffs": {
-              "final_equity_vs_capital": 1.0186340659856795e-15,
+              "final_equity_vs_capital": 7.8580342233181e-15,
               "round_trips_delta": 0,
-              "total_fees_vs_capital": 2.7284841053187848e-17
+              "total_fees_vs_capital": 4.456524038687348e-16
             },
             "metrics": {
               "manifoldbt": {
-                "total_return": -0.0447197098443024,
-                "final_equity": 95528.02901556976,
-                "round_trips": 22902,
-                "fills": 45806,
-                "total_fees": 4561.765315438204
+                "total_return": -0.04398719435120224,
+                "final_equity": 95601.28056487978,
+                "round_trips": 22915,
+                "fills": 45832,
+                "total_fees": 4462.300363471209
               },
               "vectorbt": {
-                "total_return": -0.044719709844301396,
-                "final_equity": 95528.02901556986,
-                "round_trips": 22902,
+                "total_return": -0.043987194351210075,
+                "final_equity": 95601.280564879,
+                "round_trips": 22915,
                 "fills": null,
-                "total_fees": 4561.7653154382015
+                "total_fees": 4462.300363471253
               }
             },
             "note": ""
@@ -1838,55 +1698,47 @@
         "timings": {
           "manifoldbt": {
             "samples_s": [
-              0.15858036800000264,
-              0.15745054599983632,
-              0.16013263300010294,
-              0.1576053150001826,
-              0.16098095500001364,
-              0.16445714300016334,
-              0.15703666799981875
+              0.1266000889999077,
+              0.12651657300000352,
+              0.12454237500003273
             ],
-            "min_s": 0.15703666799981875,
-            "median_s": 0.15858036800000264,
-            "max_s": 0.16445714300016334,
-            "iqr_s": 0.0035304090001773147,
-            "iqr_over_median": 0.022262585493415275
+            "min_s": 0.12454237500003273,
+            "median_s": 0.12651657300000352,
+            "max_s": 0.1266000889999077,
+            "iqr_s": 0.002057713999874977,
+            "iqr_over_median": 0.01626438300597124
           },
           "vectorbt": {
             "samples_s": [
-              3.0439520649997576,
-              2.6826457469996967,
-              2.9960822009998083,
-              2.6476033930002814,
-              2.990258724999876,
-              2.648287748000257,
-              2.972355337999943
+              1.9891889660000288,
+              2.2702777540000625,
+              1.9710023850000198
             ],
-            "min_s": 2.6476033930002814,
-            "median_s": 2.972355337999943,
-            "max_s": 3.0439520649997576,
-            "iqr_s": 0.34779445299955114,
-            "iqr_over_median": 0.11700971568008327
+            "min_s": 1.9710023850000198,
+            "median_s": 1.9891889660000288,
+            "max_s": 2.2702777540000625,
+            "iqr_s": 0.2992753690000427,
+            "iqr_over_median": 0.15045094966610545
           }
         },
         "speedup": {
           "vectorbt": {
-            "median_of_ratios": 18.575232859064744,
-            "min": 16.103209016574166,
-            "max": 19.19501198912407
+            "median_of_ratios": 15.825957911911521,
+            "min": 15.712382050548786,
+            "max": 17.94450877198515
           }
         },
-        "noisy": false,
+        "noisy": true,
         "cpu_over_wall": {
-          "manifoldbt": 1.2183720165437177,
-          "vectorbt": 0.9999406833484781
+          "manifoldbt": null,
+          "vectorbt": 1.0031347390815588
         }
       },
       {
         "workload": "bracket_sl_tp",
         "title": "SMA 10/50 entry with a 15 bps stop / 30 bps target bracket",
         "bars": 100000,
-        "data_digest": "b7c2ad8cea687ce0",
+        "data_digest": "f6e413e413e61a53",
         "engines": [
           "manifoldbt",
           "vectorbt",
@@ -1899,22 +1751,22 @@
             "expected": "documented",
             "publishable": false,
             "diffs": {
-              "final_equity_vs_capital": 0.01145740341532248,
-              "round_trips_delta": 94,
+              "final_equity_vs_capital": 0.01064905871993862,
+              "round_trips_delta": 95,
               "total_fees_vs_capital": 0.0
             },
             "metrics": {
               "manifoldbt": {
-                "total_return": -0.05756525685928504,
-                "final_equity": 94243.4743140715,
-                "round_trips": 2309,
-                "fills": 4618,
+                "total_return": -0.05655656604998993,
+                "final_equity": 94344.34339500101,
+                "round_trips": 2303,
+                "fills": 4606,
                 "total_fees": 0.0
               },
               "vectorbt": {
-                "total_return": -0.06902266027460748,
-                "final_equity": 93097.73397253925,
-                "round_trips": 2215,
+                "total_return": -0.06720562476992854,
+                "final_equity": 93279.43752300715,
+                "round_trips": 2208,
                 "fills": null,
                 "total_fees": 0.0
               }
@@ -1926,22 +1778,22 @@
             "expected": "documented",
             "publishable": false,
             "diffs": {
-              "final_equity_vs_capital": 0.009248235144781793,
-              "round_trips_delta": 925,
+              "final_equity_vs_capital": 0.00984269552616519,
+              "round_trips_delta": 922,
               "total_fees_vs_capital": 0.0
             },
             "metrics": {
               "manifoldbt": {
-                "total_return": -0.05756525685928504,
-                "final_equity": 94243.4743140715,
-                "round_trips": 2309,
-                "fills": 4618,
+                "total_return": -0.05655656604998993,
+                "final_equity": 94344.34339500101,
+                "round_trips": 2303,
+                "fills": 4606,
                 "total_fees": 0.0
               },
               "raptorbt": {
-                "total_return": -0.06681349200406679,
-                "final_equity": 93318.65079959332,
-                "round_trips": 1384,
+                "total_return": -0.06639926157615511,
+                "final_equity": 93360.07384238449,
+                "round_trips": 1381,
                 "fills": null,
                 "total_fees": 0.0
               }
@@ -1953,23 +1805,23 @@
             "expected": "documented",
             "publishable": false,
             "diffs": {
-              "final_equity_vs_capital": 7.0812876849959135e-06,
+              "final_equity_vs_capital": 1.0002018289960689e-05,
               "round_trips_delta": 0,
               "total_fees_vs_capital": 0.0
             },
             "metrics": {
               "manifoldbt": {
-                "total_return": -0.05756525685928504,
-                "final_equity": 94243.4743140715,
-                "round_trips": 2309,
-                "fills": 4618,
+                "total_return": -0.05655656604998993,
+                "final_equity": 94344.34339500101,
+                "round_trips": 2303,
+                "fills": 4606,
                 "total_fees": 0.0
               },
               "nautilus_trader": {
-                "total_return": -0.057558175571600034,
-                "final_equity": 94244.18244284,
-                "round_trips": 2309,
-                "fills": 4995,
+                "total_return": -0.0565465640317,
+                "final_equity": 94345.34359683,
+                "round_trips": 2303,
+                "fills": 4986,
                 "total_fees": 0.0
               }
             },
@@ -1979,120 +1831,104 @@
         "status": "documented",
         "divergence_scale": {
           "raptorbt": {
-            "round_trips": 1384,
-            "final_equity": 93318.65079959332
+            "round_trips": 1381,
+            "final_equity": 93360.07384238449
           },
           "nautilus_trader": {
-            "round_trips": 2309,
-            "final_equity": 94244.18244284,
-            "reentries_on_exit_bar": 925,
-            "reentry_quantity_gap_median": 0.00027019269628733995,
-            "reentry_quantity_gap_max": 0.0010824454381871866
+            "round_trips": 2303,
+            "final_equity": 94345.34359683,
+            "reentries_on_exit_bar": 922,
+            "reentry_quantity_gap_median": 0.0002688238851963217,
+            "reentry_quantity_gap_max": 0.001083501638118605
           },
           "manifoldbt": {
-            "reentries_on_exit_bar": 925,
-            "round_trips": 2309,
-            "share_of_round_trips": 0.40060632308358596,
-            "sl_exits": 632,
-            "tp_exits": 388
+            "reentries_on_exit_bar": 922,
+            "round_trips": 2303,
+            "share_of_round_trips": 0.4003473729917499,
+            "sl_exits": 630,
+            "tp_exits": 387
           }
         },
         "timings": {
           "manifoldbt": {
             "samples_s": [
-              0.005700052000065625,
-              0.007464394000180619,
-              0.008181457999853592,
-              0.008038036000016291,
-              0.008109811999929661,
-              0.008006369000213454,
-              0.008289335999961622
+              0.004477394999980788,
+              0.005718196999964675,
+              0.006040380000058576
             ],
-            "min_s": 0.005700052000065625,
-            "median_s": 0.008038036000016291,
-            "max_s": 0.008289335999961622,
-            "iqr_s": 0.0007170639996729733,
-            "iqr_over_median": 0.089208856450944
+            "min_s": 0.004477394999980788,
+            "median_s": 0.005718196999964675,
+            "max_s": 0.006040380000058576,
+            "iqr_s": 0.0015629850000777878,
+            "iqr_over_median": 0.2733352838468915
           },
           "vectorbt": {
             "samples_s": [
-              0.20142264200012505,
-              0.6899669439999343,
-              0.6840140549998068,
-              0.1994759009999143,
-              0.19908629399969868,
-              0.19700213200030703,
-              0.20559451700000864
+              0.14064427200003138,
+              0.14174883500004398,
+              0.6101605389999349
             ],
-            "min_s": 0.19700213200030703,
-            "median_s": 0.20142264200012505,
-            "max_s": 0.6899669439999343,
-            "iqr_s": 0.48492776100010815,
-            "iqr_over_median": 2.407513654794614
+            "min_s": 0.14064427200003138,
+            "median_s": 0.14174883500004398,
+            "max_s": 0.6101605389999349,
+            "iqr_s": 0.46951626699990356,
+            "iqr_over_median": 3.312311293420915
           },
           "raptorbt": {
             "samples_s": [
-              0.007894060000126046,
-              0.007890100000167877,
-              0.008053360999838333,
-              0.007991941000000224,
-              0.008080275999873265,
-              0.008014453999749094,
-              0.008004664000054618
+              0.008882810000045538,
+              0.007611122999946929,
+              0.00794319000010546
             ],
-            "min_s": 0.007890100000167877,
-            "median_s": 0.008004664000054618,
-            "max_s": 0.008080275999873265,
-            "iqr_s": 0.00015930099971228628,
-            "iqr_over_median": 0.01990102266768466
+            "min_s": 0.007611122999946929,
+            "median_s": 0.00794319000010546,
+            "max_s": 0.008882810000045538,
+            "iqr_s": 0.0012716870000986091,
+            "iqr_over_median": 0.16009776929441763
           },
           "nautilus_trader": {
             "samples_s": [
-              14.516676395999639,
-              14.093530383999678,
-              13.788040676000037,
-              14.707511115000216,
-              14.503317256000173,
-              14.903908550999859,
-              14.809474293000221
+              9.360622379000006,
+              8.851750896999988,
+              8.85180970099998
             ],
-            "min_s": 13.788040676000037,
-            "median_s": 14.516676395999639,
-            "max_s": 14.903908550999859,
-            "iqr_s": 0.7159439090005435,
-            "iqr_over_median": 0.0493187207230049
+            "min_s": 8.851750896999988,
+            "median_s": 8.85180970099998,
+            "max_s": 9.360622379000006,
+            "iqr_s": 0.5088714820000177,
+            "iqr_over_median": 0.05748784702664034
           }
         },
         "speedup": {
           "vectorbt": {
-            "median_of_ratios": 24.816497587160598,
-            "min": 24.548817408026895,
-            "max": 92.43442186776836
+            "median_of_ratios": 31.412075995223752,
+            "min": 24.789078620572123,
+            "max": 101.01360162672182
           },
           "raptorbt": {
-            "median_of_ratios": 0.9963579920155174,
-            "min": 0.9656580454805641,
-            "max": 1.3849101727554698
+            "median_of_ratios": 1.3310354644993776,
+            "min": 1.3150149493953083,
+            "max": 1.9839236877880224
           },
           "nautilus_trader": {
-            "median_of_ratios": 1829.7393934252605,
-            "min": 1685.2791612750166,
-            "max": 2546.7620989830457
+            "median_of_ratios": 1547.9968418462447,
+            "min": 1465.439210929468,
+            "max": 2090.640289507665
           }
         },
         "noisy": true,
         "cpu_over_wall": {
           "manifoldbt": null,
-          "vectorbt": 1.0056541812321103,
+          "vectorbt": 0.997138943959875,
           "raptorbt": null,
-          "nautilus_trader": 0.9998770393932211
+          "nautilus_trader": 0.9994759502988892
         }
       },
       {
         "workload": "bracket_sl_tp",
         "title": "SMA 10/50 entry with a 15 bps stop / 30 bps target bracket",
         "bars": 1000000,
-        "data_digest": "0ef03e7a3c4d011c",
+        "data_digest": "ac3e442a94f3cd06",
         "engines": [
           "manifoldbt",
           "vectorbt",
@@ -2104,21 +1940,21 @@
             "expected": "documented",
             "publishable": false,
             "diffs": {
-              "final_equity_vs_capital": 0.010543837599986582,
-              "round_trips_delta": 1092,
+              "final_equity_vs_capital": 0.0036541513284635584,
+              "round_trips_delta": 1090,
               "total_fees_vs_capital": 0.0
             },
             "metrics": {
               "manifoldbt": {
-                "total_return": -0.45070441471402267,
-                "final_equity": 54929.558528597736,
-                "round_trips": 23075,
-                "fills": 46151,
+                "total_return": -0.4672281492275321,
+                "final_equity": 53277.18507724679,
+                "round_trips": 23073,
+                "fills": 46147,
                 "total_fees": 0.0
               },
               "vectorbt": {
-                "total_return": -0.46124825231400923,
-                "final_equity": 53875.17476859908,
+                "total_return": -0.47088230055599567,
+                "final_equity": 52911.76994440043,
                 "round_trips": 21983,
                 "fills": null,
                 "total_fees": 0.0
@@ -2131,22 +1967,22 @@
             "expected": "documented",
             "publishable": false,
             "diffs": {
-              "final_equity_vs_capital": 0.10072796246195154,
-              "round_trips_delta": 9330,
+              "final_equity_vs_capital": 0.10667808181878907,
+              "round_trips_delta": 9321,
               "total_fees_vs_capital": 0.0
             },
             "metrics": {
               "manifoldbt": {
-                "total_return": -0.45070441471402267,
-                "final_equity": 54929.558528597736,
-                "round_trips": 23075,
-                "fills": 46151,
+                "total_return": -0.4672281492275321,
+                "final_equity": 53277.18507724679,
+                "round_trips": 23073,
+                "fills": 46147,
                 "total_fees": 0.0
               },
               "raptorbt": {
-                "total_return": -0.3499764522520711,
-                "final_equity": 65002.35477479289,
-                "round_trips": 13745,
+                "total_return": -0.36055006740874307,
+                "final_equity": 63944.993259125695,
+                "round_trips": 13752,
                 "fills": null,
                 "total_fees": 0.0
               }
@@ -2163,91 +1999,79 @@
         },
         "divergence_scale": {
           "raptorbt": {
-            "round_trips": 13745,
-            "final_equity": 65002.35477479289
+            "round_trips": 13752,
+            "final_equity": 63944.993259125695
           },
           "manifoldbt": {
-            "reentries_on_exit_bar": 9330,
-            "round_trips": 23075,
-            "share_of_round_trips": 0.40433369447453954,
-            "sl_exits": 6363,
-            "tp_exits": 3906
+            "reentries_on_exit_bar": 9321,
+            "round_trips": 23073,
+            "share_of_round_trips": 0.40397867637498375,
+            "sl_exits": 6357,
+            "tp_exits": 3896
           }
         },
         "timings": {
           "manifoldbt": {
             "samples_s": [
-              0.05043647799993778,
-              0.06261629600021479,
-              0.061378443999728916,
-              0.05935659599981591,
-              0.06011934200023461,
-              0.06103750699958255,
-              0.05964236499994513
+              0.042385960999922645,
+              0.05139937199999167,
+              0.04868534599995655
             ],
-            "min_s": 0.05043647799993778,
-            "median_s": 0.06011934200023461,
-            "max_s": 0.06261629600021479,
-            "iqr_s": 0.002021847999913007,
-            "iqr_over_median": 0.03363057433172034
+            "min_s": 0.042385960999922645,
+            "median_s": 0.04868534599995655,
+            "max_s": 0.05139937199999167,
+            "iqr_s": 0.009013411000069027,
+            "iqr_over_median": 0.18513601608330094
           },
           "vectorbt": {
             "samples_s": [
-              2.5742258230002335,
-              3.0020711419997497,
-              2.5256445380000514,
-              2.997094131999802,
-              2.579999408000276,
-              3.0165683889999855,
-              2.5455492520000007
+              1.9224105280000003,
+              2.3637418000000707,
+              1.9173484750000398
             ],
-            "min_s": 2.5256445380000514,
-            "median_s": 2.579999408000276,
-            "max_s": 3.0165683889999855,
-            "iqr_s": 0.45652188999974896,
-            "iqr_over_median": 0.17694650959381153
+            "min_s": 1.9173484750000398,
+            "median_s": 1.9224105280000003,
+            "max_s": 2.3637418000000707,
+            "iqr_s": 0.4463933250000309,
+            "iqr_over_median": 0.2322049939377105
           },
           "raptorbt": {
             "samples_s": [
-              0.07773258899987923,
-              0.0781139309997343,
-              0.07831352399989555,
-              0.07875304400022287,
-              0.0791859440000735,
-              0.07874680599979911,
-              0.07905192699990948
+              0.06376152699999693,
+              0.06172990300001402,
+              0.061761720000049536
             ],
-            "min_s": 0.07773258899987923,
-            "median_s": 0.07874680599979911,
-            "max_s": 0.0791859440000735,
-            "iqr_s": 0.0009379960001751897,
-            "iqr_over_median": 0.011911543436791362
+            "min_s": 0.06172990300001402,
+            "median_s": 0.061761720000049536,
+            "max_s": 0.06376152699999693,
+            "iqr_s": 0.002031623999982912,
+            "iqr_over_median": 0.03289455021623884
           }
         },
         "speedup": {
           "vectorbt": {
-            "median_of_ratios": 47.94392728035928,
-            "min": 41.14872214765181,
-            "max": 51.03896872028632
+            "median_of_ratios": 45.35488833209441,
+            "min": 39.38245555452663,
+            "max": 45.987756426293565
           },
           "raptorbt": {
-            "median_of_ratios": 1.3171458862567806,
-            "min": 1.2475016248081225,
-            "max": 1.5411978013210026
+            "median_of_ratios": 1.2685895258935749,
+            "min": 1.200985549006786,
+            "max": 1.504307688107232
           }
         },
         "noisy": true,
         "cpu_over_wall": {
           "manifoldbt": null,
-          "vectorbt": 0.9999400927783338,
-          "raptorbt": 1.0001859163770437
+          "vectorbt": 0.999435672999593,
+          "raptorbt": null
         }
       },
       {
         "workload": "bracket_sl_tp",
         "title": "SMA 10/50 entry with a 15 bps stop / 30 bps target bracket",
         "bars": 10000000,
-        "data_digest": "f4e6a3a8823f3768",
+        "data_digest": "73123cc435bd1913",
         "engines": [
           "manifoldbt",
           "vectorbt",
@@ -2259,22 +2083,22 @@
             "expected": "documented",
             "publishable": false,
             "diffs": {
-              "final_equity_vs_capital": 0.0008838890600401106,
-              "round_trips_delta": 10171,
+              "final_equity_vs_capital": 0.00053833908042622,
+              "round_trips_delta": 10184,
               "total_fees_vs_capital": 0.0
             },
             "metrics": {
               "manifoldbt": {
-                "total_return": -0.9948342253853452,
-                "final_equity": 516.5774614654839,
-                "round_trips": 231082,
-                "fills": 462164,
+                "total_return": -0.9959910122076127,
+                "final_equity": 400.89877923873416,
+                "round_trips": 231002,
+                "fills": 462004,
                 "total_fees": 0.0
               },
               "vectorbt": {
-                "total_return": -0.9957181144453853,
-                "final_equity": 428.18855546147284,
-                "round_trips": 220911,
+                "total_return": -0.9965293512880389,
+                "final_equity": 347.06487119611216,
+                "round_trips": 220818,
                 "fills": null,
                 "total_fees": 0.0
               }
@@ -2286,22 +2110,22 @@
             "expected": "documented",
             "publishable": false,
             "diffs": {
-              "final_equity_vs_capital": 0.022352514553554532,
-              "round_trips_delta": 93295,
+              "final_equity_vs_capital": 0.01997283196010167,
+              "round_trips_delta": 93238,
               "total_fees_vs_capital": 0.0
             },
             "metrics": {
               "manifoldbt": {
-                "total_return": -0.9948342253853452,
-                "final_equity": 516.5774614654839,
-                "round_trips": 231082,
-                "fills": 462164,
+                "total_return": -0.9959910122076127,
+                "final_equity": 400.89877923873416,
+                "round_trips": 231002,
+                "fills": 462004,
                 "total_fees": 0.0
               },
               "raptorbt": {
-                "total_return": -0.9724817108317907,
-                "final_equity": 2751.828916820937,
-                "round_trips": 137787,
+                "total_return": -0.9760181802475111,
+                "final_equity": 2398.1819752489014,
+                "round_trips": 137764,
                 "fills": null,
                 "total_fees": 0.0
               }
@@ -2318,84 +2142,72 @@
         },
         "divergence_scale": {
           "raptorbt": {
-            "round_trips": 137787,
-            "final_equity": 2751.828916820937
+            "round_trips": 137764,
+            "final_equity": 2398.1819752489014
           },
           "manifoldbt": {
-            "reentries_on_exit_bar": 93295,
-            "round_trips": 231082,
-            "share_of_round_trips": 0.4037311430574428,
-            "sl_exits": 63245,
-            "tp_exits": 39487
+            "reentries_on_exit_bar": 93238,
+            "round_trips": 231002,
+            "share_of_round_trips": 0.4036242110457918,
+            "sl_exits": 63242,
+            "tp_exits": 39409
           }
         },
         "timings": {
           "manifoldbt": {
             "samples_s": [
-              0.5806903919997239,
-              0.5718235690001165,
-              0.5651260380000167,
-              0.5670892809998804,
-              0.5689032579998639,
-              0.5725281969998832,
-              0.565057930000421
+              0.43082851100007247,
+              0.436113166000041,
+              0.438400725000065
             ],
-            "min_s": 0.565057930000421,
-            "median_s": 0.5689032579998639,
-            "max_s": 0.5806903919997239,
-            "iqr_s": 0.007402158999866515,
-            "iqr_over_median": 0.013011278975428696
+            "min_s": 0.43082851100007247,
+            "median_s": 0.436113166000041,
+            "max_s": 0.438400725000065,
+            "iqr_s": 0.0075722139999925275,
+            "iqr_over_median": 0.017362956659721242
           },
           "vectorbt": {
             "samples_s": [
-              30.18551779900008,
-              31.369371855999816,
-              30.208251546000156,
-              30.717189637000047,
-              30.62506509800005,
-              31.294329453000046,
-              29.37845311000001
+              23.127951451999934,
+              24.427600087999963,
+              23.86768716000006
             ],
-            "min_s": 29.37845311000001,
-            "median_s": 30.62506509800005,
-            "max_s": 31.369371855999816,
-            "iqr_s": 1.1088116539999646,
-            "iqr_over_median": 0.036206017863203654
+            "min_s": 23.127951451999934,
+            "median_s": 23.86768716000006,
+            "max_s": 24.427600087999963,
+            "iqr_s": 1.299648636000029,
+            "iqr_over_median": 0.05445222351406192
           },
           "raptorbt": {
             "samples_s": [
-              0.9103741670001,
-              0.9210496010000497,
-              0.904756290000023,
-              0.90638099600028,
-              0.9074888309996822,
-              0.9099581260002196,
-              0.90329480399987
+              0.7200646930000403,
+              0.7252870120000807,
+              0.723823523999954
             ],
-            "min_s": 0.90329480399987,
-            "median_s": 0.9074888309996822,
-            "max_s": 0.9210496010000497,
-            "iqr_s": 0.005617877000076987,
-            "iqr_over_median": 0.0061905742618213605
+            "min_s": 0.7200646930000403,
+            "median_s": 0.723823523999954,
+            "max_s": 0.7252870120000807,
+            "iqr_s": 0.005222319000040443,
+            "iqr_over_median": 0.0072149064335200784
           }
         },
         "speedup": {
           "vectorbt": {
-            "median_of_ratios": 53.83176254899806,
-            "min": 51.9821202741967,
-            "max": 54.85848005679777
+            "median_of_ratios": 54.44262702803815,
+            "min": 53.68249979165386,
+            "max": 56.012067491669505
           },
           "raptorbt": {
-            "median_of_ratios": 1.5983038762470827,
-            "min": 1.567744497829633,
-            "max": 1.610723396047815
+            "median_of_ratios": 1.6630706627187966,
+            "min": 1.6510545779773669,
+            "max": 1.6713487492472827
           }
         },
         "noisy": false,
         "cpu_over_wall": {
-          "manifoldbt": 1.0372771695784726,
-          "vectorbt": 0.9999149656006611,
-          "raptorbt": 1.005767002776265
+          "manifoldbt": 1.049533055771909,
+          "vectorbt": 1.00009466526754,
+          "raptorbt": 0.995770176204611
         }
       }
     ],
@@ -2410,48 +2222,48 @@
       ],
       "samples_s": {
         "manifoldbt": [
-          0.5905602240000007,
-          0.45103191099997275,
-          0.46660051599974395
+          0.37678671399999075,
+          0.34196317999999337,
+          0.36333937299991703
         ],
         "vectorbt": [
-          7.809749160000138,
-          7.7041224889999285,
-          7.621000976000232
+          5.747858350999877,
+          5.460906333999901,
+          5.438158751000174
         ],
         "raptorbt": [
-          0.4310210720000214,
-          0.41596967199984647,
-          0.4267126320000898
+          0.30497218300001805,
+          0.30318310600000586,
+          0.30410702099993614
         ],
         "nautilus_trader": [
-          2.3013933590000306,
-          2.2600512510002773,
-          2.2630302070001562
+          1.5063370789998771,
+          1.5008273389998976,
+          1.4934142960000827
         ],
         "baseline": [
-          0.3828898530000515,
-          0.37746361900008196,
-          0.37636589899966566
+          0.27522330599981615,
+          0.27586736800003564,
+          0.2745068510000692
         ]
       },
       "median_s": {
-        "manifoldbt": 0.46660051599974395,
-        "vectorbt": 7.7041224889999285,
-        "raptorbt": 0.4267126320000898,
-        "nautilus_trader": 2.2630302070001562,
-        "baseline": 0.37746361900008196
+        "manifoldbt": 0.36333937299991703,
+        "vectorbt": 5.460906333999901,
+        "raptorbt": 0.30410702099993614,
+        "nautilus_trader": 1.5008273389998976,
+        "baseline": 0.27522330599981615
       },
       "engine_share_s": {
-        "manifoldbt": 0.08913689699966199,
-        "vectorbt": 7.3266588699998465,
-        "raptorbt": 0.049249013000007835,
-        "nautilus_trader": 1.8855665880000743
+        "manifoldbt": 0.08811606700010088,
+        "vectorbt": 5.185683028000085,
+        "raptorbt": 0.02888371500011999,
+        "nautilus_trader": 1.2256040330000815
       },
       "ratio": {
-        "vectorbt": 16.511174387565735,
-        "raptorbt": 0.9145138450732531,
-        "nautilus_trader": 4.850037943381524
+        "vectorbt": 15.02976759416918,
+        "raptorbt": 0.8369778878877671,
+        "nautilus_trader": 4.130648783280199
       }
     },
     "memory": {
@@ -2464,44 +2276,44 @@
         "nautilus_trader"
       ],
       "manifoldbt": {
-        "before_mb": 483.168256,
-        "peak_mb": 483.18464,
-        "added_mb": 0.016384000000016385,
-        "added_mb_per_million_bars": 0.008192000000008193,
-        "seconds": 0.04862215200000719,
+        "before_mb": 454.148096,
+        "peak_mb": 454.160384,
+        "added_mb": 0.012288000000012289,
+        "added_mb_per_million_bars": 0.0061440000000061445,
+        "seconds": 0.03920613500008585,
         "mode": "memory",
         "engine": "mbt",
         "workload": "sma_cross",
         "bars": 2000000
       },
       "vectorbt": {
-        "before_mb": 601.796608,
-        "peak_mb": 851.697664,
-        "added_mb": 249.90105600000004,
-        "added_mb_per_million_bars": 124.95052800000002,
-        "seconds": 4.498048413000106,
+        "before_mb": 600.170496,
+        "peak_mb": 830.717952,
+        "added_mb": 230.547456,
+        "added_mb_per_million_bars": 115.273728,
+        "seconds": 3.389011904999961,
         "mode": "memory",
         "engine": "vbt",
         "workload": "sma_cross",
         "bars": 2000000
       },
       "raptorbt": {
-        "before_mb": 334.229504,
-        "peak_mb": 374.788096,
-        "added_mb": 40.558591999999976,
-        "added_mb_per_million_bars": 20.279295999999988,
-        "seconds": 0.1629515680001532,
+        "before_mb": 325.292032,
+        "peak_mb": 341.03296,
+        "added_mb": 15.740927999999997,
+        "added_mb_per_million_bars": 7.870463999999998,
+        "seconds": 0.13552161899997373,
         "mode": "memory",
         "engine": "rbt",
         "workload": "sma_cross",
         "bars": 2000000
       },
       "nautilus_trader": {
-        "before_mb": 460.623872,
-        "peak_mb": 461.299712,
-        "added_mb": 0.6758399999999938,
-        "added_mb_per_million_bars": 6.758399999999938,
-        "seconds": 9.150932308999927,
+        "before_mb": 456.114176,
+        "peak_mb": 456.794112,
+        "added_mb": 0.6799359999999979,
+        "added_mb_per_million_bars": 6.799359999999979,
+        "seconds": 4.7146109939999405,
         "mode": "memory",
         "engine": "nt",
         "workload": "sma_cross",
@@ -2513,12 +2325,12 @@
   },
   "sweeps": {
     "schema_version": 2,
-    "generated_at": "2026-10-26T11:44:30.095360+00:00",
+    "generated_at": "2026-10-26T13:06:59.343844+00:00",
     "environment": {
       "os": "Linux",
       "os_release": "6.17.0-1022-azure",
       "arch": "x86_64",
-      "cpu": "AMD EPYC 7763 64-Core Processor",
+      "cpu": "AMD EPYC 9V45 96-Core Processor",
       "logical_cores": 4,
       "ram_gb": 16.8,
       "python": "3.12.15",
@@ -2531,10 +2343,10 @@
         "numba": "0.64.0",
         "pandas": "2.3.3"
       },
-      "runner": "GitHub Actions 1000001189",
+      "runner": "GitHub Actions 1000001223",
       "ci": true,
-      "run_url": "https://github.com/manifoldbt/manifoldbt/actions/runs/40313008491",
-      "commit": "c9c5b3760e83f963daa913c6d630d5d9d7328529",
+      "run_url": "https://github.com/manifoldbt/manifoldbt/actions/runs/40324928426",
+      "commit": "5bdb2c29898fe36237497ed3d23acfe5be6141f4",
       "pinned_cores": null,
       "engines": [
         "manifoldbt",
@@ -2562,7 +2374,7 @@
         "workload": "sma_cross",
         "title": "SMA 30/150 crossover, long-only, no cost",
         "bars": 100000,
-        "data_digest": "b7c2ad8cea687ce0",
+        "data_digest": "f6e413e413e61a53",
         "engines": [
           "manifoldbt",
           "vectorbt",
@@ -2575,22 +2387,22 @@
             "expected": "exact",
             "publishable": true,
             "diffs": {
-              "final_equity_vs_capital": 1.8917489796876906e-15,
+              "final_equity_vs_capital": 2.037268131971359e-15,
               "round_trips_delta": 0,
               "total_fees_vs_capital": 0.0
             },
             "metrics": {
               "manifoldbt": {
-                "total_return": 0.06675521397166517,
-                "final_equity": 106675.52139716652,
-                "round_trips": 450,
-                "fills": 900,
+                "total_return": 0.06552457977030235,
+                "final_equity": 106552.45797703024,
+                "round_trips": 451,
+                "fills": 902,
                 "total_fees": 0.0
               },
               "vectorbt": {
-                "total_return": 0.06675521397166725,
-                "final_equity": 106675.52139716671,
-                "round_trips": 450,
+                "total_return": 0.06552457977030426,
+                "final_equity": 106552.45797703044,
+                "round_trips": 451,
                 "fills": null,
                 "total_fees": 0.0
               }
@@ -2608,16 +2420,16 @@
             },
             "metrics": {
               "manifoldbt": {
-                "total_return": 0.06675521397166517,
-                "final_equity": 106675.52139716652,
-                "round_trips": 450,
-                "fills": 900,
+                "total_return": 0.06552457977030235,
+                "final_equity": 106552.45797703024,
+                "round_trips": 451,
+                "fills": 902,
                 "total_fees": 0.0
               },
               "raptorbt": {
-                "total_return": 0.06675521397166521,
-                "final_equity": 106675.52139716652,
-                "round_trips": 450,
+                "total_return": 0.06552457977030238,
+                "final_equity": 106552.45797703024,
+                "round_trips": 451,
                 "fills": null,
                 "total_fees": 0.0
               }
@@ -2629,23 +2441,23 @@
             "expected": "exact",
             "publishable": true,
             "diffs": {
-              "final_equity_vs_capital": 5.593479727394879e-11,
+              "final_equity_vs_capital": 4.330242518335581e-11,
               "round_trips_delta": 0,
               "total_fees_vs_capital": 0.0
             },
             "metrics": {
               "manifoldbt": {
-                "total_return": 0.06675521397166517,
-                "final_equity": 106675.52139716652,
-                "round_trips": 450,
-                "fills": 900,
+                "total_return": 0.06552457977030235,
+                "final_equity": 106552.45797703024,
+                "round_trips": 451,
+                "fills": 902,
                 "total_fees": 0.0
               },
               "nautilus_trader": {
-                "total_return": 0.06675521402759999,
-                "final_equity": 106675.52140276,
-                "round_trips": 450,
-                "fills": 900,
+                "total_return": 0.06552457972699988,
+                "final_equity": 106552.4579727,
+                "round_trips": 451,
+                "fills": 902,
                 "total_fees": 0.0
               }
             },
@@ -2656,60 +2468,60 @@
         "timings": {
           "manifoldbt": {
             "samples_s": [
-              0.004907763999995041
+              0.0033580820000054246
             ],
-            "min_s": 0.004907763999995041,
-            "median_s": 0.004907763999995041,
-            "max_s": 0.004907763999995041,
+            "min_s": 0.0033580820000054246,
+            "median_s": 0.0033580820000054246,
+            "max_s": 0.0033580820000054246,
             "iqr_s": 0.0,
             "iqr_over_median": 0.0
           },
           "vectorbt": {
             "samples_s": [
-              0.4168191919999913
+              0.3389623799999981
             ],
-            "min_s": 0.4168191919999913,
-            "median_s": 0.4168191919999913,
-            "max_s": 0.4168191919999913,
+            "min_s": 0.3389623799999981,
+            "median_s": 0.3389623799999981,
+            "max_s": 0.3389623799999981,
             "iqr_s": 0.0,
             "iqr_over_median": 0.0
           },
           "raptorbt": {
             "samples_s": [
-              0.01043529199999682
+              0.00630613399999902
             ],
-            "min_s": 0.01043529199999682,
-            "median_s": 0.01043529199999682,
-            "max_s": 0.01043529199999682,
+            "min_s": 0.00630613399999902,
+            "median_s": 0.00630613399999902,
+            "max_s": 0.00630613399999902,
             "iqr_s": 0.0,
             "iqr_over_median": 0.0
           },
           "nautilus_trader": {
             "samples_s": [
-              6.8312003989999965
+              3.166681607000001
             ],
-            "min_s": 6.8312003989999965,
-            "median_s": 6.8312003989999965,
-            "max_s": 6.8312003989999965,
+            "min_s": 3.166681607000001,
+            "median_s": 3.166681607000001,
+            "max_s": 3.166681607000001,
             "iqr_s": 0.0,
             "iqr_over_median": 0.0
           }
         },
         "speedup": {
           "vectorbt": {
-            "median_of_ratios": 84.93056960367542,
-            "min": 84.93056960367542,
-            "max": 84.93056960367542
+            "median_of_ratios": 100.9392802199144,
+            "min": 100.9392802199144,
+            "max": 100.9392802199144
           },
           "raptorbt": {
-            "median_of_ratios": 2.126282355876804,
-            "min": 2.126282355876804,
-            "max": 2.126282355876804
+            "median_of_ratios": 1.8778975617596094,
+            "min": 1.8778975617596094,
+            "max": 1.8778975617596094
           },
           "nautilus_trader": {
-            "median_of_ratios": 1391.9170520438431,
-            "min": 1391.9170520438431,
-            "max": 1391.9170520438431
+            "median_of_ratios": 943.0030615675513,
+            "min": 943.0030615675513,
+            "max": 943.0030615675513
           }
         },
         "noisy": false,
@@ -2717,7 +2529,7 @@
           "manifoldbt": null,
           "vectorbt": null,
           "raptorbt": null,
-          "nautilus_trader": 0.9998242770040576
+          "nautilus_trader": 1.0042057884728801
         }
       }
     ],
@@ -2732,7 +2544,7 @@
           "fast": 50,
           "slow": 100
         },
-        "data_digest": "ccec9b97c4ca2b6f",
+        "data_digest": "0d360424244ea1ee",
         "engines": [
           "manifoldbt",
           "vectorbt",
@@ -2745,20 +2557,20 @@
         "out_of_scope": {
           "nautilus_trader": {
             "status": "out of scope",
-            "reason": "NautilusTrader has no parameter-grid API, so a grid is a Python loop of full backtests, each one replaying every bar through the simulated exchange. Measured: 1.53 s per backtest at 20,000 bars (mean over 16 cells spread across this grid), which puts this grid of 5,000 combinations at about 2.1 hours per call. Looped grids are held to 64 combinations, so that a point stays inside the time budget of the job. It is not run.",
+            "reason": "NautilusTrader has no parameter-grid API, so a grid is a Python loop of full backtests, each one replaying every bar through the simulated exchange. Measured: 0.69 s per backtest at 20,000 bars (mean over 16 cells spread across this grid), which puts this grid of 5,000 combinations at about 57 minutes per call. Looped grids are held to 64 combinations, so that a point stays inside the time budget of the job. It is not run.",
             "parity_scope": "anchor grid",
-            "anchor_seconds": 24.502
+            "anchor_seconds": 10.971
           }
         },
         "parity": {
           "vectorbt": {
             "status": "exact",
             "combos_compared": 5000,
-            "worst_abs_return_delta": 1.2663481374630692e-15,
+            "worst_abs_return_delta": 1.065987575987748e-15,
             "worst_component": "return",
             "worst_pair": [
-              101,
-              118
+              23,
+              113
             ]
           },
           "raptorbt": {
@@ -2767,18 +2579,18 @@
             "worst_abs_return_delta": 1.1102230246251565e-16,
             "worst_component": "return",
             "worst_pair": [
-              19,
-              113
+              17,
+              288
             ]
           },
           "nautilus_trader": {
             "status": "exact",
             "combos_compared": 16,
-            "worst_abs_return_delta": 1.455668918737274e-10,
+            "worst_abs_return_delta": 1.22973742300303e-10,
             "worst_component": "return",
             "worst_pair": [
-              103,
-              113
+              5,
+              443
             ],
             "checked_at_combos": 16,
             "scope": "anchor grid, not this grid"
@@ -2787,25 +2599,25 @@
         "status": "exact",
         "timings": {
           "seconds": {
-            "manifoldbt": 0.29500560400001063,
-            "vectorbt": 5.638847167999984,
-            "raptorbt": 7.102082507000006,
+            "manifoldbt": 0.16011208899999474,
+            "vectorbt": 5.380409748000005,
+            "raptorbt": 3.5041248300000234,
             "nautilus_trader": null
           },
           "ratio": {
-            "vectorbt": 19.114373054417573,
-            "raptorbt": 24.07439862396563
+            "vectorbt": 33.60401941917191,
+            "raptorbt": 21.885448199980317
           },
-          "reps": 2,
-          "per_combo_us": 59.00112080000213
+          "reps": 3,
+          "per_combo_us": 32.02241779999895
         },
         "memory": {
-          "manifoldbt": 45.5,
-          "vectorbt": 2531.9,
-          "raptorbt": 35.3,
+          "manifoldbt": 41.5,
+          "vectorbt": 2532.6,
+          "raptorbt": 35.6,
           "nautilus_trader": null
         },
-        "memory_baseline_mb": 813.8,
+        "memory_baseline_mb": 820.8,
         "tier_after": {
           "pro": true
         }
@@ -2818,7 +2630,7 @@
           "fast": 125,
           "slow": 160
         },
-        "data_digest": "ccec9b97c4ca2b6f",
+        "data_digest": "0d360424244ea1ee",
         "engines": [
           "manifoldbt",
           "raptorbt"
@@ -2832,13 +2644,13 @@
             "status": "out of scope",
             "reason": "vectorbt materialises the simulation per combination (measured: 1.57 MB per combination at 20k bars), so this grid would need tens of gigabytes. Running it would measure the swap file.",
             "parity_scope": "anchor grid",
-            "anchor_seconds": 4.891
+            "anchor_seconds": 3.401
           },
           "nautilus_trader": {
             "status": "out of scope",
-            "reason": "NautilusTrader has no parameter-grid API, so a grid is a Python loop of full backtests, each one replaying every bar through the simulated exchange. Measured: 1.68 s per backtest at 20,000 bars (mean over 16 cells spread across this grid), which puts this grid of 20,000 combinations at about 9.3 hours per call. Looped grids are held to 64 combinations, so that a point stays inside the time budget of the job. It is not run.",
+            "reason": "NautilusTrader has no parameter-grid API, so a grid is a Python loop of full backtests, each one replaying every bar through the simulated exchange. Measured: 0.84 s per backtest at 20,000 bars (mean over 16 cells spread across this grid), which puts this grid of 20,000 combinations at about 4.7 hours per call. Looped grids are held to 64 combinations, so that a point stays inside the time budget of the job. It is not run.",
             "parity_scope": "anchor grid",
-            "anchor_seconds": 26.862
+            "anchor_seconds": 13.447
           }
         },
         "parity": {
@@ -2848,18 +2660,18 @@
             "worst_abs_return_delta": 1.1102230246251565e-16,
             "worst_component": "return",
             "worst_pair": [
-              11,
-              733
+              17,
+              288
             ]
           },
           "vectorbt": {
             "status": "exact",
             "combos_compared": 250,
-            "worst_abs_return_delta": 2.2707530300536405e-15,
+            "worst_abs_return_delta": 2.9733160378242474e-15,
             "worst_component": "return",
             "worst_pair": [
-              9,
-              78
+              11,
+              98
             ],
             "checked_at_combos": 250,
             "scope": "anchor grid, not this grid"
@@ -2867,11 +2679,11 @@
           "nautilus_trader": {
             "status": "exact",
             "combos_compared": 16,
-            "worst_abs_return_delta": 6.04207794907552e-11,
+            "worst_abs_return_delta": 9.083811480792292e-11,
             "worst_component": "return",
             "worst_pair": [
               5,
-              528
+              263
             ],
             "checked_at_combos": 16,
             "scope": "anchor grid, not this grid"
@@ -2880,24 +2692,24 @@
         "status": "exact",
         "timings": {
           "seconds": {
-            "manifoldbt": 1.1675040270000068,
-            "raptorbt": 27.16077384900001,
+            "manifoldbt": 0.643476402999994,
+            "raptorbt": 14.238900546000025,
             "vectorbt": null,
             "nautilus_trader": null
           },
           "ratio": {
-            "raptorbt": 23.26396588009358
+            "raptorbt": 22.128085007648927
           },
-          "reps": 2,
-          "per_combo_us": 58.37520135000034
+          "reps": 3,
+          "per_combo_us": 32.1738201499997
         },
         "memory": {
-          "manifoldbt": 77.5,
+          "manifoldbt": 90.4,
           "vectorbt": null,
-          "raptorbt": 57.8,
+          "raptorbt": 58.9,
           "nautilus_trader": null
         },
-        "memory_baseline_mb": 746.5,
+        "memory_baseline_mb": 748.3,
         "tier_after": {
           "pro": true
         }
@@ -2910,7 +2722,7 @@
           "fast": 100,
           "slow": 100
         },
-        "data_digest": "e89a96644ec074e4",
+        "data_digest": "41728ac4d4fb6c04",
         "engines": [
           "manifoldbt",
           "raptorbt"
@@ -2924,13 +2736,13 @@
             "status": "out of scope",
             "reason": "vectorbt materialises the simulation per combination (measured: 1.57 MB per combination at 20k bars), so this grid would need tens of gigabytes. Running it would measure the swap file.",
             "parity_scope": "anchor grid",
-            "anchor_seconds": 8.183
+            "anchor_seconds": 6.727
           },
           "nautilus_trader": {
             "status": "out of scope",
-            "reason": "NautilusTrader has no parameter-grid API, so a grid is a Python loop of full backtests, each one replaying every bar through the simulated exchange. Measured: 15.36 s per backtest at 200,000 bars (mean over 16 cells spread across this grid), which puts this grid of 10,000 combinations at about 42.7 hours per call. Looped grids are held to 64 combinations, so that a point stays inside the time budget of the job. It is not run.",
+            "reason": "NautilusTrader has no parameter-grid API, so a grid is a Python loop of full backtests, each one replaying every bar through the simulated exchange. Measured: 7.92 s per backtest at 200,000 bars (mean over 16 cells spread across this grid), which puts this grid of 10,000 combinations at about 22.0 hours per call. Looped grids are held to 64 combinations, so that a point stays inside the time budget of the job. It is not run.",
             "parity_scope": "anchor grid",
-            "anchor_seconds": 245.827
+            "anchor_seconds": 126.727
           }
         },
         "parity": {
@@ -2940,18 +2752,18 @@
             "worst_abs_return_delta": 1.1796119636642288e-16,
             "worst_component": "return",
             "worst_pair": [
-              7,
-              323
+              31,
+              708
             ]
           },
           "vectorbt": {
             "status": "exact",
             "combos_compared": 250,
-            "worst_abs_return_delta": 9.196202827022049e-15,
+            "worst_abs_return_delta": 1.2051123987610879e-14,
             "worst_component": "return",
             "worst_pair": [
-              11,
-              53
+              13,
+              103
             ],
             "checked_at_combos": 250,
             "scope": "anchor grid, not this grid"
@@ -2959,7 +2771,7 @@
           "nautilus_trader": {
             "status": "exact",
             "combos_compared": 16,
-            "worst_abs_return_delta": 1.5742274150909452e-10,
+            "worst_abs_return_delta": 3.4502534163038945e-10,
             "worst_component": "return",
             "worst_pair": [
               5,
@@ -2972,24 +2784,24 @@
         "status": "exact",
         "timings": {
           "seconds": {
-            "manifoldbt": 4.315591329999961,
-            "raptorbt": 169.79463231900002,
+            "manifoldbt": 2.6265699880000284,
+            "raptorbt": 89.85793571900007,
             "vectorbt": null,
             "nautilus_trader": null
           },
           "ratio": {
-            "raptorbt": 39.34446506523164
+            "raptorbt": 34.2111332001556
           },
-          "reps": 2,
-          "per_combo_us": 431.5591329999961
+          "reps": 3,
+          "per_combo_us": 262.65699880000284
         },
         "memory": {
-          "manifoldbt": 342.8,
+          "manifoldbt": 345.5,
           "vectorbt": null,
-          "raptorbt": 365.3,
+          "raptorbt": 369.2,
           "nautilus_trader": null
         },
-        "memory_baseline_mb": 1099.4,
+        "memory_baseline_mb": 1107.4,
         "tier_after": {
           "pro": true
         }
@@ -3002,7 +2814,7 @@
           "fast": 375,
           "slow": 400
         },
-        "data_digest": "e89a96644ec074e4",
+        "data_digest": "41728ac4d4fb6c04",
         "engines": [
           "manifoldbt"
         ],
@@ -3015,30 +2827,30 @@
             "status": "out of scope",
             "reason": "vectorbt materialises the simulation per combination (measured: 1.57 MB per combination at 20k bars), so this grid would need tens of gigabytes. Running it would measure the swap file.",
             "parity_scope": "anchor grid",
-            "anchor_seconds": 9.145
+            "anchor_seconds": 6.377
           },
           "raptorbt": {
             "status": "out of scope",
-            "reason": "raptorbt has no fan-out API for a parameter grid on one instrument, so a grid is a Python loop of full backtests. Measured: 15.7 ms per backtest at 200,000 bars (mean over 16 cells spread across this grid), which puts this grid of 150,000 combinations at about 39 minutes per call. That is past the time budget of the job. It is not run.",
+            "reason": "raptorbt has no fan-out API for a parameter grid on one instrument, so a grid is a Python loop of full backtests. Measured: 8.4 ms per backtest at 200,000 bars (mean over 16 cells spread across this grid), which puts this grid of 150,000 combinations at about 21 minutes per call. That is past the time budget of the job. It is not run.",
             "parity_scope": "anchor grid",
-            "anchor_seconds": 0.251
+            "anchor_seconds": 0.134
           },
           "nautilus_trader": {
             "status": "out of scope",
-            "reason": "NautilusTrader has no parameter-grid API, so a grid is a Python loop of full backtests, each one replaying every bar through the simulated exchange. Measured: 25.73 s per backtest at 200,000 bars (mean over 16 cells spread across this grid), which puts this grid of 150,000 combinations at about 1072.1 hours per call. Looped grids are held to 64 combinations, so that a point stays inside the time budget of the job. It is not run.",
+            "reason": "NautilusTrader has no parameter-grid API, so a grid is a Python loop of full backtests, each one replaying every bar through the simulated exchange. Measured: 13.29 s per backtest at 200,000 bars (mean over 16 cells spread across this grid), which puts this grid of 150,000 combinations at about 553.7 hours per call. Looped grids are held to 64 combinations, so that a point stays inside the time budget of the job. It is not run.",
             "parity_scope": "anchor grid",
-            "anchor_seconds": 411.67
+            "anchor_seconds": 212.629
           }
         },
         "parity": {
           "vectorbt": {
             "status": "exact",
             "combos_compared": 250,
-            "worst_abs_return_delta": 9.196202827022049e-15,
+            "worst_abs_return_delta": 1.2051123987610879e-14,
             "worst_component": "return",
             "worst_pair": [
-              11,
-              53
+              13,
+              103
             ],
             "checked_at_combos": 250,
             "scope": "anchor grid, not this grid"
@@ -3046,11 +2858,11 @@
           "raptorbt": {
             "status": "exact",
             "combos_compared": 16,
-            "worst_abs_return_delta": 8.326672684688674e-17,
+            "worst_abs_return_delta": 1.0234868508263162e-16,
             "worst_component": "return",
             "worst_pair": [
-              5,
-              763
+              255,
+              1428
             ],
             "checked_at_combos": 16,
             "scope": "anchor grid, not this grid"
@@ -3058,11 +2870,11 @@
           "nautilus_trader": {
             "status": "exact",
             "combos_compared": 16,
-            "worst_abs_return_delta": 1.5715073686806136e-10,
+            "worst_abs_return_delta": 2.2606871930008765e-10,
             "worst_component": "return",
             "worst_pair": [
-              753,
-              763
+              5,
+              1428
             ],
             "checked_at_combos": 16,
             "scope": "anchor grid, not this grid"
@@ -3071,27 +2883,27 @@
         "status": "exact",
         "timings": {
           "seconds": {
-            "manifoldbt": 89.46898167199993,
+            "manifoldbt": 51.18511531900003,
             "vectorbt": null,
             "raptorbt": null,
             "nautilus_trader": null
           },
           "ratio": {},
-          "reps": 2,
-          "per_combo_us": 596.4598778133328
+          "reps": 3,
+          "per_combo_us": 341.23410212666687
         },
         "memory": {
-          "manifoldbt": 829.3,
+          "manifoldbt": 830.2,
           "vectorbt": null,
           "raptorbt": null,
           "nautilus_trader": null
         },
-        "memory_baseline_mb": 894.9,
+        "memory_baseline_mb": 895.3,
         "tier_after": {
           "pro": true
         }
       }
     ],
-    "sweep_reps": 2
+    "sweep_reps": 3
   }
 }
