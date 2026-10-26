@@ -40,6 +40,7 @@ def cpu_reference(published: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         "points": points,
         "version": (env.get("versions") or {}).get("manifoldbt"),
         "cores": env.get("logical_cores"),
+        "cpu_model": env.get("cpu"),
         "run_url": (published or {}).get("run_url", ""),
     }
 
@@ -69,9 +70,11 @@ def render(payload: Dict[str, Any], cpu: Optional[Dict[str, Any]] = None) -> str
     if cpu["points"]:
         lines.append(
             "CPU column: the CPU sweeps job's published run{}, manifoldbt {} on a "
-            "{}-vCPU GitHub runner.{}".format(
+            "{}-vCPU GitHub runner{}. GitHub does not always hand out the same "
+            "processor, so the ratio moves with it.{}".format(
                 " ({})".format(cpu["run_url"]) if cpu["run_url"] else "",
                 cpu["version"] or "?", cpu["cores"] or "?",
+                " ({})".format(cpu["cpu_model"]) if cpu.get("cpu_model") else "",
                 "" if same_version else
                 " Not the version measured here, so no ratio is given."))
     lines.append("")
