@@ -1177,8 +1177,10 @@ def ingest_trades(
     progress: bool = True,
     category: str = "spot",
     cache_dir: Optional[str] = None,
+    dataset: Optional[str] = None,
 ) -> DataStore:
-    """Ingest whole days of trades (a tape) from a venue's public archive.
+    """Ingest whole days of trades (a tape) from a venue's public archive or a
+    data vendor.
 
     The tick-level counterpart of :func:`ingest`, with the same shape: you name
     a provider, a symbol and a range, the provider fetches, the store keeps one
@@ -1190,6 +1192,26 @@ def ingest_trades(
     venue did not publish raises a named error rather than returning nothing.
     ``start`` and ``end`` are ``YYYY-MM-DD`` (an RFC 3339 instant is accepted;
     its date part is used), ``end`` inclusive.
+
+    Data vendors, with your own key read from the environment like for
+    :func:`ingest`:
+
+    * ``"massive"`` (``MASSIVE_API_KEY``): every print of the UTC day from
+      ``/v3/trades``, paged through, stamped by the SIP to the nanosecond.
+      ``asset_class`` defaults to ``"equity"``. Trades come with Massive's
+      Stocks Developer plan and above.
+    * ``"databento"`` (``DATABENTO_API_KEY``): the ``trades`` schema of
+      ``dataset`` (``"XNAS.ITCH"``, ``"GLBX.MDP3"``, ...), stamped by the
+      matching engine. ``asset_class`` is required: a dataset can hold
+      stocks, futures or options.
+
+    A consolidated equity tape does not say which side was the aggressor, and
+    Databento marks some prints ``N``: those are classified by the tick rule
+    (above the previous price bought, below it sold, at the same price the
+    side of the last move). A side the venue gives is kept. Every print the
+    vendor serves is stored, odd lots and off-exchange prints included. A day
+    with no trade (a weekend, a holiday) stores nothing and does not stop the
+    range.
 
     ``category`` names the market, with the words of :func:`ingest_book`:
 
@@ -1241,13 +1263,22 @@ def ingest_trades(
         asset_class: ``"crypto_spot"`` for ``spot`` and ``"crypto_perp"`` for
             the two others when left out.
         progress: Print one line per day.
-        category: ``"spot"``, ``"linear"`` or ``"inverse"``.
+        category: ``"spot"``, ``"linear"`` or ``"inverse"``. A vendor's tape
+            is ``"spot"``, the default.
         cache_dir: Keep Bybit's raw daily archives here and reuse them.
+        dataset: The Databento dataset; no other provider takes one.
 
     Example::
 
         store = mbt.ingest_trades("bybit", "BTCUSDT", symbol_id=1,
                                  start="2026-08-25", end="2026-08-25")
+        # A US stock's consolidated tape, from Massive:
+        mbt.ingest_trades("massive", "AAPL", symbol_id=3,
+                         start="2026-10-26", end="2026-10-27")
+        # A CME future's tape, from Databento:
+        mbt.ingest_trades("databento", "ESZ6", symbol_id=4,
+                         start="2026-10-26", end="2026-10-27",
+                         dataset="GLBX.MDP3", asset_class="future")
         # The perp's tape, beside its book:
         mbt.ingest_trades("bybit", "XRPUSDT", symbol_id=2,
                          start="2023-03-01", end="2023-03-01",
@@ -1266,7 +1297,7 @@ def ingest_trades(
 
     return _native(
         provider, symbol, int(symbol_id), start, end, data_root, metadata_db,
-        exchange, asset_class, cb, category, cache_dir,
+        exchange, asset_class, cb, category, cache_dir, dataset,
     )
 
 
@@ -1584,6 +1615,7 @@ def attach_quotes(
     category: str = "linear",
     cache_dir: Optional[str] = None,
     progress: bool = True,
+    dataset: Optional[str] = None,
 ) -> dict:
     """Fill the ``bid`` / ``ask`` / ``spread`` columns of already-stored bars
     with real top-of-book quotes.
@@ -1604,12 +1636,29 @@ def attach_quotes(
     another venue's bars the spread is that of a different book — a
     reasonable proxy for majors, a real approximation for thin alts.
 
+    Data vendors serve the quotes of the market itself, with your own key read
+    from the environment like for :func:`ingest`:
+
+    * ``"massive"`` (``MASSIVE_API_KEY``): the consolidated NBBO from
+      ``/v3/quotes``, every update of the day paged through and reduced as it
+      comes. A liquid stock quotes tens of millions of times a day, so a day
+      is many requests. Quotes come with Massive's Stocks Advanced plan and
+      above.
+    * ``"databento"`` (``DATABENTO_API_KEY``): the ``bbo-1m`` schema of
+      ``dataset``, the venue's best bid and offer at each minute close.
+
+    The quote standing at a bar close is carried across bars with no update.
+    A quote with a side missing or crossed (bid above ask) leaves the bars it
+    stands over without one rather than with a stale one. ``category`` and
+    ``cache_dir`` are Bybit's; ``provider_symbol`` is the store ticker as is
+    when omitted (``"AAPL"``, ``"ESZ6"``).
+
     Args:
         store: The store holding the symbol's bars (see :func:`ingest`).
         symbol: The store ticker (e.g. ``"BTC-USDT:perp"``) or symbol id.
         start: First day, ``YYYY-MM-DD``.
         end: Last day, inclusive, ``YYYY-MM-DD``.
-        provider: ``"bybit"`` (the only quote source with free history).
+        provider: ``"bybit"`` (free history), ``"massive"`` or ``"databento"``.
         provider_symbol: Symbol on the provider (e.g. ``"BTCUSDT"``). Derived
             from the ticker when omitted: ``BTC-USDT:perp`` -> ``BTCUSDT``.
         category: ``"linear"``, ``"inverse"`` or ``"spot"``.
@@ -1617,6 +1666,7 @@ def attach_quotes(
             directory per category (``cache_dir/linear/...``); an archive
             left directly in ``cache_dir`` is not reused.
         progress: Print one line per day.
+        dataset: The Databento dataset; no other provider takes one.
 
     Returns:
         ``{"days", "quote_bars", "bars_updated", "version"}``.
@@ -1628,6 +1678,13 @@ def attach_quotes(
         mbt.attach_quotes(store, 1, "2026-07-01", "2026-07-31")
         # bars now carry real bid/ask: MidPrice execution and per-bar
         # spread costs read actual quotes instead of nulls.
+
+        # A stock's NBBO on its Massive bars:
+        store = mbt.ingest(provider="massive", symbol="AAPL", symbol_id=3,
+                          start="2026-10-01T00:00:00Z", end="2026-10-28T00:00:00Z",
+                          asset_class="equity")
+        mbt.attach_quotes(store, "AAPL", "2026-10-01", "2026-10-27",
+                          provider="massive")
     """
     import datetime as _dt
 
@@ -1635,10 +1692,14 @@ def attach_quotes(
     # refusal is the accurate one. A _require_pro here would stop a Pro user
     # one layer early with the WRONG message -- an upgrade they already own.
     # Same policy as manifoldbt.ticks.
-    if provider != "bybit":
+    if provider not in ("bybit", "massive", "databento"):
         raise ValueError(
-            f"unknown quote provider {provider!r}: 'bybit' is the only source "
-            "with free order-book history"
+            f"unknown quote provider {provider!r}: 'bybit', 'massive' or 'databento'"
+        )
+    vendor = provider != "bybit"
+    if dataset is not None and provider != "databento":
+        raise ValueError(
+            f"dataset names a Databento dataset; {provider!r} takes none"
         )
 
     if isinstance(symbol, int):
@@ -1647,6 +1708,13 @@ def attach_quotes(
     else:
         ticker = str(symbol)
         symbol_id = store.resolve_symbol(ticker)
+    if provider_symbol is None and vendor:
+        # A vendor's ticker is the store's as is: "AAPL", "ESZ6", "C:EURUSD".
+        provider_symbol = ticker or ""
+        if not provider_symbol:
+            raise ValueError(
+                "provider_symbol is required when symbol is given as an id"
+            )
     if provider_symbol is None:
         base = ticker if ticker is not None else ""
         provider_symbol = base.split(":")[0].replace("-", "").replace("/", "").upper()
@@ -1668,6 +1736,20 @@ def attach_quotes(
         def cb(i, n, date):
             if i < n:
                 print(f"  quotes {provider_symbol} {date} ({i + 1}/{n})", flush=True)
+
+    if vendor:
+        from manifoldbt._native import py_attach_quotes_provider as _native_vendor
+
+        return _native_vendor(
+            store.data_root(),
+            store.metadata_db(),
+            symbol_id,
+            provider,
+            provider_symbol,
+            dates,
+            dataset,
+            cb,
+        )
 
     from manifoldbt._native import py_attach_quotes_bybit as _native_attach
 

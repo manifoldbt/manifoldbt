@@ -645,6 +645,27 @@ linear one before anything is downloaded, as it refuses a second id for the same
 ticker. Asking for an inverse contract as `"linear"` is refused with the right
 word. Inverse sizes are in contracts on the tape as in the book.
 
+A stock's or a future's tape comes from a data vendor, with your own key in the
+environment, under the default `"spot"` category:
+
+```python
+# The consolidated US tape, every print of the day (MASSIVE_API_KEY):
+bt.ingest_trades("massive", "AAPL", symbol_id=3, start="2026-10-26",
+                 end="2026-10-27")
+# A CME future from Databento's trades schema (DATABENTO_API_KEY):
+bt.ingest_trades("databento", "ESZ6", symbol_id=4, start="2026-10-26",
+                 end="2026-10-27", dataset="GLBX.MDP3", asset_class="future")
+```
+
+Massive stamps a print with the SIP's nanosecond, Databento with the matching
+engine's. The consolidated tape does not say which side was the aggressor, and
+Databento marks some prints `N`: those are classified by the tick rule (above
+the previous price bought, below it sold, at the same price the side of the last
+move); a side the venue gives is kept. Every print the vendor serves is stored,
+odd lots and off-exchange prints included. A day nobody traded stores nothing.
+The vendors' quotes reach the bars through `bt.attach_quotes(...,
+provider="massive")` or `provider="databento"`; the book stays Bybit's.
+
 Bybit stamps a derivative trade in seconds with a decimal fraction, converted to
 nanoseconds exactly. The fraction is coarser than the engine's nanosecond, and
 how coarse depends on the day:
