@@ -194,8 +194,7 @@ atexit.register(_print_pro_summary)
 # Fold this session's anonymous usage counters into their file on the way out.
 # Without it a script short enough never to reach the periodic flush (most
 # scripts) would count everything and persist nothing. Order does not matter:
-# this neither prints nor reads anything the hooks around it touch, and it is a
-# no-op under MANIFOLDBT_NO_TELEMETRY / DO_NOT_TRACK / CI.
+# this neither prints nor reads anything the hooks around it touch.
 atexit.register(_flush_usage_native)
 
 
@@ -266,9 +265,8 @@ def _require_grant_for_gpu(device, feature: str) -> None:
         )
 
 
-# Community fan-out budget: sweeps and batches may run up to this many backtests
-# cumulatively per session for free; beyond it requires Pro. A single run() is
-# never affected. Keep in step with the engine's own limit.
+# Community sweep ceiling: beyond it requires Pro. A single run() is never
+# affected. Keep in step with the engine's own limit.
 _COMMUNITY_MAX_COMBOS = 256
 
 
@@ -283,10 +281,8 @@ def _grid_combos(param_grid) -> int:
 def _require_pro_over_combos(n_combos: int, what: str) -> None:
     """Raise LicenseError if a fan-out exceeds the Community combination limit.
 
-    Fast-fail, so a call that could never fit the budget reports cleanly in a
-    notebook instead of part-way through the run. The budget is consumed
-    **cumulatively across the session**: a sequence of smaller calls draws on
-    the same allowance as one large one.
+    Fast-fail, so a call that could never fit reports cleanly in a notebook
+    instead of part-way through the run.
     """
     if n_combos <= _COMMUNITY_MAX_COMBOS or _is_pro():
         return
@@ -995,7 +991,8 @@ def ingest(
 
     Providers (free): ``"binance"``, ``"bybit"``, ``"hyperliquid"``, ``"dydx"``,
     ``"bitstamp"``, ``"deribit"``, ``"yahoo"`` (alias ``"yfinance"``),
-    ``"dukascopy"``. Pro: ``"databento"``, ``"massive"``.
+    ``"dukascopy"``. Free with your own key: ``"lse"``. Pro: ``"databento"``,
+    ``"massive"``.
 
     Returns a :class:`DataStore` ready for :func:`run`.
 
@@ -1033,6 +1030,35 @@ def ingest(
     Yahoo caps its own history: 1m goes back 30 days, 1h about 2 years, daily
     to the listing date. Prices are dividend-adjusted like ``yfinance``'s
     ``auto_adjust=True``; pass ``dataset="raw"`` for unadjusted quotes.
+
+    Example (minute or second bars on stocks, FX, crypto, futures, indices,
+    commodities and US options, from London Strategic Edge, with your own free
+    key in ``LSE_API_KEY``)::
+
+        store = mbt.ingest(
+            provider="lse",
+            symbol="AAPL",           # or "EUR_USD" (also "EUR/USD"), "BTCUSDT"
+            symbol_id=1,
+            start="2015-01-01T00:00:00Z",
+            end="2026-01-01T00:00:00Z",
+            interval="1m",
+            asset_class="equity",
+        )
+
+    Symbols are spelt as the LSE catalogue lists them (``"BTC/USD"`` is also
+    understood as ``"BTCUSDT"``), and the market is found from the symbol the
+    way LSE's own client finds it: US stocks first, so ``"AAPL"`` is the
+    Nasdaq share and not its Canadian receipt. Pass ``dataset=`` to read
+    another market (``"us_stocks"``,
+    ``"uk_stocks"``, ``"ca_stocks"``, ``"forex"``, ``"crypto"``,
+    ``"futures"``, ``"indices"``, ``"commodities"``, ``"us_options"``, or
+    ``"cme"`` and ``"nasdaq"`` on a paid LSE plan). Intervals run from
+    ``"1s"`` to ``"1d"``; ingest ``"1d"`` and resample for longer bars. Prices
+    and volumes are split-adjusted, not dividend-adjusted. A daily bar is
+    stamped at its first minute with a trade, not at midnight. The key is
+    yours and so is the data: LSE allows it for your own research and trading
+    and forbids passing it on, and it limits each key to one download at a
+    time, so the ingest downloads its windows one after the other.
 
     Example (FX, metals, indices and CFDs with BOTH sides of the book, free and
     without a key, from Dukascopy Bank)::
@@ -2610,7 +2636,7 @@ def run_sweep_lite(
             sweep. **Researcher**: without it, ``device="cuda"`` raises
             ``LicenseError``, and ``"auto"`` runs a large grid on the CPU with a
             ``UserWarning`` saying so when a GPU is present; the CPU sweep
-            itself is full speed on every tier. ``"cuda"`` requires a build with ``--features cuda``
+            itself is full speed on every tier. ``"cuda"`` requires a CUDA-enabled build
             and a CUDA device; for any unsupported strategy/config (or when no
             GPU is present at runtime) it falls back to the CPU sweep with a
             ``UserWarning`` naming the reason, so results are never affected.
@@ -2993,7 +3019,7 @@ def run_stochastic(
         confidence_levels: Quantile levels for reporting.
         store_paths: Whether to store full price paths.
         device: ``"cpu"`` (default, Rayon parallel) or ``"cuda"``/``"gpu"``
-            (CUDA GPU, requires build with ``--features cuda``).
+            (CUDA GPU, requires a CUDA-enabled build).
         precision: ``"f64"`` (default, double) or ``"f32"`` (float, ~10-20x
             faster on consumer GPUs, suitable for research/prototyping).
 
@@ -3053,6 +3079,170 @@ def run_stochastic(
         return _run_stochastic_native(json.dumps(config))
     except (ValueError, RuntimeError) as exc:
         raise _classify_error(exc) from exc
+
+
+# ---------------------------------------------------------------------------
+# Monte Carlo
+# ---------------------------------------------------------------------------
+
+_MC_METHODS = {
+    "return": "return_bootstrap",
+    "return_bootstrap": "return_bootstrap",
+    "block": "block_bootstrap",
+    "block_bootstrap": "block_bootstrap",
+    "trade": "trade_bootstrap",
+    "trade_bootstrap": "trade_bootstrap",
+}
+
+# Community ceiling, checked here so the refusal is a LicenseError that says
+# what to do, not a strategy error.
+_COMMUNITY_MAX_MC_PATHS = 1000
+
+
+def monte_carlo(
+    result,
+    *,
+    n_paths: int = 1000,
+    method: str = "block",
+    block_size: int = 20,
+    seed: Optional[int] = None,
+    initial_capital: Optional[float] = None,
+    confidence_levels: Optional[List[float]] = None,
+    cvar_levels: Optional[List[float]] = None,
+    dd_thresholds: Optional[List[float]] = None,
+    wipeout_threshold: float = -0.90,
+    store_paths: bool = False,
+    device: str = "cpu",
+) -> Dict[str, Any]:
+    """Monte Carlo resampling of a finished backtest, in the engine.
+
+    Post-processing only: the strategy is not re-run and no data is reloaded.
+    Every path is drawn from a seeded ChaCha8 generator, so one ``seed`` gives
+    the same paths on every machine and on either device.
+
+    Args:
+        result: A :class:`Result` from :func:`run` (or its ``.raw``).
+        n_paths: Number of resampled paths. Community runs up to 1,000;
+            Pro and above have no ceiling.
+        method: ``"return"`` resamples bar returns with replacement,
+            ``"block"`` (default) draws contiguous blocks of ``block_size``
+            bars to keep short-term autocorrelation, ``"trade"`` reshuffles the
+            round-trip trade P&L and rebuilds the capital curve.
+        block_size: Block length in bars, for ``method="block"``.
+        seed: RNG seed. ``None`` draws a fresh seed each call.
+        initial_capital: Capital the returns and ruin are measured against.
+            Defaults to the backtest's own ``initial_capital``.
+        confidence_levels: Quantiles to report, default
+            ``[0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95]``.
+        cvar_levels: Expected-shortfall levels, default ``[0.95, 0.99]``.
+        dd_thresholds: Drawdown levels to report ``P(max_drawdown > x)`` for,
+            e.g. ``[0.2, 0.3, 0.5]``.
+        wipeout_threshold: Final return below which a path counts as a
+            wipeout, default ``-0.90``.
+        store_paths: Also return every equity path, as a numpy array of shape
+            ``(n_paths, n_steps)``. Memory grows with ``n_paths`` x bars.
+        device: ``"cpu"`` (default) or ``"cuda"``. The GPU runs the return and
+            block bootstraps, bit-identical to the CPU; ``"trade"`` and
+            ``store_paths=True`` run on the CPU and say so in a warning.
+
+    Returns:
+        Dict with ``final_return`` and ``max_drawdown`` (each with
+        ``percentiles``, ``cvar``, ``mean``, ``std``, ``min``, ``max``),
+        ``prob_of_ruin``, ``prob_of_wipeout``, ``dd_exceedance``,
+        ``n_paths``, ``method_name``, and ``paths`` (``None`` unless
+        ``store_paths=True``).
+
+    Example:
+        >>> mc = mbt.monte_carlo(result, n_paths=1000, method="block", seed=7)
+        >>> mc["max_drawdown"]["percentiles"]
+        [[0.05, 0.081], [0.1, 0.093], ...]
+        >>> mc["prob_of_ruin"]
+        0.012
+    """
+    raw = result.raw if isinstance(result, Result) else result
+    if not hasattr(raw, "equity_curve"):
+        raise TypeError(
+            "monte_carlo resamples a backtest result: pass what mbt.run returned "
+            f"(got {type(result).__name__})"
+        )
+
+    if isinstance(method, str) and method.lower() in _MC_METHODS:
+        method_type = _MC_METHODS[method.lower()]
+    else:
+        raise ValueError(
+            f"monte_carlo: unknown method={method!r}: use \"return\", \"block\" or \"trade\""
+        )
+    if isinstance(n_paths, bool) or not isinstance(n_paths, int) or n_paths < 1:
+        raise ValueError(f"monte_carlo: n_paths must be a positive integer, got {n_paths!r}")
+    if method_type == "block_bootstrap" and (
+        isinstance(block_size, bool) or not isinstance(block_size, int) or block_size < 1
+    ):
+        raise ValueError(f"monte_carlo: block_size must be a positive integer, got {block_size!r}")
+
+    dev = device.lower() if isinstance(device, str) else device
+    if dev not in ("cpu", "cuda", "gpu"):
+        raise ValueError(f'monte_carlo: unknown device={device!r}: use "cpu" or "cuda"')
+    _require_grant_for_gpu(dev, "GPU Monte Carlo")
+
+    if n_paths > _COMMUNITY_MAX_MC_PATHS and not _grant_couvre("monte_carlo_unlimited"):
+        raise LicenseError(
+            f"monte_carlo: {n_paths:,} paths requested; this licence runs up to "
+            f"{_COMMUNITY_MAX_MC_PATHS:,}. Pass n_paths={_COMMUNITY_MAX_MC_PATHS}, "
+            "or see what Pro includes: www.manifoldbt.com/pro"
+        )
+
+    if dev in ("cuda", "gpu"):
+        # The engine routes these two to the CPU without a word; say it here.
+        why = None
+        if method_type == "trade_bootstrap":
+            why = "the trade bootstrap has no GPU kernel"
+        elif store_paths:
+            why = "store_paths=True keeps every path on the host"
+        if why:
+            import warnings
+
+            warnings.warn(
+                f'monte_carlo: device="cuda" was requested but this run used the CPU: '
+                f"{why}. Results are identical either way, only slower.",
+                UserWarning,
+                stacklevel=2,
+            )
+
+    if initial_capital is None:
+        initial_capital = raw.manifest["config"]["initial_capital"]
+
+    method_cfg: Dict[str, Any] = {"type": method_type}
+    if method_type == "block_bootstrap":
+        method_cfg["block_size"] = block_size
+    config: Dict[str, Any] = {
+        "n_paths": n_paths,
+        "method": method_cfg,
+        "rng_seed": seed,
+        "initial_capital": float(initial_capital),
+        "wipeout_threshold": float(wipeout_threshold),
+        "store_paths": bool(store_paths),
+        "device": "cuda" if dev in ("cuda", "gpu") else "cpu",
+    }
+    if confidence_levels is not None:
+        config["confidence_levels"] = list(confidence_levels)
+    if cvar_levels is not None:
+        config["cvar_levels"] = list(cvar_levels)
+    if dd_thresholds is not None:
+        config["dd_thresholds"] = list(dd_thresholds)
+
+    try:
+        out = py_run_monte_carlo(raw, json.dumps(config))
+    except (ValueError, RuntimeError) as exc:
+        raise _classify_error(exc) from exc
+
+    paths = out.get("paths")
+    if paths is not None:
+        import numpy as np
+
+        n_steps = out.get("paths_n_steps") or 0
+        flat = np.asarray(paths.to_numpy(zero_copy_only=False))
+        out["paths"] = flat.reshape(-1, n_steps) if n_steps else flat
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -3484,8 +3674,9 @@ __all__ = [
     "run_sweep_2d",
     "run_stability",
     "replay",
-    # NOT exported: py_run_monte_carlo, the raw native binding. Listing it in
-    # __all__ published an internal as API.
+    # Monte Carlo. py_run_monte_carlo, the raw native binding under it, stays
+    # out: listing it in __all__ published an internal as API.
+    "monte_carlo",
     # Stochastic simulation
     "run_stochastic",
     "StochasticModel",

@@ -11,12 +11,8 @@ three rules, in order of importance:
 3. It is opt-out, via ``MANIFOLDBT_NO_UPDATE_CHECK=1``, and it stays quiet on CI
    runners where nobody reads the notice and nobody can act on it.
 
-This is not telemetry and shares nothing with the engine's install ping: the
-request is a plain GET of a public JSON document, carries no identifier, and its
-body is thrown away except for one version string. ``DO_NOT_TRACK`` is therefore
-*not* read here -- there is nothing to track -- while ``MANIFOLDBT_NO_TELEMETRY``
-is, because someone who set it meant "this library does not touch the network on
-its own", which covers this too.
+The request is a plain GET of a public JSON document, carries no identifier, and
+its body is thrown away except for one version string.
 """
 import atexit
 import json

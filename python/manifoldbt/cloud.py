@@ -1,4 +1,4 @@
-"""Run a backtest or a sweep on managed capacity instead of this machine.
+"""Run a backtest or a sweep on your organisation's workers instead of this machine.
 
 The call is the local one with `cloud.` in front:
 
@@ -10,9 +10,12 @@ serialization a local run uses, so a job that runs on a worker is the run you
 would have got here, through the same code path. Nothing about the strategy
 changes because it moved.
 
-Authentication is an API key from the Firm portal, read from `MANIFOLDBT_API_KEY`
-or passed to `configure()`. The key is never logged, and never travels anywhere
-but the Authorization header.
+Jobs go to the job queue your deployment runs, next to its workers: its URL
+is read from `MANIFOLDBT_CLOUD_URL` or passed to `configure()`, and there is no
+default, because the queue, the machines and the data are yours. Authentication
+is an API key that queue accepts, read from `MANIFOLDBT_API_KEY` or passed to
+`configure()`. The key is never logged, and never travels anywhere but the
+Authorization header.
 
 Submission returns as soon as the job is queued. `wait()` blocks until a worker
 has finished it; without it you can close the notebook and come back:
@@ -31,8 +34,6 @@ from typing import Any, Dict, List, Optional
 
 from manifoldbt._serde import scalar_value_to_json
 from manifoldbt.exceptions import BacktesterError
-
-DEFAULT_BASE_URL = "https://www.manifoldbt.com"
 
 # Terminal states. Anything else means a worker still has it, or nobody has
 # taken it yet.
@@ -84,15 +85,16 @@ class QuotaExceeded(CloudError):
 def configure(api_key: Optional[str] = None, base_url: Optional[str] = None) -> None:
     """Set the credentials for this session.
 
-    Both fall back to the environment (`MANIFOLDBT_API_KEY`,
-    `MANIFOLDBT_CLOUD_URL`), so a notebook that never calls this still works
-    when the environment is set.
+    `base_url` is your job queue, e.g. ``http://queue.internal:8790``. Both
+    fall back to the environment (`MANIFOLDBT_API_KEY`, `MANIFOLDBT_CLOUD_URL`),
+    so a notebook that never calls this still works when the environment is
+    set. An empty string clears what an earlier call set.
     """
     global _api_key, _base_url
     if api_key is not None:
         _api_key = api_key.strip()
     if base_url is not None:
-        _base_url = base_url.rstrip("/")
+        _base_url = base_url.strip().rstrip("/") or None
 
 
 def _key() -> str:
@@ -100,13 +102,18 @@ def _key() -> str:
     if not key:
         raise CloudError(
             "no API key. Pass it with mbt.cloud.configure(api_key=...) or set "
-            "MANIFOLDBT_API_KEY. Keys are created in the Firm portal, under Keys."
+            "MANIFOLDBT_API_KEY. The key is one your job queue was started with."
         )
     return key
 
 
 def _url(path: str) -> str:
-    base = _base_url or os.environ.get("MANIFOLDBT_CLOUD_URL", DEFAULT_BASE_URL)
+    base = _base_url or os.environ.get("MANIFOLDBT_CLOUD_URL", "").strip()
+    if not base:
+        raise CloudError(
+            "no job queue. Pass its URL with mbt.cloud.configure(base_url=...) or set "
+            "MANIFOLDBT_CLOUD_URL to the queue your workers claim from."
+        )
     return f"{base.rstrip('/')}{path}"
 
 
@@ -148,15 +155,13 @@ def _call(path: str, method: str = "GET", body: Optional[dict] = None, timeout: 
 def _raise_for(status: int, payload: dict):
     if status == 401:
         raise CloudError(
-            "the API key was refused. Check it, or create a new one in the portal.", 401
+            "the API key was refused. Check it against the keys your job queue accepts.", 401
         )
     if status == 402:
         raise QuotaExceeded(payload.get("used", 0), payload.get("included", 0))
     if status == 403:
         raise CloudError(
-            "this organisation has not finished portal setup: sign in to the portal once, "
-            "answer the setup questions, then retry.",
-            403,
+            f"the job queue refused this request: {payload.get('error', 'no detail')}", 403
         )
     if status == 413:
         raise CloudError(
@@ -196,7 +201,7 @@ def _sharpe_text(metrics: dict) -> str:
 
 
 class CloudJob:
-    """A job on managed capacity: its state, and its result once it has one."""
+    """A job on your job queue: its state, and its result once it has one."""
 
     def __init__(self, row: dict):
         self._row = row
@@ -283,7 +288,7 @@ class CloudJob:
             except CloudError as err:
                 # The job is running on a worker, not in this process: a server
                 # error or a dropped connection while polling says nothing about
-                # it. Giving up here would abandon compute that is being billed.
+                # it. Giving up here would abandon a job that is still running.
                 # A refusal (a revoked key, an unknown id) is different and ends
                 # the wait immediately.
                 if not err.transient:

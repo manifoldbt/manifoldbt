@@ -1,9 +1,11 @@
-"""Monte Carlo Simulation -- confidence intervals on equity paths (Pro).
+"""Monte Carlo Simulation -- confidence intervals on equity paths.
 
 Demonstrates:
-  - py_run_monte_carlo() for bootstrapped equity paths
-  - Monte Carlo fan chart visualization
+  - mbt.monte_carlo() for bootstrapped equity paths, computed in the engine
   - Risk metrics from simulated distributions
+  - Monte Carlo fan chart visualization
+
+Community runs up to 1,000 paths; Pro has no ceiling.
 
 Data: shared store — real market data from `data/` (see examples/README.md)
 
@@ -62,6 +64,15 @@ if __name__ == "__main__":
     print(result.summary())
     print(f"Elapsed: {time.perf_counter() - t0:.3f}s\n")
 
-    # 2. Monte Carlo fan chart
+    # 2. Risk distribution, resampled in the engine: blocks of 20 bars keep the
+    #    short-term autocorrelation that an IID bootstrap would destroy.
+    mc = mbt.monte_carlo(result, n_paths=1000, method="block", block_size=20, seed=42)
+    final = dict(mc["final_return"]["percentiles"])
+    drawdown = dict(mc["max_drawdown"]["percentiles"])
+    print(f"Final return   5th pct {final[0.05]:+.1%}   median {final[0.5]:+.1%}")
+    print(f"Max drawdown   median {drawdown[0.5]:.1%}   95th pct {drawdown[0.95]:.1%}")
+    print(f"P(ruin) {mc['prob_of_ruin']:.1%}\n")
+
+    # 3. Monte Carlo fan chart
     if plots_available():
         mbt.plot.monte_carlo(result, n_simulations=10000, seed=42)

@@ -65,7 +65,7 @@ def stub():
     yield state
     server.shutdown()
     server.server_close()
-    mbt.cloud.configure(api_key="", base_url=mbt.cloud.DEFAULT_BASE_URL)
+    mbt.cloud.configure(api_key="", base_url="")
 
 
 def submit(**kwargs):
@@ -151,6 +151,21 @@ def test_a_missing_key_names_where_to_get_one():
     mbt.cloud.configure(api_key="", base_url="http://127.0.0.1:1")
     with pytest.raises(CloudError, match="MANIFOLDBT_API_KEY"):
         mbt.cloud.job(1)
+
+
+def test_a_missing_queue_url_names_how_to_set_it(monkeypatch):
+    monkeypatch.delenv("MANIFOLDBT_CLOUD_URL", raising=False)
+    mbt.cloud.configure(api_key="k", base_url="")
+    with pytest.raises(CloudError, match="MANIFOLDBT_CLOUD_URL"):
+        mbt.cloud.job(1)
+
+
+def test_the_queue_url_comes_from_the_environment(stub, monkeypatch):
+    base = mbt.cloud._base_url
+    mbt.cloud.configure(base_url="")
+    monkeypatch.setenv("MANIFOLDBT_CLOUD_URL", base + "/")
+    submit(wait=False, timeout=5)
+    assert stub.requests[-1][0] == "/api/jobs"
 
 
 def test_an_unreachable_server_is_transient_not_a_refusal():
