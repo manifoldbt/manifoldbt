@@ -1559,7 +1559,8 @@ def bars_from_trades(
     for everything downstream: ``run()`` reads them at ``interval`` or
     resamples them coarser, and the DSL addresses the flow columns by name
     (``col("buy_volume")``). Seconds with no trade produce no bar. One second
-    is the finest step the store holds.
+    is the finest step the store holds. :func:`attach_quotes` fills 1-minute
+    bars only: to put quotes on a tape, rebuild it at ``interval="1m"`` too.
 
     Args:
         store: The store holding the symbol's tape (see :func:`ingest_trades`).
@@ -1617,8 +1618,14 @@ def attach_quotes(
     progress: bool = True,
     dataset: Optional[str] = None,
 ) -> dict:
-    """Fill the ``bid`` / ``ask`` / ``spread`` columns of already-stored bars
-    with real top-of-book quotes.
+    """Fill the ``bid`` / ``ask`` / ``spread`` columns of already-stored
+    1-minute bars with real top-of-book quotes.
+
+    The quotes go on the symbol's 1-minute bars, and only on them: bars at
+    another interval (1 s bars from :func:`bars_from_trades`, say) are not
+    filled. The bars are looked for before anything is downloaded, and a
+    symbol without 1-minute bars is refused there, naming the intervals it
+    does have.
 
     The bar schema has always carried these columns and the engine has always
     known how to read them (``execution_price="MidPrice"``, per-bar spread for
