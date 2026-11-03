@@ -5,7 +5,7 @@
 
 [project]
 name = "manifoldbt"
-version = "0.32.0"
+version = "0.32.1"
 description = "Rust-powered backtesting engine for quantitative research"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -35,6 +35,7 @@ classifiers = [
 dependencies = [
     "pyarrow>=14.0",
     "numpy>=1.21",
+    "tzdata; sys_platform == 'win32'",
 ]
 
 [project.optional-dependencies]

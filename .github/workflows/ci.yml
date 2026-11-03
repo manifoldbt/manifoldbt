@@ -67,7 +67,7 @@ jobs:
           set -e
           # Expected file types for the Python package, its docs and assets.
           allowed='py|pyi|typed|md|txt|rst|toml|cfg|ini|yml|yaml|json|csv|png|jpg|jpeg|gif|svg|ico|webp|html|css|js|ipynb|sh|in'
-          allowed_names='LICENSE|NOTICE|AUTHORS|CHANGELOG|Makefile'
+          allowed_names='LICENSE|LICENSE-ENGINE|NOTICE|AUTHORS|CHANGELOG|Makefile'
           flag="$RUNNER_TEMP/unexpected"; : > "$flag"
           find . -path ./.git -prune -o -type f -print | sed 's|^\./||' | while IFS= read -r f; do
             b=${f##*/}

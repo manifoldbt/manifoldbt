@@ -3233,8 +3233,8 @@ data, before the run.
 against the span of the market when the plan runs: the open and the close of
 each weekday, in UTC, a close at or before the open being the next day's. A
 session that holds no event of the market (a holiday) is dropped. The time zone
-is read by Python's `zoneinfo`; on Windows, `pip install tzdata` brings the
-time zones.
+is read by Python's `zoneinfo`; on Windows, where the system has no time zone
+database, `tzdata` is installed with manifoldbt to bring it.
 
 ### How a plan runs
 

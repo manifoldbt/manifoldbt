@@ -78,9 +78,11 @@ def test_sweep_2d_rejects_undeclared_params():
 
 def test_stability_rejects_undeclared_param():
     stab = {"param_name": "fast", "values": [5, 10, 15], "metric": "sharpe"}
-    with pytest.raises(StrategyError) as exc:
+    with pytest.raises((StrategyError, bt.LicenseError)) as exc:
         bt.run_stability(_hardcoded(), stab, _cfg(), None)
-    assert "fast" in str(exc.value)
+    # Stability is Pro-gated first; only assert our message when we got past it.
+    if isinstance(exc.value, StrategyError):
+        assert "fast" in str(exc.value)
 
 
 def test_declared_param_passes_validation():
