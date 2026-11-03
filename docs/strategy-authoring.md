@@ -26,17 +26,19 @@ This guide describes how to define trading strategies using the manifoldbt Pytho
 16. [Reading a Maker's Day](#reading-a-makers-day)
 17. [Sweeping Execution Parameters](#sweeping-execution-parameters)
 18. [Orders, One by One](#orders-one-by-one)
-19. [Quoting in the DSL](#quoting-in-the-dsl)
-20. [A Market Stored Order by Order](#a-market-stored-order-by-order)
-21. [Fee & Slippage Models](#fee--slippage-models)
-22. [Orders (SL/TP/Trailing)](#orders-sltptrailing)
-23. [Entry Orders](#entry-orders)
-24. [Cross-Asset References](#cross-asset-references)
-25. [Dataset Auto-Resolution](#dataset-auto-resolution)
-26. [Diagnostics](#diagnostics)
-27. [Profiling](#profiling)
-28. [Complete Examples](#complete-examples)
-29. [Indicator Reference](#indicator-reference)
+19. [Sweeping an Order Plan](#sweeping-an-order-plan)
+20. [Quoting in the DSL](#quoting-in-the-dsl)
+21. [A Market Stored Order by Order](#a-market-stored-order-by-order)
+22. [Fee & Slippage Models](#fee--slippage-models)
+23. [Orders (SL/TP/Trailing)](#orders-sltptrailing)
+24. [Entry Orders](#entry-orders)
+25. [Cross-Asset References](#cross-asset-references)
+26. [Dataset Auto-Resolution](#dataset-auto-resolution)
+27. [Diagnostics](#diagnostics)
+28. [Profiling](#profiling)
+29. [Complete Examples](#complete-examples)
+30. [Indicator Reference](#indicator-reference)
+31. [Limitations](#limitations)
 
 ---
 
@@ -482,6 +484,9 @@ When `accuracy=True`, the engine loads `bars_1m` and runs in hybrid mode: signal
 ---
 
 ## Execution Model
+
+What this model assumes by default, and the setting that narrows each gap, is
+listed in [Limitations](#limitations).
 
 ```python
 mbt.ExecutionConfig(
@@ -2520,10 +2525,12 @@ a Python `UserWarning` that names the price, the side and the levels read.
 | `sim.wait(trade=, book=, order=, timeout=)` | Move the clock to the next event of the kinds named (any kind when none is), or `timeout` from now; returns why it woke |
 | `sim.book(symbol)` | The book as the strategy sees it: `best_bid`, `best_ask`, `mid`, `spread`, `qty_at(p)`, `levels(n)`, `depth_through(p)`, `tick` |
 | `sim.trades(symbol)` | The prints that reached the strategy since the last call, as `(ts_ns, price, qty, aggressor)` |
-| `sim.orders(symbol, side=, status=)` | The strategy's orders as it knows them. `status="live"`: may still fill; `"resting"`: in the book, partially filled or not; or a status name |
-| `sim.order(id)` | One order: `price`, `qty`, `filled`, `remaining`, `avg_price`, `status`, `queue_ahead`, `cancel_pending`, ... |
+| `sim.orders(symbol, side=, status=)` | The strategy's orders as it knows them. `status="live"`: may still fill; `"resting"`: in the book, partially filled or not; `"armed"`: a stop waiting for its trigger; or another status name |
+| `sim.order(id)` | One order: `price`, `qty`, `filled`, `remaining`, `avg_price`, `status`, `queue_ahead`, `cancel_pending`, `trigger_price`, `triggered_at`, ... |
 | `sim.position(symbol)`, `sim.cash()` | As the fills that reached the strategy say |
 | `sim.post(symbol, side, price, qty, tif=)` | Send an order and get its id. `price=None` is a market order; a price is put on the tick grid first (see below) |
+| `sim.post(symbol, side, price, qty, trigger=p, trigger_on=, after_trigger=)` | Send a stop order: it waits at the venue until the market reaches `p`, then executes as a market order (`price=None`) or a limit order at `price` (see [Stop orders](#stop-orders)) |
+| `sim.post_bracket(symbol, side, qty, price=, trigger=, stop=, target=, legs_on=, exit_after=, exit_at=)` | Send an order and the exits the venue holds for the position it opens: a stop, a target, an exit at a time, the first one set off taking the others off (see [Brackets held by the venue](#brackets-held-by-the-venue)) |
 | `sim.cancel(id)` | Send a cancellation |
 | `sim.replace(id, price=, qty=)` | Change the price, the total size, or both; a new price is put on the tick grid first |
 
@@ -2565,8 +2572,10 @@ On a market stored order by order it is exact and moves with the feed: see
 ### What the venue does
 
 At one venue instant the market comes first: the prints stamped at that
-instant, then the book state that shows them, then the actions that arrive at
-that instant, in the order they were sent. So an order arriving at `T` joins the
+instant, then the book state that shows them, then the stop orders that market
+set off (see [Stop orders](#stop-orders)) and the legs of brackets (see
+[Brackets held by the venue](#brackets-held-by-the-venue)), then the actions
+that arrive at that instant, in the order they were sent. So an order arriving at `T` joins the
 queue as the state of `T` shows it, and the prints of `T` do not serve it.
 
 **Every price is on the tick grid.** The venue quotes on the symbol's tick (the
@@ -2615,7 +2624,9 @@ is rejected; a `FOK` that cannot fill whole takes nothing; a market order takes
 what the ladder offers. An order the size of the whole displayed ladder (the
 float sum of its levels, whichever side of it the last digit falls on) is
 served whole and ends `filled`: what it leaves is a rest only above a
-trillionth of its own size.
+trillionth of its own size. The ladder is the stored one as of the arrival;
+with `prints_update_book` it is the book as the prints since updated it (see
+[When a print updates the book](#when-a-print-updates-the-book)).
 
 **A replacement** at the same price with a smaller size keeps the order's place
 in the queue; any other change sends it to the back of the queue at its new
@@ -2696,6 +2707,288 @@ function that returns right after it leaves the order `in_flight`.
 (`risk_adverse`, `power`, `log` and the exact queue are deterministic), so two
 seeds give the same run to the bit.
 
+### When a print updates the book
+
+A stored book is a series of states, and between two of them the tape goes on:
+a seller can sell through the bid the last state shows before the next state
+says the bid moved. By default an order that executes on arrival meets the
+last stored state, so a market sell sent on that print fills at the old bid. A
+venue that matches on trades fills it at the print instead, and so does the
+simulated venue, by one of two rules:
+
+```python
+config = mbt.sim.Config(prints_update_book="aggressed_side")   # or "both_sides"
+```
+
+From each print to the next stored state, the print updates the book:
+
+- `"aggressed_side"`: the side the print traded against. A print where the
+  **seller** crossed, at `p` for `q`, traded against the bids: no bid above `p`
+  is left, at `p` stands `q` (or the size the stored book shows at `p`, when it
+  is larger), and the stored bids below `p` stay behind it. A print where the
+  **buyer** crossed does the same to the asks. The other side is the stored
+  side.
+- `"both_sides"`: both sides, whoever crossed, as a top-of-book venue that
+  executes on trades has them. Each side is the print alone, `p` for `q`, no
+  stored level behind it. A market order (`GTC` or `GTD`) larger than `q`
+  fills its rest one tick worse than `p` (a buy above, a sell below); an `IOC`
+  lets that rest expire, a `FOK` takes nothing, and a limit order that executes
+  takes what `p` offers within its limit and lets its rest expire. A market
+  without a tick lets the rest expire.
+
+Each side keeps the last print that set it, and the next stored state replaces
+all of it. `both_sides` follows the convention of trade-driven execution in
+other event-driven engines such as Nautilus Trader.
+
+On a book of bids 100.0 x 5, 99.9 x 9, 99.0 x 9 and asks 100.1 x 5,
+100.5 x 6, tick 0.1, after a seller printed 2 at 99.5:
+
+| Sent on the print | Default | `"aggressed_side"` | `"both_sides"` |
+|---|---|---|---|
+| market sell 1 | 1 at 100.0 | 1 at 99.5 | 1 at 99.5 |
+| market sell 5 (`GTC`) | 5 at 100.0 | 2 at 99.5, 3 at 99.0 | 2 at 99.5, 3 at 99.4 |
+| market sell 5 (`IOC`) | 5 at 100.0 | 2 at 99.5, 3 at 99.0 | 2 at 99.5, the rest expires |
+| market buy 1 | 1 at 100.1 | 1 at 100.1 | 1 at 99.5 |
+| `GTX` sell at 99.9 | rejected, it would execute | rests | rests |
+| `GTX` buy at 99.5 | rests | rests | rejected, it would execute |
+| `FOK` sell 10 at 99.5 | 5 at 100.0, 5 at 99.9 | expired, nothing filled | expired, nothing filled |
+
+Under `"aggressed_side"`, a seller printing 2 at 99.9 instead leaves 99.9 x 9 at
+the top (the stored size is the larger), and one printing 2 at 100.0 leaves the
+bids as they were. Under `"both_sides"`, either print leaves 2 at its price on
+both sides: the stored sizes are not read.
+
+**What reads it.** Everything that executes against the book: a market order,
+a limit order that would execute, a `FOK`, the refusal of a `GTX` that would
+execute and of a replacement whose new price would. Fills at arrival are
+`taker` fills, charged the taker fee, as without it.
+
+**What does not.** Under either rule, resting orders are served as without it:
+by the queue model, off the prints and the stored states (a print at their price
+from the side that consumes them burns their queue, one through it serves the
+rest at their price, whatever its size). The queue an order joins is read off
+the stored state. What the strategy reads (`sim.book()`, `sim.trades()`), the
+mid the equity is marked at, and the markouts do not change. A trade-driven
+top-of-book engine without queue tracking fills a resting limit at its price up
+to the print's size on a print at it, whatever the book showed ahead of it.
+Here an order at the front of its queue does the same,
+`queue={"depth_source": "assumed", "assumed_queue": 0}`, except that a print
+through its price serves its whole rest. What changes for a limit order is on
+arrival: under `"both_sides"`, one priced at or through the print executes
+against it instead of resting (after the seller's print at 99.5, a buy at
+99.5 fills there).
+
+**When.** The update lives at the venue's clock. At one instant the prints come
+first and the book state after them, so an order arriving at a print's instant
+meets that print only when no state is stamped there: a state at the same
+nanosecond is the newer word. With zero latency, a strategy that wakes on a
+print (`sim.wait(trade=True)`) and sends a market order meets that print. With
+an entry latency, an order sent before a print and arriving after it meets the
+print; one arriving after the next stored state meets that state, and is
+walked as without the setting (no tick worse). Of several prints at one
+instant, the last stands (of each side, under `"aggressed_side"`): no order
+arrives between them.
+
+**Which side.** The print's aggressor, as the tape stores it, which only
+`"aggressed_side"` reads. A print that came without one (a consolidated equity
+tape) took the tick rule's side when it was ingested, or when
+`Market.from_arrays` built the market.
+
+**What it costs.** A note per print and a reset per stored state. On a
+synthetic stock day of 71,372 prints and 372,050 quotes, a strategy that wakes
+every minute runs in about 9.0 ms without the setting or with `"both_sides"`,
+and 9.4 ms with `"aggressed_side"`; one that sends a market order every second
+(23,400 orders) takes about 29 ms whichever it is.
+
+### Stop orders
+
+A stop order waits at the venue, out of the book, until the market reaches its
+trigger, and then executes:
+
+```python
+# A stop-market: buys 100 at market once a print reaches 190.50.
+sim.post("AAPL", "buy", None, 100, trigger=190.50)
+# A stop-limit on the bid, until the close: sells at 189.80 or better once the
+# stored best bid is at or below 189.90.
+sim.post("AAPL", "sell", 189.80, 100, trigger=189.90, trigger_on="bid_ask",
+         tif="GTD", expire_at=close_ns)
+
+mbt.sim.Config(stop_in_market="reject")   # "trigger" by default
+```
+
+**What sets it off.** `trigger_on="last"`, the default: a print at or through
+the trigger (a buy stop's at or above it, a sell stop's at or below it),
+whichever side crossed. `trigger_on="bid_ask"`: a stored book state whose best
+ask (a buy stop) or best bid (a sell stop) is at or through the trigger; an
+empty side reaches nothing. `"bid_ask"` reads the stored states alone: what a
+print makes of the book under `prints_update_book` is a rule of execution, not
+a quote, and sets off no stop.
+
+**The trigger is on the tick grid, away from the market**: a buy stop's is put
+up, a sell stop's down, so that no price short of the level asked for sets it
+off. A buy stop asked at 100.33 on a 0.1 tick waits for 100.4; a trigger within
+a millionth of a tick of a grid point is that point, as for any price. The
+limit of a stop-limit goes on the grid as any limit, on its passive side. An
+order whose trigger or limit moved counts once in `res.levels_snapped`.
+
+**Its arrival.** A stop is sent as any order and reaches the venue at
+`t + entry`, once the market of that instant is in. When the market has
+already reached its trigger there (the last print up to that instant, for
+`"last"`; the stored state standing then, for `"bid_ask"`), it is set off at
+once and executes at its arrival; with `Config(stop_in_market="reject")` it is
+refused instead and ends `rejected`, nothing filled, the convention of
+Nautilus Trader's `reject_stop_orders`. Otherwise it is `armed`: live, out of
+the book, listed by `sim.orders(status="armed")`. Its `tif` is its life while
+it waits, `"GTC"` or `"GTD"` with `expire_at`.
+
+**When it executes.** Set off at the venue instant `T`, it executes at the end
+of `T`: after every market event stamped `T` (the prints, then the book state
+that shows them), before the actions that arrive at `T`. Stops set off at one
+instant execute in the order the market set them off, the event first, then the
+order id. A book state stamped with the print that set a stop off is the newer
+word: the stop meets that state, not what the print made of the book. A
+cancellation that lands at `T` comes after the stop's execution, and is refused
+(`cancel_rejected`).
+
+**What it executes as**: the order it becomes, arriving at `T`, with `taker`
+fills and the taker fee. A stop without a limit is a market order of its own
+`tif`: under `prints_update_book="both_sides"`, what the print does not fill is
+filled one tick worse, as for any market order that may rest; otherwise the
+rest expires. A stop-limit is a limit order at its limit: one that executes
+takes the ladder within it and its rest expires, as any limit order executing
+on arrival; one that does not rests at its limit, served by the queue rule
+(`after_trigger="rest"`, the default), or expires (`after_trigger="ioc"`).
+
+On the book of bids 100.0 x 5, 99.9 x 9, 99.0 x 9 and asks 100.1 x 5,
+100.5 x 6, tick 0.1, a buyer prints 1 at 100.3 and sets off a buy stop at
+100.3; no book state is stamped there:
+
+| The stop | Default | `"aggressed_side"` | `"both_sides"` |
+|---|---|---|---|
+| market, buy 2 | 2 at 100.1 | 1 at 100.3, 1 at 100.5 | 1 at 100.3, 1 at 100.4 |
+| limit 100.5, buy 8 | 5 at 100.1, 3 at 100.5 | 1 at 100.3, 6 at 100.5, the rest expires | 1 at 100.3, the rest expires |
+| limit 100.0, buy 8 | rests at 100.0, behind the 5 shown there | rests | rests |
+
+**A GTD stop** expires at `expire_at`, after the market of that instant: a
+print stamped `expire_at` still sets it off, and it executes before the
+expiry. A stop-limit set off before then and resting expires at the same
+`expire_at`.
+
+**Cancelling and replacing.** A stop waiting for its trigger is cancelled as any
+order, after the `cancel` latency; until the cancellation lands, the market can
+still set it off. It is not replaced: cancel it and post another. A stop-limit
+set off and resting in the book is a limit order, replaced as one.
+
+**In the tables.** The journal shows `armed` when the venue holds the stop and
+`triggered`, at the trigger's price, when the market sets it off.
+`sim.order(id)` carries `trigger_price`, `trigger_on`, `after_trigger` and
+`triggered_at` (the venue instant it was set off); `res.orders_df()` carries
+`trigger_price` and `trigger_on`.
+
+**Which prints set it off.** Every print of the tape is a last price for a stop
+on `"last"`: a consolidated tape whose rows include prints that do not set the
+last sale price (average-price or late reports, out-of-sequence prints) is
+filtered of them before the market is built.
+
+**What it costs.** Nothing to a run while no stop waits: the venue reads its
+stops only when one is armed. An armed stop on `"last"` is a comparison per
+print; on `"bid_ask"`, a read of the touch per book state.
+
+### Brackets held by the venue
+
+A bracket is an order that opens a position, and the exits the venue holds for
+it: a stop, a target, an exit at a time. The venue arms them once the order has
+filled, takes the others off when the first one goes, and closes the position
+whole.
+
+```python
+# Buys 100 at market; once filled, a stop at 189.50, a target at 192.00 and an
+# exit 30 minutes later, whichever comes first.
+parent = sim.post_bracket("AAPL", "buy", 100, stop=189.50, target=192.00,
+                          exit_after=Interval.minutes(30))
+# A limit entry until t_ns, its legs on the bid and the ask, out at the third
+# session close after the entry at the latest.
+sim.post_bracket("AAPL", "sell", 100, price=191.20, tif="GTD", expire_at=t_ns,
+                 stop=192.40, target=189.00, legs_on="bid_ask", exit_at=(closes_ns, 3))
+```
+
+**The parent** is an order as `sim.post` sends it: a market order (`price=None`,
+the default), a limit at `price`, or a stop with `trigger=` and `trigger_on=` (a
+stop-limit with `price` as well). `sim.post_bracket` returns its id.
+
+**When the legs are armed.** When the parent ends having filled something
+(filled whole, or expired or cancelled after a fill in part), the venue arms its
+legs at that instant, once the market of the instant is in, with no latency.
+Each leg is an order of the other side, for the size the parent filled. A parent
+that ends with nothing filled (cancelled, expired or refused) arms none.
+
+| `role` | The leg | What sets it off, for a position bought |
+|---|---|---|
+| `"stop"` | a stop-market order at `stop` | a print at or below it (`legs_on="last"`, the default), or a stored best bid at or below it (`"bid_ask"`) |
+| `"target"` | a market-if-touched order at `target` | a print at or above it, or a stored best bid at or above it: the other way from the stop |
+| `"time"` | a market order | its time: `exit_after` after the legs were armed, or `exit_at` |
+
+For a position sold the legs buy, and read the prints, or the stored best ask,
+the other way round. `exit_at` is a venue instant in nanoseconds, a list of them
+(the exit is due at the first strictly after the legs were armed: the session
+closes, say), or `(instants, n)`, the n-th of them strictly after it; none
+left, the leg waits and never comes due. Give `exit_after` or `exit_at`, not
+both.
+
+Each level goes on the tick grid away from the market, as a stop's trigger
+does, and a bracket counts once in `res.levels_snapped` whichever of its levels
+moved. The stop lies below the target for a position bought, above it for one
+sold, so that no one price reaches both. A stop or a target the market already
+reaches when the legs are armed (the last print up to that instant, or the
+stored state standing then) is set off at once, whatever `stop_in_market` says:
+an exit is not refused.
+
+**One exit.** The first leg set off takes the others off at the same instant
+(`cancelled` in the journal), with no latency. At one instant the market comes
+first: a stop or a target that a print or a state stamped `T` sets off goes
+before the exit due at `T`. When two prints at one instant reach the stop and
+then the target, the first sets the stop off and the target is gone before the
+second.
+
+**How a leg executes.** At the end of the instant it was set off, after every
+market event stamped there, as a market order: `taker` fills, the taker fee.
+What the book does not fill of it does not expire. It waits, out of the book
+(`armed`), for the venue's next event, a print or a book state, and executes
+again at the end of that instant, as many times as it takes to close the
+position (`carried` in the journal, with the size left). Under
+`prints_update_book="both_sides"` a market order fills what a print leaves one
+tick worse, so a leg waits there only when no print set that side.
+
+On the book of bids 100.0 x 5, 99.9 x 9, 99.0 x 9 and asks 100.1 x 5,
+100.5 x 6, tick 0.1, a position of 2 bought with a stop at 99.5, when a seller
+prints 1 at 99.4 and no book state is stamped there:
+
+| The stop sells 2 | Default | `"aggressed_side"` | `"both_sides"` |
+|---|---|---|---|
+| fills | 2 at 100.0 | 1 at 99.4, 1 at 99.0 | 1 at 99.4, 1 at 99.3 |
+
+With a position of 11, and the bids thinned to 99.4 x 2 by a state before the
+print, the default sells 2 at 99.4 and carries 9 to the next event.
+
+**The strategy's side.** The legs are orders of their own, with the next ids,
+`parent` and `role` set. The strategy hears of each when the venue's first
+answer about it arrives, after the `response` latency: from then on it is in
+`sim.orders()` (`status="armed"` while it waits). Cancelling a leg takes that
+leg alone off, after the `cancel` latency; the others stay. A leg is not
+replaced.
+
+**In the tables.** `res.orders_df()` carries `parent` and `role`, `None` for
+any other order. A leg's `sent_at` is the venue instant it was armed, its
+`trigger_price` the level of a stop or a target (`None` for an exit at a time),
+and `sim.order(id).triggered_at` the instant it was set off, by the market or
+by its time.
+The journal shows `armed`, `triggered` (without a price for an exit at a time),
+`carried` and `cancelled`; the fills are in `res.fills_df()` as any.
+
+**What it costs.** Nothing to a run without a bracket. A stop or a target
+waiting is a stop waiting at the venue: a comparison per print, or a read of
+the touch per book state.
+
 ### What comes out
 
 | | |
@@ -2736,6 +3029,46 @@ does not check that the market makes sense, and accepts:
   order priced there is put on the grid, on its passive side, so it does not
   queue behind that level.
 
+Several states at one instant are accepted, and the last one stands: the book
+has one state per instant. Several prints at one instant are kept in the order
+given.
+
+`mbt.sim.Market.from_arrays` builds the same market from columns, which is how
+to bring a day of your own top-of-book quotes and prints without one Python
+object per event:
+
+```python
+market = mbt.sim.Market.from_arrays(
+    "AAPL", tick_size=0.01,
+    quotes=nbbo,    # ts_ns, bid_px, bid_qty, ask_px, ask_qty
+    trades=prints,  # ts_ns, price, qty, and aggressor when the tape has one
+)
+res = mbt.sim.run(strategy, markets=[market])
+```
+
+`quotes` and `trades` are each a pandas or polars DataFrame, a pyarrow Table or
+RecordBatch, or a dict of numpy arrays; columns it does not read are ignored,
+and either may be left out. `ts_ns` is integer nanoseconds since the epoch, UTC,
+or a timestamp column of any unit (`timestamp` is read when there is no
+`ts_ns`). The quotes are a book one level deep. The rows come in time order,
+several at one instant allowed:
+
+- of several **quotes at one instant**, the last one stands;
+- several **prints at one instant** are kept in the order given, and at an
+  instant holding both, the venue applies the prints first, then the book;
+- a quote with a **side missing** (a price that is zero, negative, NaN or null)
+  or **crossed** (bid above ask) shows an empty book until the next quote, as
+  `mbt.attach_quotes` reads a vendor's quotes; a locked quote stands;
+- a print **without an aggressor** (`aggressor` absent, null, NaN or empty) takes
+  the tick rule, as the consolidated tapes ingested by `mbt.ingest` do: above
+  the previous price a buy, below it a sell, at the same price the side of the
+  last move. `aggressor` is `"buy"` / `"sell"`, or `1` for a buy and `-1` or
+  `2` for a sell; a `0` is refused rather than read as unknown, so that a
+  column of `1` for a buy and `0` for a sell cannot lose its sells.
+
+A column missing, of another length or of a type it cannot read (a float
+`ts_ns`, a boolean `aggressor`) is refused by name.
+
 ### Against another engine
 
 On three BTCUSDT days, the quotes of the queue duel replayed through `mbt.sim`
@@ -2761,9 +3094,28 @@ differences come from two named rules:
 - Cancelling or replacing an order the strategy knows to be finished, or a
   market order's price: refused. Cancelling an order whose cancellation is
   already on its way does nothing.
+- A stop order whose `tif` is not `"GTC"` or `"GTD"`, whose trigger is not
+  finite and positive (or is put down to zero on the grid, for a sell stop),
+  a `trigger_on` other than `"last"` / `"bid_ask"`, an `after_trigger` other
+  than `"rest"` / `"ioc"` or given to a stop without a limit, `trigger_on` or
+  `after_trigger` without `trigger`: refused when the call is made, by name.
+  Replacing a stop waiting for its trigger: refused ("cancel it and post
+  another").
+- A bracket with no stop, no target and no exit at a time; a stop that is not
+  below the target for a position bought (above it for one sold) once both
+  are on the grid; a level that is not finite and positive, or that the grid
+  puts down to zero; `exit_after` and `exit_at` both; a negative
+  `exit_after`; an `exit_at` that is not an instant, a list of instants in
+  strictly ascending order or `(instants, n)` with `n` from 1; `trigger_on`
+  without `trigger`; a `legs_on` other than `"last"` / `"bid_ask"`: refused
+  when the call is made, by name, and nothing is sent. Replacing a leg, or
+  cancelling one the strategy has not heard of yet: refused.
 - A latency key other than the four, a negative latency, an unknown queue key,
   a latency, a fee, `initial_cash` or a queue number that is NaN or infinite, a
-  negative `seed`: refused before the run starts, naming the key and the value.
+  negative `seed`, a `prints_update_book` other than `"aggressed_side"`,
+  `"both_sides"` or `None` (a `True` or a `False` included), a `stop_in_market`
+  other than `"trigger"` or `"reject"`: refused before the run starts, naming
+  the key and the value.
 - An order id that no `post` returned (`sim.cancel(-1)`, `sim.replace(-1, ...)`):
   refused as an order never sent (`sim.order(-1)` is `None`). A `levels` below 1
   when a market is read from a store, or `book.levels(n)` with a negative `n`:
@@ -2797,6 +3149,326 @@ depth of the book. What does grow with it is loading a day stored as whole
 ladders: `levels=` bounds it to the levels the strategy needs. `sim.orders()` filtered on `"live"`, `"resting"`,
 `"in_flight"` or `"partially_filled"` reads the live orders alone and costs the
 same whatever the history; any other filter walks every order sent.
+
+---
+
+## Sweeping an Order Plan
+
+`mbt.sim.run` hands the venue to a Python function, which decides at every
+wake-up. When what the function does is a schedule -- decide at set instants or
+at the rows of a table, send one order, hold the position with exits the venue
+keeps -- it can be written down as a **plan** instead: `mbt.sim.Plan`. The
+engine runs it on the venue of [Orders, One by One](#orders-one-by-one) without
+calling back into Python, and `mbt.sim.sweep` runs every variant of a grid of
+its parameters, in parallel. **Each variant is the run `mbt.sim.run` makes of
+the same plan**, with the same parameters and the same config, to the bit.
+
+```python
+import manifoldbt as mbt
+from manifoldbt.helpers import Interval
+S = mbt.sim
+
+# A market order at the first print at or after each deadline (the open + k x
+# the interval), sides in turn.
+plan = S.Plan(
+    when=S.every(mbt.param("every", default=Interval.minutes(5)), on="print",
+                 anchor="session"),
+    entry=S.market(),
+    side=S.alternate("buy"),
+    size=mbt.param("qty", default=100),
+    sessions=S.sessions(open="09:30", close="16:00", tz="America/New_York"),
+)
+res = S.sweep(plan, {"every": [Interval.minutes(m) for m in (1, 2, 3, 5, 10)],
+                     "qty": [100, 200, 500]},
+              markets=[market], config=S.Config(prints_update_book="both_sides"))
+res.to_df()            # one row per variant: param_*, exec_*, the metrics
+res.fills_df(3)        # the fills of variant 3, computed again on demand
+res.run(3)             # variant 3 run again: the whole SimResult
+
+# Stop entries that expire, a bracket, positions held over several sessions.
+plan = S.Plan(
+    when=S.setups(signals),                    # ts_ns, side, level
+    entry=S.stop(offset=mbt.param("off", default=1), unit="ticks", on="last",
+                 expire_after=mbt.param("expiry", default=Interval.minutes(30))),
+    side="from_setups",
+    size=S.notional(10_000, lot=1),
+    exit=S.bracket(stop=mbt.param("sl", default=1.5), target=mbt.param("tp", default=3.0),
+                   unit="pct", on="last", hold=S.closes(3)),
+    sessions=S.sessions(open="09:30", close="16:00", tz="America/New_York",
+                        entries=("09:45", "15:30")),
+)
+res = S.sweep(plan, {"off": [0, 1, 2, 3], "sl": [1.0, 1.5, 2.0], "tp": [2.0, 3.0]},
+              markets=[market])
+
+S.run(plan, config, markets=[market])          # one plan, its defaults: a SimResult
+```
+
+### What a plan is
+
+| Part | What it takes |
+|---|---|
+| `when` | `S.every(period, on=, anchor=)`: at `anchor + k * period`, `k` from 1, the anchor the market's first instant (`anchor="start"`, the default) or each session's open (`"session"`); on the clock (`on="clock"`, the default) or at the first print the strategy sees at or after it (`"print"`). Or `S.setups(table)`: one decision per row, at its instant |
+| `entry` | `S.market()`; `S.limit(offset, unit=, tif=)`, a limit through the market that executes at its arrival (`"IOC"`, the default, or `"FOK"`); `S.stop(offset, unit=, on=, expire_after=)`; `S.stop_limit(offset, limit_offset, unit=, on=, expire_after=, after_trigger=)` |
+| `side` | `"buy"`, `"sell"`, `S.alternate(first)` (then the other side, entry after entry), or `"from_setups"` |
+| `size` | a size; `S.notional(amount, lot=1)`, `floor(amount / price / lot) * lot`; or `"from_setups"` |
+| `exit` | `S.bracket(stop=, target=, unit=, on=, hold=)`: a stop and a target at a distance from the price the entry filled at, and a hold, a duration or `S.closes(n)` |
+| `sessions` | `S.sessions(open=, close=, tz=, entries=)`: the weekday sessions, in a time zone, and the window of each in which entries are decided |
+| `sample_every` | the step of the equity samples the metrics read; a minute when left out |
+
+Every number and every duration of a plan takes a value or `mbt.param("name",
+default=...)`, the `mbt.param` of `mbt.run_sweep`. Any other expression is
+refused by name: "a plan field takes a number or mbt.param(...)". Durations are
+an `Interval`, a `datetime.timedelta` or nanoseconds. A unit is `"ticks"` (the
+default), `"bps"` or `"pct"` of the price the distance is counted from, or
+`"price"`.
+
+`S.setups(table)` reads a pandas or polars DataFrame, a pyarrow table or a dict
+of arrays: `ts_ns` (nanoseconds since the epoch or a timestamp column, the rows
+in time order), and when the table has them `side` (`"buy"` / `"sell"`),
+`level` (the reference price of the row; a missing value reads the last print)
+and `size`. The signals of a plan arrive this way: computed by you, on your own
+data, before the run.
+
+`S.sessions(open="09:30", close="16:00", tz="America/New_York")` is set
+against the span of the market when the plan runs: the open and the close of
+each weekday, in UTC, a close at or before the open being the next day's. A
+session that holds no event of the market (a holiday) is dropped. The time zone
+is read by Python's `zoneinfo`; on Windows, `pip install tzdata` brings the
+time zones.
+
+### How a plan runs
+
+- **Decisions.** `every` decides at its instants inside the entry windows
+  (`[open + from, close - until]`, or the whole market without sessions); on
+  prints, at the first print the strategy sees (its instant plus `latency.feed`)
+  at or after the instant, when that print comes before the end of the window.
+  The next instant is the first one strictly after the decision; a window over
+  without a print moves on to the next one. A setup row decides at its instant
+  when it lies inside a window. A decision at or before the last instant of the
+  market is made, none after it.
+- **Arrival.** An entry reaches the venue `latency.entry` after its decision. The
+  plan sends nothing else: no cancellation, no replacement. Expiries and exits
+  are held by the venue, so `latency.cancel` never comes into play.
+- **Busy.** With an `exit`, a decision is skipped while the strategy knows of a
+  live order or an open position, as the answers of the venue reach it
+  (`latency.response`): one position at a time. Without an `exit`, the plan is
+  a calendar and every decision sends its order.
+- **Reference.** The levels of an entry are set from the setup's `level`, or
+  from the last print the strategy has seen at the decision (a print with a
+  finite price above zero and a size above zero, stamped at or before the
+  decision minus `latency.feed`). A decision without one is skipped.
+- **Levels.** A buy stop at the reference plus `offset`, a sell stop at it minus
+  `offset`, the trigger put on the tick grid away from the market; a limit
+  through the market, a buy at the reference plus `offset`, a sell at it minus
+  `offset`, on its passive side; a stop-limit's limit `limit_offset` past its
+  trigger. In `"bps"` and `"pct"`, a share of the reference. A level that comes
+  out at or below zero sends nothing.
+- **Size.** A notional is read against the entry's own level: a stop's trigger,
+  a limit's price, the mid the strategy sees for a market order. A size of zero
+  sends nothing.
+- **Execution.** Every order goes through the venue's own rules, exactly as one
+  sent by `sim.post` does: a market order (`GTC`) takes the displayed ladder,
+  a limit executes at its arrival or expires, a stop waits at the venue (see
+  [Stop orders](#stop-orders)), and `stop_in_market` says what a stop already
+  in the market at its arrival does. `expire_after` makes a stop `GTD`, until
+  that long after its arrival at the venue.
+- **Exits.** They are a bracket held by the venue (see [Brackets held by the
+  venue](#brackets-held-by-the-venue)), armed when the entry has filled: the
+  stop `stop` below the price it filled at on average for a position bought
+  (above it for one sold), the target `target` above it (below), each put on
+  the grid away from the market, and the hold. The first one set off takes the
+  others off; what the book does not fill of it executes again at the next
+  event. A level set from the entry price that comes out at or below zero is not
+  armed.
+- **Sessions and the end.** A position crosses the sessions: its exits stay
+  armed overnight, and an open beyond the stop sets it off at the session's
+  first print (or first book state, on `"bid_ask"`), executed at the end of that
+  instant. `S.closes(n)` exits at the `n`-th session close strictly after the
+  entry filled. The run ends with the market data: what reaches the venue at or
+  before its last instant is played, nothing after it; a position still open
+  stays in `position` and is marked at the last mid.
+
+### The grid
+
+```python
+res = S.sweep(plan, {"every": [...], "qty": [100, 200]}, config, markets=[market],
+              execution_grid={"latency.entry": [0, Interval.millis(5)],
+                              "prints_update_book": [None, "both_sides"]},
+              max_parallelism=None, keep="metrics")
+```
+
+- `param_grid` is `{name: [values]}` for the `mbt.param` the plan names; a
+  parameter left out takes its default. An axis that no field of the plan reads
+  is refused by name, so that a flat surface always means a parameter that does
+  not matter.
+- `execution_grid` is `{path: [values]}` over the keys of `mbt.sim.Config`,
+  dotted: `"latency.entry"`, `"latency.feed"`, `"latency.response"`,
+  `"prints_update_book"` (`None` is the stored book alone), `"taker_fee_bps"`.
+  Every combination is read before anything runs, and one the simulation cannot
+  honour is refused by name.
+- The order is the one of [Sweeping Execution
+  Parameters](#the-order-the-combinations-come-in): the parameters sorted by
+  name, the last the fastest, the execution axes slower than all of them.
+  Variant `i` runs parameter combination `i % P` under execution combination
+  `i // P`, `P` the number of parameter combinations.
+- The market is loaded once, by you (`markets=[market]`) or from a store
+  (`store=`, `symbol=`, `start=`, `end=`, `by_day=`), and every variant runs on
+  it in the engine, in parallel, the GIL released. `max_parallelism` bounds the
+  threads; every core when left out. The results do not depend on it.
+- `keep="metrics"` (the default) keeps one row of metrics per variant;
+  `keep="fills"` keeps the fills of every variant as well.
+- `engine=` says how the variants run, to the same results. Our fills take
+  nothing out of the stored book, so the book an order meets when it arrives
+  (the state standing then, and the prints since it) is the same for every
+  variant: `engine="direct"` reads the market only at the instants a variant
+  acts, where it decides and where its orders arrive, and reads what it needs
+  there once for every variant. `engine="sim"` runs each variant on the
+  order-level simulation, which plays every event of the market.
+  `engine="auto"`, the default, takes `"direct"` for a plan it computes and
+  `"sim"` for any other, and says which and why in `res.engine` and
+  `res.engine_reason`.
+- `engine="direct"` computes the plans in which no order rests in the book:
+  entries at the market, limits with `tif="IOC"` or `"FOK"`, stops,
+  stop-limits with `after_trigger="ioc"`, with or without an `exit`, over one
+  market whose book holds a whole ladder at each state (`Market.from_arrays`,
+  `Market.from_ladders`, or a store book laid out whole as it loads, see [What
+  comes in through the store](#what-comes-in-through-the-store)), held whole
+  or day by day. A stop or a leg of a bracket waiting at the venue, and the
+  rest of a leg waiting for the next event, are handed the first market event
+  that reaches them, found without reading the events in between; they execute
+  there as the simulation executes them. A stop-limit that rests once set off
+  (`after_trigger="rest"`) joins the queue of the book, and runs on the
+  simulation.
+- A market held day by day (`by_day=True`, or `"auto"` over a range longer
+  than a day) is swept a day at a time for every variant together: each day is
+  read from the store once, prepared while the variants play the day before,
+  and let go once every variant is past it, so that a few days are held
+  whatever the span. A position, a stop still armed, a leg waiting for its
+  trigger, an exit at a later close go on from one day to the next with the
+  variant; what happens at night (an expiry, an exit at a time, a decision)
+  is played at its instant against the last state and the last prints of the
+  day before, as the simulation plays it. Each variant gives the bits of the
+  same sweep over the market held whole, under either engine. Under
+  `engine="sim"`, the variants run in lots of `max_parallelism`, each lot
+  reading every day once for all of its variants. The sessions of a plan
+  (`S.sessions`) are set against the days before the sweep: the prints of
+  each day, and its book for a session no print falls in.
+
+### What comes out
+
+| | |
+|---|---|
+| `res.to_df(backend=)` | One row per variant, in order: `variant`, `param_<name>`, `exec_<path>`, then the metrics below |
+| `res.to_arrow()` | The same table as a `pyarrow.RecordBatch`, handed over without a copy |
+| `res.fills_df(i)` | The fills of variant `i`: the ones kept (`keep="fills"`), or those of the variant run again |
+| `res.run(i)` | Variant `i` run again, alone: the whole `SimResult` of `mbt.sim.run` (orders, fills, journal, equity, markouts) |
+| `res.params(i)`, `res.config_of(i)` | The parameters and the `Config` variant `i` ran with |
+| `res.engine`, `res.engine_reason` | How the variants ran (`"direct"` or `"sim"`), and why |
+
+| Metric | |
+|---|---|
+| `orders` | Every order: the entries and the legs of their brackets |
+| `entries` | Entries sent |
+| `entries_filled` | Entries that filled, whole or in part |
+| `entries_expired`, `entries_rejected` | Entries that expired, or were refused at their arrival, with nothing filled |
+| `entries_skipped_busy` | Decisions skipped while an entry was live or a position open |
+| `entries_skipped_no_reference` | Decisions skipped for want of a reference price (or of a mid, for a notional at market) |
+| `entries_skipped_level`, `entries_skipped_size` | Decisions skipped for a level at or below zero, or a size of zero |
+| `exits_stop`, `exits_target`, `exits_time` | Exits that filled, by kind |
+| `exits_carried` | Exits whose rest the book could not fill at once and that executed again at a later event; one leg counts once, however many events it took |
+| `fills`, `volume`, `notional`, `fees` | Summed in the order of the fills |
+| `final_equity`, `pnl` | The equity at the end, and less the initial cash |
+| `max_drawdown` | The deepest fall of the equity from its running peak, in cash: zero or less |
+| `round_trips` | Spans of the position from flat back to flat; a fill through zero closes one and opens the next |
+| `win_rate`, `avg_round_trip_pnl` | The share of round trips that earned more than zero, and their mean, fees included; `NaN` without one |
+| `exposure` | The share of equity samples taken with a position open |
+| `position` | The position at the end |
+
+The equity is the cash of the venue plus the position at the mid of the last
+stored state that had one, as `res.equity_df()` of a run marks it, read at
+`start + k * sample_every` and at the end.
+
+### What refuses, and why
+
+Refused by name, before anything runs:
+
+- **in the plan**: a field that is not a number, a duration or `mbt.param`; a
+  parameter with no default and no value in the grid; a period, a size, an
+  amount or a lot that is not above zero; a distance, an offset, an expiry or a
+  hold below zero; a stop and a target both at the entry price; an exit with
+  neither a stop, a target nor a hold; a distance in ticks on a market without
+  a tick; `anchor="session"` or `S.closes(n)` without sessions; a side or a size
+  `"from_setups"` without that column; setups out of time order, columns of
+  different lengths, a level that is not a price above zero; sessions out of
+  time order or overlapping, an entry window outside the session; a word that
+  is not one of the plan (`on=`, `unit=`, `tif=`, `after_trigger=`), with the
+  words it takes;
+- **in the sweep**: an axis no field reads, an axis without a value, a `bool` as
+  a value, an execution path that names no key of `mbt.sim.Config`, a value the
+  key does not take, a `keep` other than `"metrics"` or `"fills"`, an `engine`
+  other than `"auto"`, `"sim"` or `"direct"`;
+- **with `engine="direct"`**: a plan it does not compute, with what sets it
+  outside (a stop-limit entry that rests once set off, a market stored order
+  by order or whose book is replayed from its changes, a `latency.feed` of a
+  day or more over a market held day by day) and the words `engine="sim" runs
+  it on the order-level simulation, with the same results where both apply`.
+  Under `engine="auto"` the same plan runs on the simulation, and
+  `res.engine_reason` says why. A queue rule the market cannot serve is
+  refused with the simulation's own words, whichever engine runs;
+- **the market**: more than one (a plan runs on one symbol: one sweep per
+  symbol).
+
+### What it costs
+
+Under `engine="sim"`, every variant plays every event of the market on its own
+copy of the venue, so its cost is the cost of the run of the market, whatever
+the plan does. Under `engine="direct"`, a variant costs what it reads: a few
+bisections on the stamps of the market at each decision and at each arrival,
+a search down a tree of the market's prices for each order the venue sets off,
+and its equity samples. The first direct sweep over a market reads its prints
+once to build what every variant reads, and the first that sets orders off
+reads its prints and its states once more for the trees (the stored book is
+read where it lies); a second sweep over the same market, or over a clone of
+it, builds nothing.
+
+On a synthetic stock day (71,372 prints, 372,050 top-of-book quotes), the
+periodic plan at the top of this chapter swept over 100 variants (ten
+intervals, five sizes, both first sides), the market built once, the whole
+call of `S.sweep` timed:
+
+| | 100 variants | 10,000 variants |
+|---|---|---|
+| `engine="direct"` | 1.5 ms | 16 ms (20 threads), 58 ms (1 thread) |
+| `engine="sim"`, 20 threads | 0.09 s | |
+| `engine="sim"`, 1 thread | 0.90 s | |
+
+On the same day, a plan with stops and a bracket: thirteen setups a day,
+every thirty minutes from a minute after the open, each a stop entry `off`
+ticks past the last print seen that expires `expiry` after its arrival, the
+position held by a stop `sl` ticks and a target `tp` ticks from its entry
+price and closed at the session's close (`S.closes(1)`), one position at a
+time, sides in turn. Swept over `off` (ten values), `expiry` (five), `sl`
+(two, then five), `tp` (one, then five), the first side and four sizes:
+
+| | 100 variants | 10,000 variants |
+|---|---|---|
+| `engine="direct"` | 1.1 ms | 8.4 ms (20 threads), 72 ms (1 thread) |
+| `engine="sim"`, 20 threads | 0.09 s | 9.6 s |
+| `engine="sim"`, 1 thread | 0.90 s | |
+
+Both give the same fills, to the bit. The same strategy written as a Python
+function for `mbt.sim.run` gives them in 0.95 s for the 100 variants one after
+the other, and in 0.22 s on fourteen processes, each building its own market.
+Measured on an i5-13600KF (14 cores, 20 threads), with a release build of the
+wheel.
+
+Over twenty days of the same profile read from a store and held day by day,
+the plan with stops and a bracket swept over 1,000 variants (`off`, `expiry`,
+`sl`, `tp`), the whole call of `S.sweep` (the market and its sessions read from
+the store, every day read once for all the variants) takes 0.26 s on 20
+threads and 0.45 s on one, where reading the twenty days alone, one after the
+other, takes 0.21 s. `engine="sim"` takes 51 s over the same days. Both give
+the bits of the same sweep over the twenty days held whole.
 
 ---
 
@@ -4383,6 +5055,62 @@ pandas' `sort_values` puts it last. With arrays from `mbt.sweep_columns`, use
 `np.nanargmax`: `np.argmax` returns the first NaN. In polars a NaN sorts above
 every number: filter it out (`pl.col("sharpe").is_not_nan()`) before a
 descending sort.
+
+---
+
+## Limitations
+
+What a backtest from this engine does not tell you, and the setting that narrows
+each gap where one exists. A run that sets none of them is the optimistic run:
+the defaults are the simple conventions, and every item below names what to turn
+on to replace a convention with a calculation.
+
+**A bar carries four prices, not the path between them.** On bars, a level order
+(limit, stop, take-profit) is resolved against the bar's high and low. When a
+stop and a target both sit inside one bar, the stop wins. Two ways to ask the
+prints instead: `fill_model={"fill_resolution": "ticks"}` settles level orders on
+the trades inside each bar (it needs a stored tape, see
+[Backtesting on the Tape](#backtesting-on-the-tape)), and `accuracy=True`
+simulates on 1-minute bars.
+
+**A passive order fills when the price reaches its level.** The default is
+`passive_fill="touch"`: a limit order books as soon as the bar reaches the
+level, with no queue in front of it. That is optimistic, because a trade at the
+level proves volume traded there, not that the orders ahead of yours were served.
+`passive_fill="traverse"` requires the price to trade through the level, and
+`fill_model.queue` replaces the convention with a volume calculation (see
+[Queue Model](#queue-model)). `result.fill_fragility` counts the maker fills that
+rest on the convention, so the size of the gap is in the result.
+
+**An order fills whole, at once.** Nothing caps the size an order takes from a
+bar by default. `fill_model.max_participation_rate` limits each fill to a fraction
+of the volume the bar (or, on a tape, each trade) offers and spreads the rest over
+the following ones.
+
+**The round trip is instant.** `signal_delay=0` fills at the close of the signal
+bar, which is the market-on-close convention; on fine bars it assumes an
+infinitely fast round trip. Set `signal_delay` deliberately, and on a tape use
+`execution.latency` to put the round trip back in time (see [Latency](#latency)).
+
+**The market does not react to your orders.** A backtest replays recorded
+history. The only price impact in a run is the slippage model you choose
+(`Slippage.fixed_bps`, `volume_impact`, `spread_based`), a formula and not the
+market's actual response to a large order.
+
+**The queue and adverse selection are assumptions, not measurements.** Without an
+order-by-order market (`ingest_mbo`), the position in the queue is estimated from
+the sizes shown at each level, and `assumed_queue`, `cancel_ahead_rate` and the
+named models in [Execution Models](#execution-models) are hypotheses that make the
+P&L. Sweep them and publish the result at each value instead of choosing one. The
+exact queue (`"fifo"`) exists only on a market stored order by order.
+
+**Depth and tape exist only where you stored them.** The book columns are null
+where the book says nothing, a run that reads a book you did not store is refused
+by name, and the trade clock runs one symbol at a time, a day at a time in
+practice (see [What holds for every step](#what-holds-for-every-step)).
+
+The result carries the full execution config, so any figure can be read together
+with the assumptions behind it.
 
 ---
 

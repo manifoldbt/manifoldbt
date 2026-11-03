@@ -5,7 +5,7 @@
 
 [project]
 name = "manifoldbt"
-version = "0.31.1"
+version = "0.32.0"
 description = "Rust-powered backtesting engine for quantitative research"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -20,6 +20,7 @@ classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Financial and Insurance Industry",
     "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
     "License :: Other/Proprietary License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",

@@ -250,7 +250,7 @@ def test_the_tables_of_a_run():
     orders = res.orders_df(backend="pandas")
     assert list(orders.columns) == [
         "order_id", "symbol", "side", "price", "qty", "filled", "avg_price", "status",
-        "tif", "sent_at",
+        "tif", "trigger_price", "trigger_on", "parent", "role", "sent_at",
     ]
     assert orders["status"].tolist() == ["filled", "filled"]
     assert pd.isna(orders["price"].iloc[1])

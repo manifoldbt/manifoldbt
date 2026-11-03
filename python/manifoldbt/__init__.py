@@ -245,6 +245,23 @@ def _require_pro(feature: str) -> None:
     )
 
 
+_GPU_DEVICES = ("cuda", "gpu")
+
+
+def _device_requests_gpu(device) -> bool:
+    """Whether ``device`` names the GPU, whatever the spelling.
+
+    The engine understands ``cpu``, ``cuda`` and ``gpu``; anything else it does
+    not recognise lands on the CPU. Reading the request from an exact match on
+    the string therefore let ``cuda:0`` (or a stray space, or ``CUDA``) past the
+    gate while the run still happened on the CPU.
+    """
+    if not isinstance(device, str):
+        return False
+    name = device.strip().lower().split(":", 1)[0]
+    return name in _GPU_DEVICES
+
+
 def _require_grant_for_gpu(device, feature: str) -> None:
     """Gate GPU acceleration (``device="cuda"``/``"gpu"``) behind its tier.
 
@@ -256,7 +273,7 @@ def _require_grant_for_gpu(device, feature: str) -> None:
     rather than read from the tier: a Pro licence may carry the GPU grant on
     its own.
     """
-    if isinstance(device, str) and device.lower() in ("cuda", "gpu"):
+    if _device_requests_gpu(device):
         if _grant_couvre("gpu_sweep"):
             return
         raise LicenseError(
@@ -1119,7 +1136,9 @@ def ingest(
     option, an approximation for a single-stock one.
     """
     _PRO_PROVIDERS = {"databento", "massive"}
-    if provider in _PRO_PROVIDERS:
+    # Span, not exact match: "Databento" used to skip the gate and reach the
+    # native registry, which then rejected it for an unrelated reason.
+    if isinstance(provider, str) and provider.strip().lower() in _PRO_PROVIDERS:
         _require_pro(f"Data connector: {provider}")
 
     # Build list of (symbol, symbol_id) pairs.
@@ -3041,6 +3060,7 @@ def run_stability(
     Returns:
         Dict with ``stability_score``, ``metric_values``, ``mean_metric``, ``std_metric``.
     """
+    _require_pro("Parameter stability analysis")
     _require_pro_over_combos(len(stability_config.get("values", [])), "Parameter stability analysis")
     _validate_swept_params(
         strategy,

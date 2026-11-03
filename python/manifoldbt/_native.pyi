@@ -222,7 +222,57 @@ class Market:
         book state (every book read is empty and a market order expires); a
         level off the tick grid (``Book.levels()`` shows it as written, while an
         order priced there is put on the grid, on its passive side, and does not
-        queue behind that level)."""
+        queue behind that level).
+
+        Several states at one instant are accepted and the last one stands:
+        the book has one state per instant. Several prints at one instant are
+        kept in the order given."""
+        ...
+    @staticmethod
+    def from_arrays(
+        name: str,
+        tick_size: float,
+        *,
+        quotes: Optional[Any] = None,
+        trades: Optional[Any] = None,
+    ) -> Market:
+        """A market from columns, without a Python object per event.
+
+        ``quotes`` is the top of book, a book one level deep: ``ts_ns``,
+        ``bid_px``, ``bid_qty``, ``ask_px``, ``ask_qty``. ``trades`` is the
+        tape: ``ts_ns``, ``price``, ``qty`` and, when the tape has one,
+        ``aggressor``. Each is a pandas or polars DataFrame, a pyarrow Table
+        or RecordBatch, or a dict of numpy or pyarrow arrays; other columns
+        are ignored. Either may be left out (an empty book, an empty tape).
+
+        ``ts_ns`` is integer nanoseconds since the epoch, UTC, or a timestamp
+        column of any unit; ``timestamp`` is read when there is no ``ts_ns``
+        (a pandas index of that name too). Prices and sizes are any numeric
+        type. ``aggressor`` is ``"buy"`` / ``"sell"`` or a number, ``1`` for a
+        buy, ``-1`` or ``2`` for a sell; a null, a NaN or an empty string is
+        not known. A ``0`` is refused rather than guessed (a column of ``1``
+        for a buy and ``0`` for a sell would read its sells as unknown).
+
+        Rows come in time order, several at one instant allowed:
+
+        * of several quotes at one instant the last one stands, the book once
+          every update stamped there is in;
+        * several prints at one instant are kept in the order given; at an
+          instant holding both, the venue applies the prints first, then the
+          book;
+        * a quote with a side missing (a price that is zero, negative, NaN or
+          null) or crossed (bid above ask) shows an empty book until the next
+          quote; a locked quote (bid equal to ask) stands;
+        * a print whose aggressor is not known takes the tick rule: above the
+          previous price a buy, below it a sell, at the same price the side of
+          the last price move, a buy before the first move.
+
+        Refused by name: rows out of time order, a column missing, of another
+        length or of a type it cannot read (a float ``ts_ns``, a boolean
+        ``aggressor``), a null ``ts_ns``, a size below zero on a valid quote,
+        a print whose price or size is not finite and positive, and a
+        ``tick_size`` as in :meth:`from_ladders`. The market is the one
+        :meth:`from_ladders` builds from the same quotes and prints."""
         ...
     @property
     def name(self) -> str: ...
@@ -272,6 +322,19 @@ class Order:
     replace_pending: bool
     sent_ns: int
     queue_ahead: Optional[float]
+    # A stop order's trigger, what sets it off ("last" or "bid_ask"), what a
+    # stop-limit does once set off ("rest" or "ioc"), and the venue instant it
+    # was set off; None for any other order (and before it is set off). A
+    # bracket's stop and target carry their level and legs_on; every leg,
+    # the exit at a time included, the instant it was set off.
+    trigger_price: Optional[float]
+    trigger_on: Optional[str]
+    after_trigger: Optional[str]
+    triggered_at: Optional[int]
+    # A leg of a bracket: the id of its parent, and what it does ("stop",
+    # "target" or "time"); None for any other order.
+    parent: Optional[int]
+    role: Optional[str]
     remaining: float
 
 class Wakeup:
@@ -299,14 +362,73 @@ class Sim:
     def cash(self) -> float: ...
     def post(
         self, symbol: Union[str, int], side: str, price: Optional[float], qty: float,
-        tif: str = "GTC", expire_at: Optional[int] = None,
+        tif: str = "GTC", expire_at: Optional[int] = None, *,
+        trigger: Optional[float] = None, trigger_on: str = "last",
+        after_trigger: str = "rest",
     ) -> int:
         """Send an order and get its id. ``side``, ``tif`` and the symbol are
         read without regard to case. ``price=None`` is a market order; a price
         is put on the tick grid first. A GTD order whose ``expire_at`` is at or
         before its arrival expires without executing. A post after the data is
         over is accepted: the order reaches the venue only if the clock moves
-        again, and stays ``in_flight`` otherwise."""
+        again, and stays ``in_flight`` otherwise.
+
+        With ``trigger``, a stop order. It reaches the venue as any order and
+        waits there, ``armed``, out of the book, until the market reaches the
+        trigger: ``trigger_on="last"``, a print at or through it, whichever
+        side crossed; ``"bid_ask"``, a stored state whose best ask (a buy
+        stop) or best bid (a sell stop) is at or through it, an empty side
+        reaching nothing. Set off at an instant, it executes at the end of it,
+        after every market event stamped there and before the actions arriving
+        then: a market order of the same ``tif`` when ``price`` is None, a
+        limit order at ``price`` otherwise, which rests when it does not
+        execute (``after_trigger="rest"``) or expires (``"ioc"``). ``tif`` is
+        its life while it waits, ``"GTC"`` or ``"GTD"``. The trigger is put on
+        the tick grid away from the market (a buy stop's up, a sell stop's
+        down). A stop whose trigger the market has already reached when it
+        arrives is set off at once, or refused under
+        ``Config(stop_in_market="reject")``. Cancelled as any order; a stop
+        waiting for its trigger is not replaced."""
+        ...
+    def post_bracket(
+        self, symbol: Union[str, int], side: str, qty: float, *,
+        price: Optional[float] = None, trigger: Optional[float] = None,
+        trigger_on: str = "last", tif: str = "GTC", expire_at: Optional[int] = None,
+        stop: Optional[float] = None, target: Optional[float] = None,
+        legs_on: str = "last", exit_after: Any = None, exit_at: Any = None,
+    ) -> int:
+        """Send the parent of a bracket, and the exits the venue holds for the
+        position it opens; get the parent's id.
+
+        The parent is an order as ``post`` sends it: a market order
+        (``price=None``), a limit at ``price``, or a stop (``trigger``,
+        ``trigger_on``; with ``price``, a stop-limit). When it ends having
+        filled something (filled whole, or expired or cancelled after a fill
+        in part), the venue arms its legs at that instant, once the market of
+        the instant is in, with no latency: each an order of the other side
+        for the size the parent filled. ``stop`` is a stop-market, set off at
+        or through it; ``target`` a market-if-touched order, set off at or
+        beyond it, the other way; both by ``legs_on`` (``"last"``: a print;
+        ``"bid_ask"``: the stored best bid of a leg that sells, the best ask
+        of one that buys). ``exit_after`` (a duration) or ``exit_at`` (a venue
+        instant in nanoseconds, a list of them, or ``(instants, n)``: the n-th
+        of them strictly after the arming) is an exit at a time, a market
+        order. A stop or a target the market already reaches when the legs
+        are armed is set off at once. A parent that ends with nothing filled
+        arms no leg.
+
+        The first leg set off takes the others off at the same instant
+        (``cancelled``); at one instant the market comes first, so a stop or
+        a target set off then goes before the exit due then. A leg executes
+        at the end of its instant as a market order, taker fills; what the
+        book does not fill of it waits for the venue's next event, a print or
+        a book state, and executes again at the end of that instant
+        (``carried`` in the journal), until filled. The legs are orders of
+        their own (``parent``, ``role``), in ``sim.orders()`` once the venue's
+        answer about them arrives; cancelling one takes that leg alone off,
+        and a leg is not replaced. For a position bought the stop must be
+        below the target, above it for one sold. Each level is put on the
+        tick grid away from the market."""
         ...
     def cancel(self, id: int) -> None:
         """Send a cancellation. A cancellation that reaches the venue before its
@@ -345,6 +467,53 @@ class SimResult:
     ) -> Tuple[int, int, int, int, int, float, float, float, Optional[float]]: ...
 
 def sim_run(strategy: Any, markets: List[Market], config_json: str) -> SimResult: ...
+def sim_run_plan(
+    plan_json: str,
+    config_json: str,
+    markets: List[Market],
+    values_json: str = "{}",
+    full: bool = True,
+) -> SimResult:
+    """Run an order plan (``mbt.sim.Plan``, serialised) over its one market,
+    its parameters at their defaults or at ``values_json`` (``{name:
+    value}``), without calling back into Python. ``full`` keeps the record of
+    ``sim_run`` (the journal, the equity at each move of the clock, the
+    markouts); off, the orders and the fills."""
+    ...
+
+class PlanSweepResult:
+    """One row of metrics per variant of a sweep of an order plan, in the
+    order of the enumeration, and what it takes to run any variant again."""
+
+    #: ``"direct"`` or ``"sim"``.
+    engine: str
+    engine_reason: str
+    def __len__(self) -> int: ...
+    def metrics_arrow(self) -> pa.RecordBatch: ...
+    def fills(self, i: int) -> Optional[SimResult]: ...
+    def config_json(self, i: int) -> str: ...
+    def params_json(self, i: int) -> str: ...
+    def run(self, i: int, full: bool = True) -> SimResult: ...
+
+def sim_sweep(
+    plan_json: str,
+    param_grid_json: str,
+    config_json: str,
+    markets: List[Market],
+    max_parallelism: int = 0,
+    exec_grid_json: str = "{}",
+    keep: str = "metrics",
+    engine: str = "auto",
+) -> PlanSweepResult:
+    """Every variant of an order plan over its one market, in parallel, the
+    GIL released: the parameter grid (``{name: [values]}``, names sorted, the
+    last the fastest) crossed with the execution grid (``{path: [values]}``
+    over the keys of ``mbt.sim.Config``, the slowest axes). ``keep`` is
+    ``"metrics"`` or ``"fills"``; ``engine`` ``"auto"``, ``"sim"`` or
+    ``"direct"``, the way it took in ``engine`` and why in
+    ``engine_reason``. A market held day by day is read a day at a time for
+    every variant, to the bits of the market held whole."""
+    ...
 def run_quotes(
     strategy_json: str,
     config_json: str,

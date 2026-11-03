@@ -1,0 +1,57 @@
+Manifold-BT Engine License
+
+Copyright (c) ManifoldBT. All rights reserved.
+
+This file covers the compiled Manifold-BT engine, that is the
+manifoldbt._native extension module distributed inside the manifoldbt wheels
+published on PyPI (the "Engine"). The Python package, examples, tests and
+benchmarks in this repository are not covered by this file: they are licensed
+under Apache 2.0, see LICENSE.
+
+The Engine is proprietary software. Its source code is not published. It is
+licensed, not sold.
+
+1. Grant. Subject to the conditions below, ManifoldBT (the "Licensor") grants
+   you a free, worldwide, non-exclusive, non-transferable licence to install
+   and run the Engine on any number of machines, for any purpose, including
+   commercial use within your own organisation.
+
+2. Copies. You may copy the Engine, unmodified and as published by the
+   Licensor, and pass those copies on free of charge, for example in an
+   internal package mirror or a container image, provided this file goes with
+   them.
+
+3. Restrictions. You may not:
+
+   (a) sell, rent, lease or sublicense the Engine, or provide to third
+       parties, for a fee or other consideration (including hosting,
+       consulting or support fees), a product or service whose value derives
+       entirely or substantially from the functionality of the Engine;
+   (b) modify, decompile, disassemble or otherwise reverse engineer the
+       Engine, except to the extent that applicable law expressly permits it
+       notwithstanding this restriction;
+   (c) remove, disable or circumvent the licence verification of the Engine,
+       or use features of a paid edition without a valid licence for it;
+   (d) remove or alter any notice of ownership or licence in the Engine or in
+       this file.
+
+4. Paid editions. Features of the paid editions of Manifold-BT require a
+   licence key and are also governed by the Terms of Service at
+   https://www.manifoldbt.com/terms.
+
+5. Termination. This licence ends automatically if you breach any of its
+   conditions. On termination you must stop using the Engine and delete your
+   copies of it.
+
+6. No warranty. THE ENGINE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+   EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT.
+
+7. Limitation of liability. TO THE EXTENT PERMITTED BY APPLICABLE LAW, IN NO
+   EVENT SHALL THE LICENSOR BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+   FROM, OUT OF OR IN CONNECTION WITH THE ENGINE OR ITS USE, INCLUDING ANY
+   TRADING OR INVESTMENT DECISION MADE ON ITS OUTPUT.
+
+Versions of the Engine published before this file took effect remain
+available under the terms they were published with.

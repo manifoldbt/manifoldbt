@@ -52,9 +52,10 @@ the command that runs them. Tests that no command reaches will rot unnoticed.
 
 ## License
 
-The project is published under Apache 2.0 with the Commons Clause.
-**Contributions are accepted under Apache 2.0 alone, without the Commons
-Clause.**
+The code in this repository is published under Apache 2.0 (`LICENSE`). The
+compiled engine inside the PyPI wheels is under separate terms
+(`LICENSE-ENGINE`); nothing in this repository is covered by them.
+**Contributions are accepted under Apache 2.0.**
 
 By opening a pull request you agree that your contribution is licensed to the
 project under Apache 2.0, including the patent grant in its section 3, and that
