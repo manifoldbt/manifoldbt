@@ -1,8 +1,9 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/manifoldbt/manifoldbt/master/assets/logo.png" width="110" alt="Manifold-BT logo">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/manifoldbt/.github/HEAD/profile/assets/hero-dark.svg">
+    <img alt="Manifold-BT: sweep the grid, read the surface, check every fill. The Sharpe surface of 225 real EMA crossover backtests on BTCUSDT, with its plateau marked." src="https://raw.githubusercontent.com/manifoldbt/.github/HEAD/profile/assets/hero-light.svg" width="800">
+  </picture>
 </p>
-
-<h1 align="center">Manifold-BT</h1>
 
 <p align="center">
   <strong>Python backtesting with a Rust engine. Fast enough to sweep, strict about fills.</strong>
@@ -50,6 +51,17 @@ pip install manifoldbt
 ```
 
 Wheels for Linux (x86_64 and ARM), Windows and macOS on Apple Silicon. No Rust toolchain, no compiler, no account.
+
+## Pick your route
+
+| You want to | Go to | Start with |
+| --- | --- | --- |
+| Run a backtest | [Quick start](#quick-start) | `pip install manifoldbt` |
+| Have an agent write the strategy | [MCP docs](https://www.manifoldbt.com/mcp) | Connect `https://mcp.manifoldbt.com/docs/mcp`, no key and nothing to install |
+| Run the research method with an agent | [quant-research-skill](https://github.com/Jimmy7892/quant-research-skill) | `claude plugin marketplace add Jimmy7892/quant-research-skill` |
+| Read working strategies first | [Examples](#examples) | `python examples/13_stochastic_simulation.py` |
+| Walk through it in the browser | [Notebook](https://www.manifoldbt.com/notebook) | Strategy, sweep, walk-forward, Monte Carlo |
+| Check our numbers | [Performance](#performance) | Fork the repo and press **Run workflow** on [the benchmark](https://github.com/manifoldbt/manifoldbt/actions/workflows/bench-vs-vectorbt.yml) |
 
 ## Quick start
 
