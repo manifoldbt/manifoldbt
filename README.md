@@ -13,7 +13,10 @@
   <img src="https://img.shields.io/badge/python-3.9%E2%80%933.13-3776AB?logo=python&logoColor=white" alt="Python 3.9 to 3.13">
   <a href="https://github.com/manifoldbt/manifoldbt/actions/workflows/ci.yml"><img src="https://github.com/manifoldbt/manifoldbt/actions/workflows/ci.yml/badge.svg?branch=master" alt="Tests against the PyPI wheel"></a>
   <a href="https://github.com/manifoldbt/manifoldbt/actions/workflows/bench-vs-vectorbt.yml"><img src="https://img.shields.io/badge/benchmarks-public%20CI-2ea44f?logo=githubactions&logoColor=white" alt="Benchmarks in public CI"></a>
-  <a href="https://discord.gg/bvU6Wjc72d"><img src="https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
+</p>
+
+<p align="center">
+  <a href="https://discord.gg/bvU6Wjc72d"><img src="https://img.shields.io/badge/Discord-join%20the%20community-5865F2?style=for-the-badge&logo=discord&logoColor=white" height="36" alt="Join the Discord community"></a>
 </p>
 
 <p align="center">
