@@ -238,8 +238,17 @@ class Market:
     ) -> Market:
         """A market from columns, without a Python object per event.
 
-        ``quotes`` is the top of book, a book one level deep: ``ts_ns``,
-        ``bid_px``, ``bid_qty``, ``ask_px``, ``ask_qty``. ``trades`` is the
+        ``quotes`` is the book: ``ts_ns``, ``bid_px``, ``bid_qty``,
+        ``ask_px``, ``ask_qty``. A side column of numbers is the top of book.
+        A book several levels deep lists each side best first, bids falling
+        and asks rising, in one of three shapes: list columns (a row the
+        levels of its side; a fixed-size list, an Arrow or polars list, a
+        pandas column of lists), a 2-D numpy array in a dict (a row of levels
+        a row), or one column a level, ``bid_px_0``, ``bid_qty_0``,
+        ``bid_px_1``, ... (or ``bid_px_00``, ...), read when there is no
+        ``bid_px``. A side ends at its first level without a price (NaN,
+        null, zero): pad a shallower row so. The book keeps as many levels as
+        the deepest side. ``trades`` is the
         tape: ``ts_ns``, ``price``, ``qty`` and, when the tape has one,
         ``aggressor``. Each is a pandas or polars DataFrame, a pyarrow Table
         or RecordBatch, or a dict of numpy or pyarrow arrays; other columns
@@ -260,9 +269,10 @@ class Market:
         * several prints at one instant are kept in the order given; at an
           instant holding both, the venue applies the prints first, then the
           book;
-        * a quote with a side missing (a price that is zero, negative, NaN or
-          null) or crossed (bid above ask) shows an empty book until the next
-          quote; a locked quote (bid equal to ask) stands;
+        * a quote with a side missing (a best price that is zero, negative,
+          NaN or null) or crossed (best bid above best ask) shows an empty
+          book until the next quote; a locked quote (bid equal to ask)
+          stands;
         * a print whose aggressor is not known takes the tick rule: above the
           previous price a buy, below it a sell, at the same price the side of
           the last price move, a buy before the first move.
@@ -270,7 +280,9 @@ class Market:
         Refused by name: rows out of time order, a column missing, of another
         length or of a type it cannot read (a float ``ts_ns``, a boolean
         ``aggressor``), a null ``ts_ns``, a size below zero on a valid quote,
-        a print whose price or size is not finite and positive, and a
+        a print whose price or size is not finite and positive, a level of
+        a deep side priced after the end of its side, out of the side's
+        order, or whose price comes without its size, and a
         ``tick_size`` as in :meth:`from_ladders`. The market is the one
         :meth:`from_ladders` builds from the same quotes and prints."""
         ...

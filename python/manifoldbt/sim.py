@@ -77,6 +77,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -184,11 +185,21 @@ def _instant_ns(what: str, raw: Any) -> int:
 
 
 # The columns `Market.from_arrays` reads from each table; any other is left
-# alone, and never converted.
+# alone, and never converted. A book several levels deep may also come one
+# column a level (`bid_px_0`, `bid_px_00`, ...).
 _ARRAY_COLUMNS = {
     "quotes": ("ts_ns", "timestamp", "bid_px", "bid_qty", "ask_px", "ask_qty"),
     "trades": ("ts_ns", "timestamp", "price", "qty", "aggressor"),
 }
+_LEVEL_COLUMN = re.compile(r"(bid|ask)_(px|qty)_\d+")
+
+
+def _read(what: str, name: Any) -> bool:
+    """Does ``Market.from_arrays`` read column ``name`` of ``what``?"""
+    name = str(name)
+    if name in _ARRAY_COLUMNS[what]:
+        return True
+    return what == "quotes" and _LEVEL_COLUMN.fullmatch(name) is not None
 
 
 def _arrow_array(what: str, name: str, raw: Any) -> Any:
@@ -202,6 +213,12 @@ def _arrow_array(what: str, name: str, raw: Any) -> Any:
         return raw
     lib = type(raw).__module__.split(".")[0]
     try:
+        # A 2-D array is a book several levels deep: a row of levels a row.
+        if lib == "numpy" and getattr(raw, "ndim", 1) == 2:
+            import numpy as np
+
+            flat = np.ascontiguousarray(raw).reshape(-1)
+            return pa.FixedSizeListArray.from_arrays(pa.array(flat), raw.shape[1])
         if lib == "polars":
             return _arrow_array(what, name, raw.to_arrow())
         if lib == "pandas":
@@ -221,27 +238,26 @@ def _arrow_columns(obj: Any, what: str) -> Any:
     stream."""
     import pyarrow as pa
 
-    wanted = _ARRAY_COLUMNS[what]
     if isinstance(obj, pa.RecordBatch):
         return obj
     lib = type(obj).__module__.split(".")[0]
     if isinstance(obj, pa.Table):
-        cols = [(n, obj.column(n)) for n in obj.column_names if n in wanted]
+        cols = [(n, obj.column(n)) for n in obj.column_names if _read(what, n)]
     elif isinstance(obj, dict):
-        cols = [(str(k), v) for k, v in obj.items() if str(k) in wanted]
+        cols = [(str(k), v) for k, v in obj.items() if _read(what, k)]
     elif lib == "polars" and hasattr(obj, "to_arrow"):
-        present = [n for n in obj.columns if n in wanted]
+        present = [n for n in obj.columns if _read(what, n)]
         table = obj.select(present).to_arrow()
         cols = [(n, table.column(n)) for n in table.column_names]
     elif lib == "pandas" and hasattr(obj, "items"):
-        cols = [(str(k), v) for k, v in obj.items() if str(k) in wanted]
+        cols = [(str(k), v) for k, v in obj.items() if _read(what, k)]
         index = getattr(obj.index, "name", None)
         has_ts = any(n in ("ts_ns", "timestamp") for n, _ in cols)
         if index in ("ts_ns", "timestamp") and not has_ts:
             cols.insert(0, (index, obj.index))
     elif hasattr(obj, "__arrow_c_stream__"):
         table = pa.table(obj)
-        cols = [(n, table.column(n)) for n in table.column_names if n in wanted]
+        cols = [(n, table.column(n)) for n in table.column_names if _read(what, n)]
     else:
         raise TypeError(
             f"{what} takes a pandas or polars DataFrame, a pyarrow Table or "

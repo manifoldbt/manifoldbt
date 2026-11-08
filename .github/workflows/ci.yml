@@ -122,13 +122,17 @@ jobs:
 
       # A freshly published version takes a moment to become installable: the
       # upload succeeds before the index serves it. Without this wait, the run
-      # immediately after a release fails on a package that does exist.
+      # immediately after a release fails on a package that does exist. The
+      # probe is pip itself, on the index pip installs from: the JSON API
+      # answers first, and a wait on it let the v0.32.1 run reach `pip install`
+      # while the index pip reads still listed 0.32.0 as the latest.
       - name: Wait for PyPI to serve it
         run: |
           set -e
           VERSION="${{ steps.version.outputs.version }}"
           for attempt in $(seq 1 30); do
-            if curl -sf "https://pypi.org/pypi/manifoldbt/${VERSION}/json" > /dev/null; then
+            if python -m pip download --quiet --no-deps --no-cache-dir --only-binary=:all: \
+                 -d "$RUNNER_TEMP/pypi-probe" "manifoldbt==${VERSION}" 2> /dev/null; then
               echo "manifoldbt ${VERSION} is being served"
               exit 0
             fi
@@ -173,6 +177,19 @@ jobs:
           set -e
           VERSION="$(grep -m1 '^version = ' pyproject.toml | sed 's/.*"\(.*\)".*/\1/')"
           python -m pip install --upgrade pip
+          # The same wait as the tests job: right after a release the index pip
+          # reads can lag the upload by a minute or two.
+          for attempt in $(seq 1 30); do
+            if python -m pip download --quiet --no-deps --no-cache-dir --only-binary=:all: \
+                 -d "$RUNNER_TEMP/pypi-probe" "manifoldbt==${VERSION}" 2> /dev/null; then
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              echo "::error::manifoldbt ${VERSION} never appeared on PyPI"; exit 1
+            fi
+            echo "attempt ${attempt}: not on the index yet, waiting 20s"
+            sleep 20
+          done
           python -m pip install "manifoldbt==${VERSION}"
 
       # Only the files that need neither the shared store (not in this

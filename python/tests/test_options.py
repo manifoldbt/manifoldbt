@@ -363,3 +363,151 @@ def test_per_leg_sizing_leaves_the_other_leg_flat(tmp_path):
     assert (trades.symbol_id == OPTION_ID).all(), (
         f"only the call leg may trade, got:\n{trades}"
     )
+
+
+# ── Event contracts: a share settled by its outcome ─────────────────────────
+
+SHARE_ID = 7
+# Bar 30 of the 40-bar daily series above.
+RESOLVED_AT = "2020-01-31T00:00:00Z"
+
+
+def _share_store(tmp_path, price=0.6, n_bars=N_BARS):
+    return bt.import_dataframe(
+        _daily([price] * n_bars),
+        symbol="WILL-X-HAPPEN/YES",
+        symbol_id=SHARE_ID,
+        interval="1d",
+        data_root=os.path.join(str(tmp_path), "data"),
+        metadata_db=os.path.join(str(tmp_path), "m.sqlite"),
+    )
+
+
+def _share_config(**kwargs):
+    base = dict(universe=[SHARE_ID], initial_capital=100.0, currency="USD")
+    base.update(kwargs)
+    return _config(**base)
+
+
+@pytest.mark.parametrize(
+    "payout, final_equity", [(1.0, 100.4), (0.0, 99.4), (0.5, 99.9)]
+)
+def test_a_share_settles_at_its_payout_set_by_hand(tmp_path, payout, final_equity):
+    store = _share_store(tmp_path)
+    config = _share_config(
+        option_contracts={SHARE_ID: bt.event_contract(RESOLVED_AT, payout=payout)}
+    )
+    result = bt.run(_hold(**{str(SHARE_ID): 1.0}), config, store)
+
+    settlements = result.trades.to_pandas().query("exit_reason == 5")
+    assert len(settlements) == 1
+    assert settlements.iloc[0].fill_price == payout
+    assert float(result.equity_curve[-1]) == pytest.approx(final_equity)
+
+
+def test_a_share_recorded_in_the_store_needs_no_underlying(tmp_path):
+    """The terms a connector records settle it, without `option_underlyings`."""
+    import sqlite3
+
+    store = _share_store(tmp_path)
+    conn = sqlite3.connect(os.path.join(str(tmp_path), "m.sqlite"))
+    conn.execute(
+        "UPDATE symbols SET option_underlying = '', option_type = 'call', option_strike = 0,"
+        " option_expiry = ?, option_contract_size = 1, option_settlement = 'event:1'"
+        " WHERE id = ?",
+        (RESOLVED_AT, SHARE_ID),
+    )
+    conn.commit()
+    conn.close()
+
+    result = bt.run(_hold(**{str(SHARE_ID): 1.0}), _share_config(), store)
+    assert result.trades.to_pandas().query("exit_reason == 5").iloc[0].fill_price == 1.0
+
+
+def _record_share_terms(tmp_path):
+    import sqlite3
+
+    conn = sqlite3.connect(os.path.join(str(tmp_path), "m.sqlite"))
+    conn.execute(
+        "UPDATE symbols SET asset_class = 'EquityOption', option_underlying = '', option_type = 'call',"
+        " option_strike = 0, option_expiry = ?, option_contract_size = 1,"
+        " option_settlement = 'event:1' WHERE id = ?",
+        (RESOLVED_AT, SHARE_ID),
+    )
+    conn.commit()
+    conn.close()
+
+
+def test_registering_a_symbol_again_keeps_its_contract_terms(tmp_path):
+    """An import or a tape has no terms to give, and must not erase the venue's."""
+    _share_store(tmp_path)
+    _record_share_terms(tmp_path)
+
+    store = _share_store(tmp_path)
+
+    assert store.option_contracts()[SHARE_ID]["settlement"] == {"event": {"payout": 1.0}}
+    assert store.asset_classes()[SHARE_ID] == "EquityOption"
+    result = bt.run(_hold(**{str(SHARE_ID): 1.0}), _share_config(), store)
+    assert result.trades.to_pandas().query("exit_reason == 5").iloc[0].fill_price == 1.0
+
+
+def test_a_row_that_cannot_be_read_is_not_written_over(tmp_path):
+    """Half-written terms stop the import rather than disappear under it."""
+    import sqlite3
+
+    _share_store(tmp_path)
+    _record_share_terms(tmp_path)
+    conn = sqlite3.connect(os.path.join(str(tmp_path), "m.sqlite"))
+    conn.execute("UPDATE symbols SET option_strike = NULL WHERE id = ?", (SHARE_ID,))
+    conn.commit()
+    conn.close()
+
+    with pytest.raises(Exception, match="option_strike"):
+        _share_store(tmp_path)
+
+
+def test_a_symbol_id_given_to_another_ticker_does_not_inherit_its_terms(tmp_path):
+    _share_store(tmp_path)
+    _record_share_terms(tmp_path)
+
+    store = bt.import_dataframe(
+        _daily([0.6] * N_BARS),
+        symbol="ANOTHER-MARKET/YES",
+        symbol_id=SHARE_ID,
+        interval="1d",
+        data_root=os.path.join(str(tmp_path), "data"),
+        metadata_db=os.path.join(str(tmp_path), "m.sqlite"),
+    )
+    assert SHARE_ID not in store.option_contracts()
+
+
+def test_a_share_settles_on_its_last_bar_when_trading_stopped_first(tmp_path):
+    store = _share_store(tmp_path, n_bars=20)
+    config = _share_config(option_contracts={SHARE_ID: bt.event_contract(RESOLVED_AT)})
+    result = bt.run(_hold(**{str(SHARE_ID): 1.0}), config, store)
+    assert result.trades.to_pandas().query("exit_reason == 5").iloc[0].fill_price == 1.0
+
+
+@pytest.mark.parametrize(
+    "resolved_at, expected",
+    [
+        ("2026-03-01T14:00:00Z", 1_772_373_600_000_000_000),
+        ("2026-03-01T14:00:00", 1_772_373_600_000_000_000),
+        ("2026-03-01T15:00:00+01:00", 1_772_373_600_000_000_000),
+        ("2026-03-01T14:00:00.000001Z", 1_772_373_600_000_001_000),
+        (1_772_373_600_000_000_000, 1_772_373_600_000_000_000),
+    ],
+)
+def test_event_contract_reads_the_resolution_instant(resolved_at, expected):
+    assert bt.event_contract(resolved_at)["expiry"] == expected
+
+
+@pytest.mark.parametrize("payout", [-0.5, float("nan"), float("inf"), "1"])
+def test_event_contract_refuses_an_impossible_payout(payout):
+    with pytest.raises(ValueError, match="payout"):
+        bt.event_contract(RESOLVED_AT, payout=payout)
+
+
+def test_event_contract_refuses_an_unreadable_instant():
+    with pytest.raises(TypeError, match="resolved_at"):
+        bt.event_contract(1.5)

@@ -106,6 +106,25 @@ def _symbol_rows(metadata_db: str) -> List[Tuple[int, str, str]]:
         con.close()
 
 
+def references_added_to_universe(
+    asked_universe: Any, universe: Any, metadata_db: str
+) -> Dict[int, str]:
+    """``{id: ticker}`` of the symbols of ``universe`` the caller did not ask for."""
+    rows = _symbol_rows(metadata_db)
+    entries = asked_universe if isinstance(asked_universe, (list, tuple)) else [asked_universe]
+    asked = {_resolve_row(entry, rows) for entry in entries}
+    added = {
+        (ticker, provider)
+        for provider, tickers in universe.items()
+        for ticker in tickers
+    } - asked
+    return {
+        sid: ticker
+        for sid, ticker, exchange in rows
+        if (ticker, (exchange.strip().lower() or "binance")) in added
+    }
+
+
 def _resolve_row(
     entry: Any, rows: List[Tuple[int, str, str]]
 ) -> Tuple[str, str]:

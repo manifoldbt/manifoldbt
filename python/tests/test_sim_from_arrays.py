@@ -159,6 +159,116 @@ def test_crossed_or_one_sided_quotes_show_an_empty_book():
     assert seen == [100.0, None, None]
 
 
+# A book three levels deep at 1, 2 and 4 ms, best first; the second state is
+# shallower, padded with NaN.
+NAN = math.nan
+DEEP_TS = np.array([1, 2, 4], dtype=np.int64) * MS
+DEEP_BIDS = np.array([
+    [(100.0, 2.0), (99.9, 3.0), (99.8, 4.0)],
+    [(100.0, 1.0), (99.9, 5.0), (NAN, NAN)],
+    [(99.9, 4.0), (99.8, 1.0), (99.7, 2.0)],
+])
+DEEP_ASKS = np.array([
+    [(100.1, 5.0), (100.2, 6.0), (100.3, 1.0)],
+    [(100.1, 2.0), (NAN, NAN), (NAN, NAN)],
+    [(100.0, 2.0), (100.1, 3.0), (100.2, 1.0)],
+])
+
+
+def _deep_ladders():
+    real = lambda side: [(float(p), float(q)) for p, q in side if not math.isnan(p)]
+    states = [(int(t), real(b), real(a)) for t, b, a in zip(DEEP_TS, DEEP_BIDS, DEEP_ASKS)]
+    return bt.sim.Market.from_ladders("X", 0.1, states, TRADES_DEEP)
+
+
+TRADES_DEEP = [(3 * MS, 99.9, 4.0, "sell"), (5 * MS, 99.8, 3.0, "sell")]
+
+
+def _deep_2d():
+    return {
+        "ts_ns": DEEP_TS,
+        "bid_px": DEEP_BIDS[:, :, 0], "bid_qty": DEEP_BIDS[:, :, 1],
+        "ask_px": DEEP_ASKS[:, :, 0], "ask_qty": DEEP_ASKS[:, :, 1],
+    }
+
+
+def _deep_pandas_lists():
+    pd = pytest.importorskip("pandas")
+    trim = lambda side, j: [[x for x, p in zip(r[:, j], r[:, 0]) if not math.isnan(p)] for r in side]
+    return pd.DataFrame({
+        "ts_ns": DEEP_TS,
+        "bid_px": trim(DEEP_BIDS, 0), "bid_qty": trim(DEEP_BIDS, 1),
+        "ask_px": trim(DEEP_ASKS, 0), "ask_qty": trim(DEEP_ASKS, 1),
+    })
+
+
+def _deep_polars_lists():
+    pl = pytest.importorskip("polars")
+    return pl.from_pandas(_deep_pandas_lists())
+
+
+def _deep_wide():
+    pd = pytest.importorskip("pandas")
+    cols = {"ts_ns": DEEP_TS, "venue": ["N"] * 3}
+    for k in range(3):
+        for side, lv in (("bid", DEEP_BIDS), ("ask", DEEP_ASKS)):
+            cols[f"{side}_px_{k:02}"] = lv[:, k, 0]
+            cols[f"{side}_qty_{k:02}"] = lv[:, k, 1]
+    return pd.DataFrame(cols)
+
+
+def _deep_run(market):
+    """The book read at each state and a sell of 6 at 99.8 walking the bids
+    at 4.5 ms, the run to 10 ms."""
+    seen = []
+
+    def strategy(sim):
+        for t in (1, 2, 4):
+            sim.elapse(t * MS - sim.now())
+            seen.append(sim.book("X").levels())
+        sim.elapse(4 * MS + MS // 2 - sim.now())
+        sim.post("X", "sell", 99.8, 6.0)
+        sim.elapse(10 * MS - sim.now())
+
+    res = bt.sim.run(strategy, markets=[market])
+    return seen, res.fills_df(backend="pandas").to_dict("list"), res.position, res.cash
+
+
+@pytest.mark.parametrize("source", [_deep_2d, _deep_pandas_lists, _deep_polars_lists, _deep_wide])
+def test_a_deep_book_from_columns_is_the_book_of_the_ladders(source):
+    by_hand = _deep_ladders()
+    trades = {
+        "ts_ns": np.array([t for t, *_ in TRADES_DEEP], dtype=np.int64),
+        "price": np.array([p for _, p, _, _ in TRADES_DEEP]),
+        "qty": np.array([q for _, _, q, _ in TRADES_DEEP]),
+        "aggressor": np.array([a for *_, a in TRADES_DEEP], dtype=object),
+    }
+    columns = bt.sim.Market.from_arrays("X", 0.1, quotes=source(), trades=trades)
+    assert _shape(columns) == _shape(by_hand)
+    seen, fills, *_ = ran = _deep_run(columns)
+    assert len(seen[0][0]) == 3 and len(seen[1][1]) == 1, seen
+    assert sum(fills["qty"]) > 0, "the sell walks the bids"
+    assert ran == _deep_run(by_hand)
+
+
+def test_a_deep_side_out_of_order_or_with_a_gap_is_refused_by_row():
+    gap = _deep_2d()
+    gap["bid_px"] = gap["bid_px"].copy()
+    gap["bid_px"][1, 1] = NAN
+    gap["bid_px"][1, 2] = 99.8  # level 2 priced after level 1, which has none
+    with pytest.raises(ValueError, match="row 1 has a bid priced at level 2 after level 1"):
+        bt.sim.Market.from_arrays("X", 0.1, quotes=gap)
+    unordered = _deep_2d()
+    unordered["ask_px"] = unordered["ask_px"].copy()
+    unordered["ask_px"][0, 1] = 100.3
+    unordered["ask_px"][0, 2] = 100.2
+    with pytest.raises(ValueError, match="row 0 has ask level 2 at 100.2 after 100.3"):
+        bt.sim.Market.from_arrays("X", 0.1, quotes=unordered)
+    shallow = dict(_deep_2d(), bid_qty=DEEP_BIDS[:, 0, 1])
+    with pytest.raises(ValueError, match="bid_px holds 3 levels a row and bid_qty 1"):
+        bt.sim.Market.from_arrays("X", 0.1, quotes=shallow)
+
+
 def test_empty_and_absent_tables_make_an_empty_market():
     empty = {k: v[:0] for k, v in QUOTES.items()}
     for m in (

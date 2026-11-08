@@ -5,6 +5,7 @@ import difflib
 import json
 import math
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Union
 
 
@@ -31,6 +32,58 @@ def entry_price(
     if price is not None:
         return {"Absolute": price}
     return {"Signal": signal}
+
+
+def event_contract(resolved_at: Union[str, int], payout: float = 1.0) -> dict:
+    """Contract terms of a share settled by an outcome, for ``option_contracts``.
+
+    A prediction market's share (Polymarket, Kalshi, ...) pays a fixed amount
+    when the event resolves, whatever its last price was: ``payout=1.0`` for the
+    side that won, ``0.0`` for the side that lost, what the venue paid when it
+    voided the market (Polymarket pays 0.5).
+
+    ``resolved_at`` is when the venue resolved it, as RFC 3339 text or
+    nanoseconds since the epoch. The position settles at the first bar at or after
+    it. If the bars stop earlier, as they do when trading ends before the
+    resolution, it settles on the last bar, as long as the run's own range covers
+    ``resolved_at``. A run that ends sooner leaves the position at its last price:
+    the outcome is not known yet. Nothing here is visible to a strategy before
+    that, so it cannot look ahead through it.
+
+    Example, with bars you imported yourself::
+
+        config = mbt.BacktestConfig(
+            universe=[1],
+            ...,
+            option_contracts={1: mbt.event_contract("2026-03-01T14:00:00Z", payout=1.0)},
+        )
+
+    To bet against an outcome, buy the other side's share. Selling one short is
+    not refused, but no collateral is reserved for it.
+    """
+    if isinstance(resolved_at, str):
+        parsed = datetime.fromisoformat(resolved_at.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        epoch = parsed.astimezone(timezone.utc).replace(microsecond=0).timestamp()
+        expiry = int(epoch) * 1_000_000_000 + parsed.microsecond * 1_000
+    elif isinstance(resolved_at, int) and not isinstance(resolved_at, bool):
+        expiry = resolved_at
+    else:
+        raise TypeError(
+            "resolved_at must be RFC 3339 text or nanoseconds since the epoch, "
+            f"got {resolved_at!r}"
+        )
+    if not isinstance(payout, (int, float)) or not math.isfinite(payout) or payout < 0:
+        raise ValueError(f"payout must be zero or more, got {payout!r}")
+    return {
+        "underlying": "",
+        "option_type": "call",
+        "strike": 0.0,
+        "expiry": expiry,
+        "contract_size": 1.0,
+        "settlement": {"event": {"payout": float(payout)}},
+    }
 
 
 def exit_distance(
@@ -1238,7 +1291,8 @@ class BacktestConfig:
     sweep refuse the configuration by name instead of ignoring it."""
     option_contracts: Dict = field(default_factory=dict)
     """Contract terms per option symbol id. Filled automatically from the data
-    store at run time; set it by hand only to override what was ingested.
+    store at run time; set it by hand only to override what was ingested. For a
+    prediction market's share, see :func:`event_contract`.
 
     Positions on an option are counted in **units of the underlying**, not in
     exchange contracts. On Deribit the two are the same thing (contract size 1).

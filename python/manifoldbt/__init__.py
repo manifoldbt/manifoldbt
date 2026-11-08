@@ -73,11 +73,15 @@ from manifoldbt._native import (
     py_import_dataframe as _import_dataframe_native,
 )
 from manifoldbt._serde import scalar_value_to_json
-from manifoldbt.crossasset import prepare_cross_asset as _prepare_cross_asset
+from manifoldbt.crossasset import (
+    prepare_cross_asset as _prepare_cross_asset,
+    references_added_to_universe,
+)
 from manifoldbt.config import (
     AccountPhase,
     AccountRules,
     BacktestConfig,
+    event_contract,
     ExecutionConfig,
     FeeConfig,
     Liquidation,
@@ -136,7 +140,7 @@ _PAID_TIERS = ("Pro", "Researcher")
 
 def _print_banner():
     try:
-        tier, email = _license_info()
+        tier, _ = _license_info()
         if tier in _PAID_TIERS:
             # A trial shows its end date up front. Without this the banner is
             # identical to a paid licence, and the expiry is discovered the day
@@ -148,8 +152,8 @@ def _print_banner():
                     trial = f" (trial ends {expiry[:10]})"
             except Exception:
                 pass
-            who = f" | {email}" if email else ""
-            print(f"manifoldbt v{__version__} | \033[38;5;214m{tier}\033[0m{trial}{who}")
+            # No address here: stdout is often captured into logs and files.
+            print(f"manifoldbt v{__version__} | \033[38;5;214m{tier}\033[0m{trial}")
         else:
             print(f"manifoldbt v{__version__} | \033[36mCommunity\033[0m | upgrade: www.manifoldbt.com")
     except Exception:
@@ -766,6 +770,10 @@ def _attach_option_contracts(cfg: BacktestConfig, store: DataStore) -> None:
         sid = int(sid)
         if sid not in in_universe:
             continue
+        # An event contract settles on its outcome: there is no price to name.
+        if isinstance(terms.get("settlement"), dict):
+            contracts[sid] = dict(terms)
+            continue
         if sid not in underlyings:
             missing.append(sid)
             continue
@@ -1008,8 +1016,8 @@ def ingest(
 
     Providers (free): ``"binance"``, ``"bybit"``, ``"hyperliquid"``, ``"dydx"``,
     ``"bitstamp"``, ``"deribit"``, ``"yahoo"`` (alias ``"yfinance"``),
-    ``"dukascopy"``. Free with your own key: ``"lse"``. Pro: ``"databento"``,
-    ``"massive"``.
+    ``"dukascopy"``, ``"polymarket"``. Free with your own key: ``"lse"``. Pro:
+    ``"databento"``, ``"massive"``.
 
     Returns a :class:`DataStore` ready for :func:`run`.
 
@@ -1107,6 +1115,37 @@ def ingest(
     file per day, so a long minute ingest is thousands of requests and the host
     starts refusing after a burst; the connector paces itself and retries.
 
+    Example (one outcome of a prediction market, free and without a key, from
+    Polymarket)::
+
+        store = mbt.ingest(
+            provider="polymarket",
+            symbol="will-x-happen/Yes",   # "<market slug>/<outcome>"
+            symbol_id=1,
+            start="2026-01-01T00:00:00Z",
+            end="2026-03-01T00:00:00Z",
+            interval="1h",
+        )
+
+    The slug is the last part of the market's address on Polymarket. Prices run
+    from 0 to 1, in dollars per share, and each outcome is its own symbol.
+    Intervals run from ``"1m"`` to ``"1d"``.
+
+    What this data IS matters. These bars are Polymarket's price series, not a
+    record of trading: volume and trade count are zero, a price with nobody
+    behind it looks like any other, and there is no bid or ask. The real prints
+    come from :func:`ingest_trades`, which restates the trades of both outcomes
+    in the terms of the one you ask for, because they share one book. A share
+    pays 1 or 0 when the market resolves, off the book, and the ingest records
+    what it paid: a position still open then settles at that payout and the
+    share stops trading, while no strategy can read the outcome beforehand. Ingest
+    the market after it resolved for this to apply, and let the run's range cover
+    the resolution. A market not yet reported as resolved has no payout to record,
+    and a position there keeps its last price.
+    Trading fees depend on the market and the date and are yours to set. Access
+    to Polymarket's hosts is restricted in some countries, where the ingest
+    fails with a network error.
+
     Example (a Deribit option, including one that has already expired)::
 
         store = mbt.ingest(
@@ -1148,6 +1187,16 @@ def ingest(
         pairs = [(symbol, symbol_id)]
     else:
         raise ValueError("provide either symbol+symbol_id or symbols=[(ticker, id), ...]")
+
+    if str(provider).strip().lower() in ("binance", "bybit") and asset_class == "crypto_perp":
+        import warnings
+
+        warnings.warn(
+            f"{provider} serves spot bars: they are stored here as a perpetual, so "
+            "their prices are the spot market's, not the contract's.",
+            UserWarning,
+            stacklevel=2,
+        )
 
     if len(pairs) == 1:
         return _ingest_single(
@@ -1223,6 +1272,16 @@ def ingest_trades(
       ``dataset`` (``"XNAS.ITCH"``, ``"GLBX.MDP3"``, ...), stamped by the
       matching engine. ``asset_class`` is required: a dataset can hold
       stocks, futures or options.
+
+    ``"polymarket"``, free and without a key, serves the trades of one outcome
+    of a market, ``symbol="will-x-happen/Yes"``, stamped to the second. Both
+    outcomes share one book, so a trade on the other one is restated in the
+    terms of the one asked for: buying No at 0.38 is stored as selling Yes at
+    0.62. The same market asked from either side is the same tape. Polymarket
+    serves a market's trades newest first and cannot jump to a date, so reaching a
+    day means reading everything after it, as far back as it serves them: ask for
+    the end of a market's life first, because an old day of a busy market takes a
+    long read. Fills under 0.01 shares are not served.
 
     A consolidated equity tape does not say which side was the aggressor, and
     Databento marks some prints ``N``: those are classified by the tick rule
@@ -1842,12 +1901,14 @@ def import_csv(
 
 _BARS_REQUIRED_COLUMNS = ("timestamp", "open", "high", "low", "close", "volume")
 
-# The nullable f64 columns of the canonical bar schema. A caller who has them
-# (own quotes on equities, forex, options; a venue's buy/sell split) keeps them;
-# a caller who does not gets nulls, which the engine reads as "this venue does
-# not publish it". Anything else in the frame is still dropped on purpose:
+# The optional columns of the canonical bar schema. A caller who has them
+# (own vwap and trade count; own quotes on equities, forex, options; a venue's buy/sell split) keeps them;
+# a caller who does not gets nulls (or, for vwap and trade_count, the typical
+# price and 0), which the engine reads as "this venue does not publish it". Anything else in the frame is still dropped on purpose:
 # the store schema is fixed, and an unknown column would be a silent no-op.
-_BARS_OPTIONAL_COLUMNS = ("buy_volume", "sell_volume", "bid", "ask", "spread")
+_BARS_OPTIONAL_COLUMNS = (
+    "vwap", "trade_count", "buy_volume", "sell_volume", "bid", "ask", "spread",
+)
 
 
 def _df_to_bars_batch(data):
@@ -1855,7 +1916,7 @@ def _df_to_bars_batch(data):
 
     Output contract (what the native import expects): columns
     ``timestamp`` (timestamp[ns, UTC]), ``open/high/low/close/volume`` (f64),
-    plus whichever of ``buy_volume/sell_volume/bid/ask/spread`` the frame
+    plus whichever of ``vwap/trade_count/buy_volume/sell_volume/bid/ask/spread`` the frame
     carries (nullable f64, kept in that order after the required ones).
     Naive timestamps are assumed UTC. A pandas DatetimeIndex is promoted to
     the ``timestamp`` column when the column is absent.
@@ -1939,8 +2000,9 @@ def import_dataframe(
     ``low``, ``close``, ``volume``. A pandas DatetimeIndex is used as
     ``timestamp`` if that column is absent. Rows must be sorted by timestamp.
 
-    Optional columns are kept when present: ``bid``, ``ask``, ``spread``,
-    ``buy_volume``, ``sell_volume`` (missing values allowed). With ``bid`` and
+    Optional columns are kept when present: ``vwap``, ``trade_count``, ``bid``,
+    ``ask``, ``spread``, ``buy_volume``, ``sell_volume`` (missing values allowed;
+    a missing ``vwap`` is the typical price, a missing ``trade_count`` is 0). With ``bid`` and
     ``ask`` but no ``spread``, the spread is derived as ``ask - bid``. Bars
     that carry quotes get real ``execution_price="MidPrice"`` fills and real
     per-bar spread costs; bars without them fall back to the close, as before.
@@ -2053,6 +2115,34 @@ def _apply_cross_asset(strategy, config: BacktestConfig, store: DataStore):
     cfg = copy.deepcopy(config)
     cfg.universe = dict_universe
     return json.dumps(new_doc), cfg
+
+
+def _warn_traded_references(asked_universe, universe, result, store) -> None:
+    """Say so when a symbol only ``symbol_ref()`` named took positions.
+
+    A referenced symbol missing from the universe joins the run as a member, and
+    a member follows its own target. Nothing changes in the result.
+    """
+    if universe is asked_universe or not result.trade_count:
+        return
+    try:
+        added = references_added_to_universe(asked_universe, universe, store.metadata_db())
+        if not added:
+            return
+        traded = {int(sid) for sid in result.trades_df()["symbol_id"]}
+    except Exception:
+        return
+    names = sorted(name for sid, name in added.items() if sid in traded)
+    if names:
+        import warnings
+
+        warnings.warn(
+            f"symbol_ref() added {', '.join(names)} to this run, and the strategy traded "
+            "it: a referenced symbol follows its own target like any member. Keep it flat "
+            "in the sizing rule, with col('symbol_id'), to read it without trading it.",
+            UserWarning,
+            stacklevel=3,
+        )
 
 
 def _split_fill_callable(config: BacktestConfig):
@@ -2236,6 +2326,7 @@ def run(
         config, fill_rule, override_traverse = _split_fill_callable(config)
         config = _cap_output_resolution(config)
         store = _resolve_store(config, store)
+        asked_universe = config.universe
         strategy_json, config = _apply_cross_asset(strategy, config, store)
         cfg_json = _prepared_config_json(config, strategy, store)
         if fill_rule is None:
@@ -2248,7 +2339,9 @@ def run(
                 fill_rule,
                 override_traverse,
             )
-        return Result(raw)
+        result = Result(raw)
+        _warn_traded_references(asked_universe, config.universe, result, store)
+        return result
     except (ValueError, RuntimeError) as exc:
         raise _classify_error(exc) from exc
 
@@ -2636,6 +2729,8 @@ def run_batch(
     each, each the run :func:`run` makes of it alone. A batch holds strategies
     that quote or strategies that do not, never both.
     """
+    for strategy in strategies:
+        _reject_unset_params(strategy)
     exec_json, exec_combos = _execution_grid_plan(execution_grid)
     _require_pro_over_combos(len(strategies) * exec_combos, "Batch backtesting")
     if any(_quotes(s) for s in strategies):
@@ -2692,6 +2787,8 @@ def run_batch_lite(
     simulation, each without its order journal and its markouts; the metrics
     are those :func:`run` reports for the same strategy, to the bit.
     """
+    for strategy in strategies:
+        _reject_unset_params(strategy)
     _require_pro_over_combos(len(strategies), "Batch backtesting")
     if any(_quotes(s) for s in strategies):
         return _run_quote_batch(strategies, config, store, max_parallelism, "{}", lite=True)
@@ -3670,11 +3767,13 @@ last non-NaN value of the SERIES, so masking it does not destroy it:
     # hold() inside the when: mbt.when(regime_open, <...hold()...>, mbt.lit(0.0))
 
 Several legs against one anchor. Same expression, several traded symbols: each
-one gets its own state and its own position, equity is shared. The anchor is
-simply left out of the universe.
+one gets its own state and its own position, equity is shared. An anchor left out
+of the universe joins the run as a member and follows its own target: run() warns
+if it trades. Here it stays flat because its ratio to itself is constant, and the
+z-score of a constant has no value. Any other rule has to keep it flat itself.
 
     cfg = mbt.BacktestConfig(universe=["SOLUSDT", "AVAXUSDT", "DOTUSDT"], ...)
-    # each leg's z is computed against symbol_ref("ETHUSDT", ...); ETH is not traded
+    # each leg's z is computed against symbol_ref("ETHUSDT", ...); ETH's own z is NaN
 
 Cross-sectional (rank/zscore across the universe at each bar). The op must be
 the WHOLE signal -- the engine refuses anything wrapped around it rather than
@@ -3761,6 +3860,7 @@ __all__ = [
     # Strategy & config
     "Strategy",
     "BacktestConfig",
+    "event_contract",
     "ExecutionConfig",
     "FeeConfig",
     "VenueFees",

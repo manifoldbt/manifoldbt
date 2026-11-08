@@ -165,10 +165,10 @@ def detect_lookahead(
     fails.
 
     A re-run sub-test that has nothing to compare reports INCONCLUSIVE, not
-    PASS, and ``.passed`` is False: a strategy that never trades (a
-    ``param()`` left without a value is enough), a truncated run that fails,
-    or no trade before the split. A cut run with no trade while the full run
-    traded before the split is a FAIL: the same bars gave two answers.
+    PASS, and ``.passed`` is False: a strategy that never trades, a truncated
+    run that fails, or no trade before the split. A cut run with no trade while
+    the full run traded before the split is a FAIL: the same bars gave two
+    answers. A ``param()`` without a value is refused, as in :func:`run`.
 
     .. warning::
        **What the re-runs cannot see.** A leak that reads a *fixed* number of
@@ -223,8 +223,9 @@ def detect_lookahead(
     """
     # Pro feature: report it here so a notebook gets a clean LicenseError rather
     # than a traceback from deeper in the analysis.
-    from manifoldbt import _require_pro
+    from manifoldbt import _reject_unset_params, _require_pro
     _require_pro("Look-ahead bias detection")
+    _reject_unset_params(strategy)
 
     # Checked natively too; here so a typo fails before any data is touched.
     if mode not in _MODES:

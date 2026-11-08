@@ -3034,8 +3034,8 @@ has one state per instant. Several prints at one instant are kept in the order
 given.
 
 `mbt.sim.Market.from_arrays` builds the same market from columns, which is how
-to bring a day of your own top-of-book quotes and prints without one Python
-object per event:
+to bring a day of your own quotes, top of book or deeper, and prints without
+one Python object per event:
 
 ```python
 market = mbt.sim.Market.from_arrays(
@@ -3050,14 +3050,33 @@ res = mbt.sim.run(strategy, markets=[market])
 RecordBatch, or a dict of numpy arrays; columns it does not read are ignored,
 and either may be left out. `ts_ns` is integer nanoseconds since the epoch, UTC,
 or a timestamp column of any unit (`timestamp` is read when there is no
-`ts_ns`). The quotes are a book one level deep. The rows come in time order,
-several at one instant allowed:
+`ts_ns`). The rows come in time order, several at one instant allowed.
+
+A side column of numbers is the top of book. A **book several levels deep**
+lists each side best first, bids falling and asks rising, in one of three
+shapes:
+
+```python
+# list columns: a row holds the levels of its side
+quotes = {"ts_ns": ts, "bid_px": bid_px_2d, "bid_qty": bid_qty_2d,  # numpy (rows, levels)
+         "ask_px": ask_px_2d, "ask_qty": ask_qty_2d}
+# or one column a level, as vendors write a book snapshot
+quotes = df[["ts_ns", "bid_px_00", "bid_qty_00", "ask_px_00", "ask_qty_00",
+             "bid_px_01", "bid_qty_01", "ask_px_01", "ask_qty_01"]]
+```
+
+List columns are a 2-D numpy array, an Arrow or polars list, or a pandas column
+of lists; one column a level is `bid_px_0`, `bid_px_1`, ... or `bid_px_00`, ...,
+read when there is no `bid_px`. A side ends at its first level without a price
+(NaN, null, zero): pad a shallower row so. The book keeps as many levels as the
+deepest side. Then:
 
 - of several **quotes at one instant**, the last one stands;
 - several **prints at one instant** are kept in the order given, and at an
   instant holding both, the venue applies the prints first, then the book;
-- a quote with a **side missing** (a price that is zero, negative, NaN or null)
-  or **crossed** (bid above ask) shows an empty book until the next quote, as
+- a quote with a **side missing** (a best price that is zero, negative, NaN or
+  null) or **crossed** (best bid above best ask) shows an empty book until the
+  next quote, as
   `mbt.attach_quotes` reads a vendor's quotes; a locked quote stands;
 - a print **without an aggressor** (`aggressor` absent, null, NaN or empty) takes
   the tick rule, as the consolidated tapes ingested by `mbt.ingest` do: above
@@ -3067,7 +3086,9 @@ several at one instant allowed:
   column of `1` for a buy and `0` for a sell cannot lose its sells.
 
 A column missing, of another length or of a type it cannot read (a float
-`ts_ns`, a boolean `aggressor`) is refused by name.
+`ts_ns`, a boolean `aggressor`) is refused by name, and so is a level of a deep
+side priced after the end of its side, out of the side's order, or whose price
+comes without its size.
 
 ### Against another engine
 
@@ -4638,6 +4659,8 @@ Use `mbt.symbol_ref()` to reference another symbol's data in multi-asset strateg
 pair_close = mbt.symbol_ref("ETHUSDT", "close")
 ratio = close / (pair_close + mbt.lit(1e-12))
 ```
+
+> **A referenced symbol trades.** A symbol that only `symbol_ref()` names joins the run as a member and follows its own target, and `run()` warns when it does. To read it without trading it, keep it flat in the sizing rule, with `col("symbol_id")`.
 
 > **Important:** Expressions using `symbol_ref()` must be registered as named signals (`.signal("name", expr)`), not passed directly to `.size()`. The multi-pass evaluator needs named signals to route cross-asset data correctly.
 

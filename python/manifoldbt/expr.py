@@ -117,7 +117,11 @@ def _resolve_period(value: Period, allow_duration: bool = False) -> Any:
         return _param_name(value)
     if isinstance(value, Expr):
         raise TypeError("Only param() expressions can be used as indicator periods, not arbitrary expressions")
-    return int(value)
+    # A window counts bars.
+    period = float(value)
+    if abs(period - round(period)) > 1e-9:
+        raise ValueError(f"a window counts bars: pass a whole number, got {value!r}")
+    return int(round(period))
 
 
 def _resolve_span(value: Span) -> Any:
