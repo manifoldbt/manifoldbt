@@ -87,7 +87,8 @@ jobs:
 
   tests:
     name: tests (Python ${{ matrix.python }})
-    runs-on: ubuntu-latest
+    # ubuntu-latest moved to 26.04, where setup-python has no 3.9 build.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     strategy:
       fail-fast: false
