@@ -18,7 +18,7 @@ def test_the_banner_does_not_print_the_email():
     out = subprocess.run(
         [sys.executable, "-c", "import manifoldbt"],
         capture_output=True, text=True, check=True,
-    ).stdout
+    ).stderr
     assert "manifoldbt v" in out, out
     assert not re.search(r"\S+@\S+", out), out
     _, email = bt.license_info()

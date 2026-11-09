@@ -280,8 +280,10 @@ def _refresh(state: dict) -> Optional[str]:
 # Notice
 # ---------------------------------------------------------------------------
 def notice(current: str, latest: str) -> str:
-    return "\033[38;5;214mUpdate available:\033[0m {} {} (you have {}) -- pip install -U {}".format(
-        PACKAGE, latest, current, PACKAGE
+    from manifoldbt import _console
+
+    return "{} {} {} (you have {}) -- pip install -U {}".format(
+        _console.paint("Update available:", "38;5;214"), PACKAGE, latest, current, PACKAGE
     )
 
 
@@ -293,7 +295,10 @@ def _announce(current: Optional[str], latest: Optional[str]) -> bool:
     if _newer(current, latest) is None:
         return False
     _announced = True
-    print(notice(current, latest))
+    from manifoldbt import _console
+
+    if not _console.quiet():
+        _console.say(notice(current, latest))
     return True
 
 

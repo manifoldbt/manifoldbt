@@ -216,7 +216,7 @@ def test_a_fresh_cache_prints_the_notice_without_asking_pypi(monkeypatch, capsys
 
     _update.start()
 
-    out = capsys.readouterr().out
+    out = capsys.readouterr().err
     assert "0.20.0" in out and "0.19.1" in out
     assert "pip install -U manifoldbt" in out
 
@@ -228,7 +228,7 @@ def test_being_up_to_date_prints_nothing(monkeypatch, capsys):
 
     _update.start()
 
-    assert capsys.readouterr().out == ""
+    assert capsys.readouterr().err == ""
 
 
 def test_a_source_checkout_is_never_compared(monkeypatch, capsys):
@@ -238,7 +238,7 @@ def test_a_source_checkout_is_never_compared(monkeypatch, capsys):
 
     _update.start()
 
-    assert capsys.readouterr().out == ""
+    assert capsys.readouterr().err == ""
 
 
 @pytest.mark.parametrize(
@@ -252,7 +252,7 @@ def test_opt_out_silences_it_entirely(monkeypatch, capsys, var):
 
     _update.start()
 
-    assert capsys.readouterr().out == ""
+    assert capsys.readouterr().err == ""
 
 
 def test_opt_out_reads_zero_as_opting_in(monkeypatch, capsys):
@@ -263,7 +263,7 @@ def test_opt_out_reads_zero_as_opting_in(monkeypatch, capsys):
 
     _update.start()
 
-    assert "0.20.0" in capsys.readouterr().out
+    assert "0.20.0" in capsys.readouterr().err
 
 
 def test_a_stale_cache_asks_pypi_in_the_background(monkeypatch, capsys):
@@ -274,11 +274,11 @@ def test_a_stale_cache_asks_pypi_in_the_background(monkeypatch, capsys):
     _write_cache({"latest": "0.19.1", "last_check": time.time() - 48 * 3600})
 
     thread = _update.start()
-    assert capsys.readouterr().out == ""  # the banner is not delayed for this
+    assert capsys.readouterr().err == ""  # the banner is not delayed for this
     thread.join(timeout=5)
 
     _update._flush()  # what atexit runs
-    assert "0.20.0" in capsys.readouterr().out
+    assert "0.20.0" in capsys.readouterr().err
     assert _read_cache()["latest"] == "0.20.0"
 
 
@@ -288,11 +288,11 @@ def test_the_notice_is_printed_once_per_process(monkeypatch, capsys):
     _write_cache({"latest": "0.20.0", "last_check": time.time() - 48 * 3600})
 
     thread = _update.start()
-    assert "0.20.0" in capsys.readouterr().out
+    assert "0.20.0" in capsys.readouterr().err
     thread.join(timeout=5)
 
     _update._flush()
-    assert capsys.readouterr().out == ""
+    assert capsys.readouterr().err == ""
 
 
 def test_start_is_idempotent(monkeypatch, capsys):
@@ -304,7 +304,7 @@ def test_start_is_idempotent(monkeypatch, capsys):
     capsys.readouterr()
     _update.start()
 
-    assert capsys.readouterr().out == ""
+    assert capsys.readouterr().err == ""
 
 
 # ---------------------------------------------------------------------------

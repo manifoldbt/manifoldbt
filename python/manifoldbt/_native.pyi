@@ -185,9 +185,15 @@ class Market:
     def from_store(
         store: DataStore, symbol: Union[str, int], start_ns: int, end_ns: int,
         levels: Optional[int] = None, by_day: bool = False, device: str = "cpu",
-        prefetch: bool = True,
+        prefetch: bool = True, tape_only: bool = False,
     ) -> Market:
         """The stored book and tape of ``symbol`` over ``[start_ns, end_ns)``.
+
+        ``tape_only=True`` reads the stored tape alone, for a venue whose book
+        history is not published (a Polymarket market ingested with
+        ``ingest_trades``): ``sim.book()`` stays empty and orders execute
+        against the prints under ``Config(prints_update_book=...)``. It takes
+        neither ``levels``, ``by_day`` nor ``device``.
 
         ``levels`` keeps at most that many levels per side, all of them when
         the book is stored shallower; every stored level when ``None`` (the
@@ -350,9 +356,12 @@ class Order:
     remaining: float
 
 class Wakeup:
+    # Why wait() returned: "trade", "book", "order", "timeout" or "end".
+    # False once the data has ended, so `while sim.wait(...)` stops there.
     kind: str
     symbol: Optional[str]
     order_id: Optional[int]
+    def __bool__(self) -> bool: ...
 
 class Sim:
     end: int

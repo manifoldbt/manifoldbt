@@ -211,6 +211,11 @@ def _arrow_array(what: str, name: str, raw: Any) -> Any:
         return raw.combine_chunks()
     if isinstance(raw, pa.Array):
         return raw
+    if raw is None:
+        raise TypeError(
+            f"{what}: column {name!r} is None; give it an array, with NaN where "
+            "a row has no value"
+        )
     lib = type(raw).__module__.split(".")[0]
     try:
         # A 2-D array is a book several levels deep: a row of levels a row.
@@ -502,11 +507,36 @@ def run(
         ]
     if not markets:
         raise ValueError("mbt.sim.run: at least one market")
+    _say_bookless(markets, config)
     if is_plan:
         raw = _sim_run_plan(strategy._to_json(markets), config._to_json(), markets)
     else:
         raw = _sim_run(strategy, markets, config._to_json())
     return SimResult(raw, config)
+
+
+def _say_bookless(markets: Sequence[Market], config: Config) -> None:
+    """Warn of a market that holds prints and no book state: ``sim.book()``
+    stays empty there, and without ``prints_update_book`` no order can fill."""
+    import warnings
+
+    for m in markets:
+        if m.book_states or not m.trades or m.by_day or m.by_order:
+            continue
+        if config.prints_update_book is None:
+            msg = (
+                f"mbt.sim.run: market {m.name!r} has prints and no book state: "
+                "sim.book() stays empty and no order can fill. Give it quotes=, or "
+                'Config(prints_update_book="both_sides") to fill orders against the prints'
+            )
+        else:
+            msg = (
+                f"mbt.sim.run: market {m.name!r} has prints and no book state: orders "
+                f"fill against the prints (prints_update_book={config.prints_update_book!r}), "
+                "but sim.book() stays empty, best_bid and best_ask None. A strategy "
+                "that waits for a price there never sends an order"
+            )
+        warnings.warn(msg, UserWarning, stacklevel=3)
 
 
 def _to_frame(cols: Dict[str, Any], times: Sequence[str], backend: str) -> Any:
@@ -558,7 +588,13 @@ def _orders_columns(raw: Any) -> Dict[str, Any]:
 
 
 class SimResult:
-    """What a simulation recorded, as the venue saw it."""
+    """What a simulation recorded, as the venue saw it.
+
+    The ``*_df`` methods return a pandas DataFrame when pandas is installed,
+    a polars one when only polars is (``backend="pandas"`` or ``"polars"``
+    picks one). With neither installed, or with ``backend="arrow"``, they
+    return a dict of column name to list: pandas and polars are optional
+    extras (``pip install manifoldbt[pandas]`` or ``[polars]``)."""
 
     __slots__ = ("_raw", "config", "_totals")
 

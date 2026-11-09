@@ -2522,7 +2522,7 @@ a Python `UserWarning` that names the price, the side and the levels read.
 |---|---|
 | `sim.now()` | The strategy's local time, in nanoseconds |
 | `sim.elapse(dt)` | Move the clock `dt` forward; `False` once it reaches the end of the data |
-| `sim.wait(trade=, book=, order=, timeout=)` | Move the clock to the next event of the kinds named (any kind when none is), or `timeout` from now; returns why it woke |
+| `sim.wait(trade=, book=, order=, timeout=)` | Move the clock to the next event of the kinds named (any kind when none is), or `timeout` from now; returns a `Wakeup` whose `kind` says why: `"trade"`, `"book"`, `"order"`, `"timeout"` or `"end"`. It is false at the end of the data, so `while sim.wait(trade=True):` ends with it |
 | `sim.book(symbol)` | The book as the strategy sees it: `best_bid`, `best_ask`, `mid`, `spread`, `qty_at(p)`, `levels(n)`, `depth_through(p)`, `tick` |
 | `sim.trades(symbol)` | The prints that reached the strategy since the last call, as `(ts_ns, price, qty, aggressor)` |
 | `sim.orders(symbol, side=, status=)` | The strategy's orders as it knows them. `status="live"`: may still fill; `"resting"`: in the book, partially filled or not; `"armed"`: a stop waiting for its trigger; or another status name |
@@ -2536,6 +2536,18 @@ a Python `UserWarning` that names the price, the side and the levels read.
 
 Durations are an `Interval`, a `datetime.timedelta` or nanoseconds. A symbol is
 its ticker or its index in `symbols`.
+
+The clock starts on the first event of the data, already applied: the first
+print is in `sim.trades()` and the first book in `sim.book()` before the first
+`wait` or `elapse`, and `wait` wakes on the events after it. A strategy that
+acts on every print reads the state once before its loop:
+
+```python
+def strategy(sim):
+    on_prints(sim)                      # the first event of the data
+    while sim.wait(trade=True):         # false once the data has ended
+        on_prints(sim)
+```
 
 `tif` is `"GTC"` (the default), `"GTX"` (post-only), `"IOC"`, `"FOK"` or
 `"GTD"` with `expire_at=` (a venue instant in nanoseconds).
@@ -2789,6 +2801,13 @@ walked as without the setting (no tick worse). Of several prints at one
 instant, the last stands (of each side, under `"aggressed_side"`): no order
 arrives between them.
 
+**A market of prints alone.** With no stored state at all (`Market.from_arrays`
+with `trades=` only), each side keeps its last print to the end of the run, so
+orders execute against the prints. `sim.book()` still reads the stored book,
+empty there: `best_bid` and `best_ask` stay `None`, and a strategy that waits for
+a price in the book never sends an order. Read prices off `sim.trades()`
+instead. `mbt.sim.run` warns of such a market.
+
 **Which side.** The print's aggressor, as the tape stores it, which only
 `"aggressed_side"` reads. A print that came without one (a consolidated equity
 tape) took the tick rule's side when it was ingested, or when
@@ -3002,6 +3021,11 @@ the touch per book state.
 | `res.fill_fragility` | What the queue decided for the orders that rested, in the shape of [Queue Model](#queue-model): `maker_fills`, and under `queue` the `queue_decided_fills`, `traverse_fills`, `fills_from_book_cross`, `partial_fills` and `book_unknown_at_post` (orders posted behind `assumed_queue`); `would_fill_touch` / `would_fill_traverse` count the lives of an order at one level that a print reached, or went through. The counters under `queue` count fills, except `partial_fills` and `book_unknown_at_post`, which count orders; `traverse_fills` counts the `traverse` and the `book_cross` fills. Read the units in [Queue Model](#queue-model), "What comes out", before setting one against another. `touch_only_fills` is a bar convention and stays `0` |
 | `res.levels_snapped` | Orders whose price was between two ticks and moved to the passive side |
 
+The `*_df` methods return a pandas DataFrame when pandas is installed, a polars
+one when only polars is, and `backend="pandas"` or `"polars"` picks one. With
+neither installed, or with `backend="arrow"`, they return a dict of column name
+to list: pandas and polars are optional extras (`pip install manifoldbt[pandas]`).
+
 ### A market without a store
 
 `mbt.sim.Market.from_ladders` builds a market from book states and prints
@@ -3024,7 +3048,10 @@ does not check that the market makes sense, and accepts:
 - a **crossed or locked book**, a bid at or above the ask: an order that crosses
   it executes at once against the displayed opposite side;
 - a market with **prints and no book state**: every book read is empty
-  (`best_bid` is `None`) and a market order expires;
+  (`best_bid` is `None`) and a market order expires, unless
+  `prints_update_book` lets the prints stand for the book (see
+  [When a print updates the book](#when-a-print-updates-the-book)); `mbt.sim.run`
+  says so in a `UserWarning`;
 - a level **off the tick grid**: `book.levels()` shows it as written, while an
   order priced there is put on the grid, on its passive side, so it does not
   queue behind that level.
@@ -3076,8 +3103,12 @@ deepest side. Then:
   instant holding both, the venue applies the prints first, then the book;
 - a quote with a **side missing** (a best price that is zero, negative, NaN or
   null) or **crossed** (best bid above best ask) shows an empty book until the
-  next quote, as
-  `mbt.attach_quotes` reads a vendor's quotes; a locked quote stands;
+  next quote, both sides of it, as
+  `mbt.attach_quotes` reads a vendor's quotes; a locked quote stands. A book
+  with one side is not supported: a market where one side is legitimately
+  absent (a prediction market bucket nobody bids on) keeps the other side
+  with a token level on the missing one, a price on the grid and a size near
+  zero. `from_arrays` counts the book states left empty in a `UserWarning`;
 - a print **without an aggressor** (`aggressor` absent, null, NaN or empty) takes
   the tick rule, as the consolidated tapes ingested by `mbt.ingest` do: above
   the previous price a buy, below it a sell, at the same price the side of the
@@ -3088,7 +3119,81 @@ deepest side. Then:
 A column missing, of another length or of a type it cannot read (a float
 `ts_ns`, a boolean `aggressor`) is refused by name, and so is a level of a deep
 side priced after the end of its side, out of the side's order, or whose price
-comes without its size.
+comes without its size or with a size of zero. The four side columns are all
+needed, `bid_px` included on a market with no bids.
+
+### A market of its tape alone
+
+`mbt.sim.Market.from_store` refuses a symbol whose store holds prints and no
+book: an order would have nothing to rest against. A venue that publishes no
+book history (a Polymarket market, ingested with `mbt.ingest_trades`) can
+still be replayed from its tape, on request, with `tape_only=True`.
+
+The market holds the prints and no book: `sim.book()` stays empty, prices are
+read off `sim.trades()`, and orders execute against the prints as
+[When a print updates the book](#when-a-print-updates-the-book) says. Without
+`prints_update_book`, no order fills. It is held whole, and takes neither
+`levels`, `by_day` nor `device`; a range without a print is refused by name.
+
+### A prediction market from its tape
+
+`mbt.ingest_trades("polymarket", "<market-slug>/Yes", ...)` stores the tape of
+one outcome, and no book: Polymarket keeps no public order book history. To
+replay a strategy that takes liquidity on it, read the market from its tape
+and let the prints stand for the book:
+
+```python
+store = mbt.ingest_trades("polymarket", "will-x-happen/Yes", symbol_id=1,
+                          start="2026-11-01", end="2026-11-08")
+market = mbt.sim.Market.from_store(store, "will-x-happen/Yes", start_ns, end_ns,
+                                   tape_only=True)
+sym = market.name                  # "WILL-X-HAPPEN/YES", as the store files it
+
+def strategy(sim):
+    bought = False
+    while sim.wait(trade=True):     # false once the data has ended
+        prices = [p for _, p, _, _ in sim.trades(sym)]
+        if not bought and min(prices) < 0.30:
+            sim.post(sym, "buy", None, 10.0, tif="IOC")
+            bought = True
+
+res = mbt.sim.run(strategy, mbt.sim.Config(prints_update_book="both_sides"),
+                  markets=[market])
+```
+
+`start_ns` and `end_ns` are nanoseconds since the epoch, UTC. Several
+outcomes of one event are several markets in the same run.
+
+Three things the simulation does not do on such a market, and how to do them
+from what it returns:
+
+- **The book.** With prints alone, `sim.book()` stays empty: read prices off
+  `sim.trades()`, as above. Orders execute against the last print of each
+  side, its size included (see
+  [When a print updates the book](#when-a-print-updates-the-book)). Quotes of
+  your own, with the tape, through `Market.from_arrays(quotes=, trades=)`,
+  replace that assumption; one with a side missing empties the book (see
+  above).
+- **Fees.** `taker_fee_bps` is a rate on the notional, and Polymarket charges
+  a rate on `p * (1 - p)` per share, set market by market. Leave the fees at
+  zero and charge them on the fills.
+- **Settlement.** A position still open at the end of the data is marked at
+  its last price, not settled. Settle it at the outcome's payout (1, 0, or
+  0.5 for a market cancelled 50/50), or run the market's bars through
+  `mbt.run`, which settles a resolved market ingested with `mbt.ingest`
+  ("polymarket") on its own, and any other with
+  `option_contracts={sid: mbt.event_contract(resolved_at, payout)}`.
+
+```python
+fills = res.fills_df(backend="arrow")
+fee_rate = 0.02          # the market's taker fee rate, read off Polymarket
+fees = sum(fee_rate * q * p * (1 - p) for p, q in zip(fills["price"], fills["qty"]))
+sign = [1 if s == "buy" else -1 for s in fills["side"]]
+cost = sum(k * p * q for k, p, q in zip(sign, fills["price"], fills["qty"]))
+shares = sum(k * q for k, q in zip(sign, fills["qty"]))
+payout = 1.0             # what one share of the outcome paid at resolution
+pnl = shares * payout - cost - fees
+```
 
 ### Against another engine
 

@@ -36,9 +36,9 @@ strategy once, in a fluent Python DSL, and hand it to the engine: the whole
 backtest then runs in Rust, signals, fills, fees, slippage, funding and equity
 included. Python stays out of the hot loop.
 
-- **Fast.** 10 million bars with a full performance summary in **<!-- bench:fast_mbt -->245 ms<!-- /bench:fast_mbt -->**,
-  where vectorbt takes <!-- bench:fast_vbt -->99.7 s<!-- /bench:fast_vbt -->. 10,000 parameter sets over 200,000 bars in
-  **<!-- bench:fast_sweep_time -->4.2 s<!-- /bench:fast_sweep_time --> inside <!-- bench:fast_sweep_mem -->346 MB<!-- /bench:fast_sweep_mem -->**. Measured on a standard 4-vCPU GitHub runner,
+- **Fast.** 10 million bars with a full performance summary in **<!-- bench:fast_mbt -->211 ms<!-- /bench:fast_mbt -->**,
+  where vectorbt takes <!-- bench:fast_vbt -->82.2 s<!-- /bench:fast_vbt -->. 10,000 parameter sets over 200,000 bars in
+  **<!-- bench:fast_sweep_time -->3.5 s<!-- /bench:fast_sweep_time --> inside <!-- bench:fast_sweep_mem -->344 MB<!-- /bench:fast_sweep_mem -->**. Measured on a standard 4-vCPU GitHub runner,
   [every run linked](#performance).
 - **Checked.** Entry price, exit price and exit reason are asserted against
   vectorbt in CI, on the wheel published to PyPI. A benchmark workload the
@@ -158,13 +158,13 @@ and only then reports how long each took.
 
 ```text
 SMA crossover with drawdown, Sharpe, Sortino and volatility, 10M bars
-  Manifold-BT  ▏                                                  0.24 s
-  raptorbt     ▊                                                   1.5 s
-  vectorbt     ████████████████████████████████████████████████   99.7 s
+  Manifold-BT  ▏                                                  0.21 s
+  raptorbt     ▊                                                   1.2 s
+  vectorbt     ████████████████████████████████████████████████   82.2 s
 
 Parameter sweep, 10,000 combinations over 200,000 bars
-  Manifold-BT  █▎                                                  4.2 s
-  raptorbt     ████████████████████████████████████████████████   155.4 s
+  Manifold-BT  █▍                                                  3.5 s
+  raptorbt     ████████████████████████████████████████████████   127.8 s
   vectorbt     not run: it materialises every combination, this grid needs tens of GB
 ```
 
@@ -172,8 +172,8 @@ Parameter sweep, 10,000 combinations over 200,000 bars
 
 <!-- bench:run -->
 
-**[Run 41724799184](https://github.com/manifoldbt/manifoldbt/actions/runs/41724799184)**:
-Linux x86_64, 4 vCPU, Python 3.12, manifoldbt 0.32.1, vectorbt 0.28.4,
+**[Run 42444246865](https://github.com/manifoldbt/manifoldbt/actions/runs/42444246865)**:
+Linux x86_64, 4 vCPU, Python 3.12, manifoldbt 0.33.0, vectorbt 0.28.4,
 raptorbt 0.9.0. Seven interleaved repetitions, medians
 reported; the ratio is the median of the per-repetition ratios. All five rows below agree with vectorbt exactly (relative tolerance 1e-9).
 These figures are regenerated from the latest published run at each release; the
@@ -186,11 +186,11 @@ newest run is always the one on [manifoldbt.com/benchmarks](https://www.manifold
 
 | Workload | Bars | Manifold-BT | vectorbt | raptorbt |
 |---|---:|---:|---:|---:|
-| SMA 30/150 crossover | 10M | **236 ms** | 25.8 s (×109.3) | 1.52 s (×6.5) |
-| ...plus drawdown, Sharpe, Sortino, volatility | 10M | **245 ms** | 99.7 s (**×407**) | 1.53 s (×6.2) |
-| ...with a 5 bps fee and 2 bps slippage | 10M | **239 ms** | 26.2 s (×109.5) | not supported |
-| EMA 12/26 + RSI(14) filter, 5 bps fee | 1M | **46 ms** | 2.18 s (×47.6) | not supported |
-| Five assets in one book, 5 bps fee | 1M | **158 ms** | 2.84 s (×17.5) | not supported |
+| SMA 30/150 crossover | 10M | **198 ms** | 20.7 s (×104.0) | 1.22 s (×6.1) |
+| ...plus drawdown, Sharpe, Sortino, volatility | 10M | **211 ms** | 82.2 s (**×391**) | 1.22 s (×5.8) |
+| ...with a 5 bps fee and 2 bps slippage | 10M | **203 ms** | 21.4 s (×105.7) | not supported |
+| EMA 12/26 + RSI(14) filter, 5 bps fee | 1M | **37 ms** | 1.93 s (×51.1) | not supported |
+| Five assets in one book, 5 bps fee | 1M | **131 ms** | 2.05 s (×15.7) | not supported |
 
 <!-- /bench:table -->
 
@@ -208,10 +208,10 @@ of an empty cell.
 
 | Bars | Combinations | Manifold-BT | vectorbt | raptorbt |
 |---:|---:|---:|---:|---:|
-| 20,000 | 5,000 | **0.30 s**, 46 MB | 5.63 s, 2.5 GB | 6.89 s, 34 MB |
-| 20,000 | 20,000 | **1.15 s**, 77 MB | not run | 26.8 s, 60 MB |
-| 200,000 | 10,000 | **4.24 s**, 346 MB | not run | 155 s, 369 MB |
-| 200,000 | 150,000 | **88.0 s**, 834 MB | not run | not run |
+| 20,000 | 5,000 | **0.24 s**, 38 MB | 4.12 s, 2.5 GB | 5.15 s, 37 MB |
+| 20,000 | 20,000 | **0.90 s**, 80 MB | not run | 20.3 s, 63 MB |
+| 200,000 | 10,000 | **3.53 s**, 344 MB | not run | 128 s, 370 MB |
+| 200,000 | 150,000 | **73.0 s**, 834 MB | not run | not run |
 
 <!-- /bench:sweeps -->
 
@@ -227,14 +227,14 @@ at 256 combinations.
 
 - **On a single backtest, the gap to raptorbt is about 4×, not orders of
   magnitude.** Both are compiled engines; the large ratios in the first table
-  are against vectorbt. The <!-- bench:sweep_raptor_range -->×23 to ×37<!-- /bench:sweep_raptor_range --> on sweeps is a different story: raptorbt
+  are against vectorbt. The <!-- bench:sweep_raptor_range -->×22 to ×36<!-- /bench:sweep_raptor_range --> on sweeps is a different story: raptorbt
   has no fan-out API, so its sweep is a Python loop paying a full backtest per
   combination.
-- **Multi-asset is the smallest lead over vectorbt (<!-- bench:multi_vbt -->×17.5<!-- /bench:multi_vbt -->).** Broadcasting a
+- **Multi-asset is the smallest lead over vectorbt (<!-- bench:multi_vbt -->×15.7<!-- /bench:multi_vbt -->).** Broadcasting a
   column per asset is close to free for vectorbt, while walking five books is
   not free for anything.
 - **On a stop-loss/take-profit bracket, raptorbt comes closest** (<!-- bench:bracket_raptor_1m -->×1.2<!-- /bench:bracket_raptor_1m --> at 1M
-  bars, <!-- bench:bracket_raptor_10m -->×3.0<!-- /bench:bracket_raptor_10m --> at 10M). Deciding which side triggers first inside a bar is a
+  bars, <!-- bench:bracket_raptor_10m -->×2.8<!-- /bench:bracket_raptor_10m --> at 10M). Deciding which side triggers first inside a bar is a
   sequential walk in both engines. That workload is also not in the table
   above: the engines disagree on whether to re-enter on the bar a bracket
   closes, so its timing sits in the benchmark's annex with the cause written
@@ -514,6 +514,11 @@ when one does. It never delays an import (the notice is the previous run's
 answer, read from a local cache) and the request is a plain GET of a public
 JSON document. Set `MANIFOLDBT_NO_UPDATE_CHECK=1` to turn it off, or call
 `mbt.check_for_update()` to ask on demand.
+
+**Quiet imports.** The banner and the update notice go to stderr, so piping or
+capturing a script's stdout gets only what the script prints. They are coloured
+only on a terminal and never when `NO_COLOR` is set; `MANIFOLDBT_QUIET=1`
+silences both.
 
 ## Community, Pro and Researcher
 

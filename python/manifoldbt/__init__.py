@@ -138,7 +138,18 @@ __version__ = _update.installed_version() or "0.1.0"
 _PAID_TIERS = ("Pro", "Researcher")
 
 
+from manifoldbt import _console as _console
+
+
 def _print_banner():
+    # On stderr, coloured only on a terminal, off with MANIFOLDBT_QUIET=1:
+    # stdout is the caller's, and pipes and logs read it.
+    if _console.quiet():
+        return
+    community = (
+        f"manifoldbt v{__version__} | {_console.paint('Community', '36')}"
+        " | upgrade: www.manifoldbt.com"
+    )
     try:
         tier, _ = _license_info()
         if tier in _PAID_TIERS:
@@ -152,12 +163,12 @@ def _print_banner():
                     trial = f" (trial ends {expiry[:10]})"
             except Exception:
                 pass
-            # No address here: stdout is often captured into logs and files.
-            print(f"manifoldbt v{__version__} | \033[38;5;214m{tier}\033[0m{trial}")
+            # No address here: the output is often captured into logs and files.
+            _console.say(f"manifoldbt v{__version__} | {_console.paint(tier, '38;5;214')}{trial}")
         else:
-            print(f"manifoldbt v{__version__} | \033[36mCommunity\033[0m | upgrade: www.manifoldbt.com")
+            _console.say(community)
     except Exception:
-        print(f"manifoldbt v{__version__} | \033[36mCommunity\033[0m | upgrade: www.manifoldbt.com")
+        _console.say(community)
 
 _print_banner()
 del _print_banner
@@ -186,10 +197,10 @@ def _warn_pro(msg: str) -> None:
 def _print_pro_summary() -> None:
     """Print collected Pro warnings at exit."""
     if _pro_warnings:
-        print()
+        _console.say()
         for w in _pro_warnings:
-            print(f"\033[38;5;214m[!] {w} -- Pro feature\033[0m")
-        print("\033[38;5;214m  -> upgrade at www.manifoldbt.com\033[0m")
+            _console.say(_console.paint(f"[!] {w} -- Pro feature", "38;5;214"))
+        _console.say(_console.paint("  -> upgrade at www.manifoldbt.com", "38;5;214"))
 
 
 import atexit
@@ -1252,8 +1263,12 @@ def ingest_trades(
 
     The tick-level counterpart of :func:`ingest`, with the same shape: you name
     a provider, a symbol and a range, the provider fetches, the store keeps one
-    Arrow file per UTC day under ``{provider}/ticks/{symbol}/``. Nothing is
-    fetched that you did not ask for.
+    Arrow file per UTC day under ``{data_root}/mega/{provider}/ticks/{SYMBOL}/``,
+    the symbol upper-cased (``will-x-happen/Yes`` is stored as
+    ``WILL-X-HAPPEN/YES``; every reader takes it in any case). Each day file
+    keeps an empty ``.lock`` beside it, on purpose: removing it would let two
+    writers lock two different files. Nothing is fetched that you did not ask
+    for.
 
     Providers with a public trade archive: ``"bybit"`` (one ``.csv.gz`` per
     day) and ``"binance"`` (spot aggTrades, one ``.zip`` per day). A day the
@@ -1281,7 +1296,12 @@ def ingest_trades(
     serves a market's trades newest first and cannot jump to a date, so reaching a
     day means reading everything after it, as far back as it serves them: ask for
     the end of a market's life first, because an old day of a busy market takes a
-    long read. Fills under 0.01 shares are not served.
+    long read. Fills under 0.01 shares are not served. A Polymarket trade is
+    identified by its transaction hash, which the tape's integer ``trade_id``
+    cannot hold: it reads back null. No order book is stored: to replay a
+    market order by order, read it with
+    ``mbt.sim.Market.from_store(..., tape_only=True)`` (see "A prediction
+    market from its tape" in the strategy authoring guide).
 
     A consolidated equity tape does not say which side was the aggressor, and
     Databento marks some prints ``N``: those are classified by the tick rule
@@ -1329,8 +1349,10 @@ def ingest_trades(
     the strategy authoring guide for what reads it and in what order.
 
     Args:
-        provider: ``"bybit"`` or ``"binance"``.
-        symbol: Symbol on the venue (e.g. ``"BTCUSDT"``).
+        provider: ``"bybit"``, ``"binance"``, ``"massive"``, ``"databento"``
+            or ``"polymarket"``.
+        symbol: Symbol on the venue (e.g. ``"BTCUSDT"``), or
+            ``"<market-slug>/<outcome>"`` on Polymarket.
         symbol_id: Store id for the symbol, the same as its book's.
         start: First day, ``YYYY-MM-DD``.
         end: Last day, inclusive.

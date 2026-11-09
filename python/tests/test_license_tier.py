@@ -34,7 +34,7 @@ def test_the_banner_names_the_tier():
     out = subprocess.run(
         [sys.executable, "-c", "import manifoldbt"],
         capture_output=True, text=True, check=True,
-    ).stdout
+    ).stderr
     assert bt.license_info()[0] in out, out
 
 
