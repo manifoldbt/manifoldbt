@@ -280,11 +280,15 @@ call into the engine. That catches an implementation drifting away from the
 documented rule; it does not independently prove the rule is right, because the
 rule was measured from the engine before being re-implemented.
 
-**Look-ahead.** Regression tests in
-[`python/tests/`](https://github.com/manifoldbt/manifoldbt/tree/master/python/tests),
-the strictest of which corrupts every bar after a cut point, re-runs, and
-requires the equity before that point to come back **bit-identical**: any
-decision that read a future bar moves the prefix.
+**Look-ahead.** A dedicated suite in
+[`python/tests/`](https://github.com/manifoldbt/manifoldbt/tree/master/python/tests)
+corrupts every bar after a cut point, re-runs, and requires the equity before
+that point to come back **bit-identical**: any decision that read a future bar
+moves the prefix. The same method runs at several cut points per operator, and
+on fills priced from a signal on the bar it was computed, with the level read
+from a higher timeframe. Every operator of the expression language is
+classified causal or not in a registry the compiler enforces, so an operator
+added without that classification does not build.
 
 ### Execution semantics
 
@@ -308,39 +312,30 @@ was available, the pessimistic one was taken.
 
 **Prices and margin.** Prices are used as the data source supplies them: Yahoo
 defaults to dividend-adjusted (`dataset="raw"` opts out) and splits follow the
-provider. Margin force-close applies to short options; leveraged spot and
-perpetual positions are held as sized, so leverage limits belong in the
-strategy.
+provider. Leveraged spot and perpetual positions are liquidated at their
+maintenance margin with `cfg.liquidation`: one cross margin for the account,
+per-symbol rates and a liquidation fee. Short options keep their own margin
+call.
 
 Independent verification is welcome, and a reproduction showing a fill this
 engine gets wrong is the most useful report this project can receive.
 
 ## Look-ahead
 
-`mbt.detect_lookahead` (Pro) re-runs a strategy over different windows and
-compares the trades they have in common. That isolates bias coming from the
-engine or from a strategy's own use of time. It is a check on one strategy, not
-a proof: the regression tests in [Correctness](#correctness) cover the engine,
-and the rest of this section is what the comparison cannot see.
+Only two operators of the expression language read past the current bar,
+`lead()` and `full_series_rank()`, and a higher-timeframe bar is read only once
+it has closed. `mbt.detect_lookahead` (Pro) checks a strategy both ways: it
+re-runs it over truncated windows and compares the trades they share, and it
+reads its expressions and fails on any non-causal operator, naming the signal
+that uses it. A check that had nothing to compare reports INCONCLUSIVE, not
+PASS.
 
-One shape of leak is invisible to that comparison by construction: a signal
-that reads a fixed number of bars ahead (`close.lead(1)`, or a column
-precomputed with future bars and imported as data). Bar T sees the same T+1 in
-every window, so the re-runs report PASS next to a Sharpe in the hundreds. The
-detector therefore also walks the strategy's expressions and fails any explicit
-`lead()`, naming the signal. For an implicit one, the check belongs to the
-pipeline that built the column: perturb the raw data after some bar K, rebuild
-the column from it, and require the equity up to K to be bit-identical.
-Perturbing the bars alone leaves a precomputed column untouched and sees
-nothing.
-
-A parameter derived from the data *before* the backtest is a different
-question: a threshold computed over the whole history in a notebook is the same
-number in every run, so no re-run can weigh it. Re-derive it on the window under
-test.
+Data prepared before the backtest is checked where it is built. For a column
+computed upstream and imported, perturb the raw data after some bar K, rebuild
+the column, and require the equity up to K to be bit-identical. For a threshold
+fitted in a notebook, re-derive it on the window under test.
 [`examples/25_lookahead_trap.py`](https://github.com/manifoldbt/manifoldbt/blob/master/examples/25_lookahead_trap.py)
-runs every one of these checks on the same strategy and prints what each
-concludes, so the difference is visible rather than asserted.
+runs each of these checks on the same strategy and prints what each concludes.
 
 ## What you can build
 
