@@ -182,7 +182,7 @@ def prepare_cross_asset(
     bare = sorted(r for r in refs if ":" not in r)
     dict_universe: Optional[Dict[str, List[str]]] = None
     if bare and not isinstance(universe, dict) and metadata_db is not None:
-        rows = _symbol_rows(metadata_db)
+        rows = metadata_db if isinstance(metadata_db, list) else _symbol_rows(metadata_db)
         traded = [
             _resolve_row(entry, rows)
             for entry in (universe if isinstance(universe, (list, tuple)) else [universe])

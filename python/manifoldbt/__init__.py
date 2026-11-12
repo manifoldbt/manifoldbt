@@ -71,6 +71,7 @@ from manifoldbt._native import (
     py_ingest as _ingest_native,
     py_import_csv as _import_csv_native,
     py_import_dataframe as _import_dataframe_native,
+    py_bars_in_memory as _bars_in_memory_native,
 )
 from manifoldbt._serde import scalar_value_to_json
 from manifoldbt.crossasset import (
@@ -499,7 +500,11 @@ def _prepared_config_json(config: BacktestConfig, strategy, store: DataStore) ->
     """
     _reject_resting_order_without_delay(config, strategy)
     try:
-        meta_db = store.metadata_db()
+        # An in-memory store has no file to key on: its version is its content.
+        meta_db = (
+            store.active_version("bars_1m") if store.dataset() == "memory"
+            else store.metadata_db()
+        )
     except Exception:
         meta_db = None
     if meta_db is None:
@@ -1028,7 +1033,15 @@ def ingest(
     Providers (free): ``"binance"``, ``"bybit"``, ``"hyperliquid"``, ``"dydx"``,
     ``"bitstamp"``, ``"deribit"``, ``"yahoo"`` (alias ``"yfinance"``),
     ``"dukascopy"``, ``"polymarket"``. Free with your own key: ``"lse"``. Pro:
-    ``"databento"``, ``"massive"``.
+    ``"databento"``, ``"massive"``, ``"0xarchive"``.
+
+    ``"0xarchive"`` (``OXARCHIVE_API_KEY``) serves the full history of
+    Hyperliquid and Lighter, where Hyperliquid's own API stops at its last
+    5,000 candles. The symbol names the market: ``"BTC"`` a Hyperliquid
+    perpetual, ``"HYPE-USDC"`` a spot pair, ``"xyz/XYZ100"`` a HIP-3 market,
+    ``"lighter/BTC"`` a Lighter market. 0xArchive's own ``"xyz:XYZ100"`` is
+    accepted and stored as ``"XYZ/XYZ100"``, the name to give ``universe``.
+    Intervals ``1m`` to ``1d``, and ``1w``.
 
     Returns a :class:`DataStore` ready for :func:`run`.
 
@@ -1287,6 +1300,11 @@ def ingest_trades(
       ``dataset`` (``"XNAS.ITCH"``, ``"GLBX.MDP3"``, ...), stamped by the
       matching engine. ``asset_class`` is required: a dataset can hold
       stocks, futures or options.
+    * ``"0xarchive"`` (``OXARCHIVE_API_KEY``): every trade of the UTC day on
+      Hyperliquid (perpetuals, spot, HIP-3) or Lighter, stamped to the
+      millisecond, with the aggressor's side from the venue. Symbols as for
+      :func:`ingest` (``"BTC"``, ``"HYPE-USDC"``, ``"xyz/XYZ100"``,
+      ``"lighter/BTC"``); ``asset_class`` follows the market when left out.
 
     ``"polymarket"``, free and without a key, serves the trades of one outcome
     of a market, ``symbol="will-x-happen/Yes"``, stamped to the second. Both
@@ -1349,8 +1367,8 @@ def ingest_trades(
     the strategy authoring guide for what reads it and in what order.
 
     Args:
-        provider: ``"bybit"``, ``"binance"``, ``"massive"``, ``"databento"``
-            or ``"polymarket"``.
+        provider: ``"bybit"``, ``"binance"``, ``"massive"``, ``"databento"``,
+            ``"0xarchive"`` or ``"polymarket"``.
         symbol: Symbol on the venue (e.g. ``"BTCUSDT"``), or
             ``"<market-slug>/<outcome>"`` on Polymarket.
         symbol_id: Store id for the symbol, the same as its book's.
@@ -1442,8 +1460,8 @@ def ingest_book(
     refused. :func:`convert_book_to_deltas` rewrites a stored book as
     deltas.
 
-    ``"bybit"`` is the only provider: its archive is the one free source of
-    historical depth. How deep a day goes depends on the market and the date
+    ``"bybit"``: its archive is the free source of historical depth. How deep
+    a day goes depends on the market and the date
     (checked on BTCUSDT, ETHUSDT and BTCUSD; a symbol listed later starts
     later):
 
@@ -1452,6 +1470,15 @@ def ingest_book(
       Linear BTCUSDT goes back to 2023-01-18.
     * ``"spot"``: 200 levels, from about 2025-04-30.
     * Options: no archive.
+
+    ``"0xarchive"`` (``OXARCHIVE_API_KEY``) serves the book 0xArchive recorded
+    on Hyperliquid (perpetuals, spot, HIP-3) and Lighter, each row a snapshot
+    of both sides. Hyperliquid is recorded 20 levels deep, the default and the
+    most ``levels`` takes there; Lighter is recorded whole, and ``levels``
+    goes up to 500. The symbol names the market as for :func:`ingest`
+    (``"BTC"``, ``"HYPE-USDC"``, ``"xyz/XYZ100"``, ``"lighter/BTC"``), and so
+    the ``category``, which can be left out. A day 0xArchive holds no book for
+    raises a named error.
 
     Each day is read from the file Bybit published for it, whichever depth
     that is. A day it did not publish raises a named error rather than
@@ -1480,7 +1507,7 @@ def ingest_book(
     strategy authoring guide.
 
     Args:
-        provider: ``"bybit"``.
+        provider: ``"bybit"`` or ``"0xarchive"``.
         symbol: Symbol on the venue (e.g. ``"BTCUSDT"``).
         symbol_id: Store id for the symbol, as for :func:`ingest`.
         start: First day, ``YYYY-MM-DD``.
@@ -1946,7 +1973,11 @@ def _df_to_bars_batch(data):
     import pyarrow as pa
 
     # --- to Arrow Table (same dispatch as register_exo) ---
-    if hasattr(data, "to_arrow"):
+    if isinstance(data, pa.Table):
+        table = data
+    elif isinstance(data, pa.RecordBatch):
+        table = pa.Table.from_batches([data])
+    elif hasattr(data, "to_arrow"):
         # Polars DataFrame
         table = data.to_arrow()
     elif hasattr(data, "columns"):
@@ -2065,6 +2096,110 @@ def import_dataframe(
         raise _classify_error(exc) from exc
 
 
+def _bars_from_file(path) -> Any:
+    """The bar columns of an Arrow IPC / Feather or Parquet file, as a pyarrow Table.
+
+    An uncompressed Arrow file is memory-mapped, so its columns are read in place
+    and the operating system pages in only what a run touches. Parquet is decoded,
+    its other columns skipped.
+    """
+    import pyarrow as pa
+    from pathlib import Path
+
+    path = Path(path)
+    if not path.is_file():
+        raise DataError(f"no such file: {path}")
+    suffix = path.suffix.lower()
+    if suffix == ".parquet":
+        import pyarrow.parquet as pq
+
+        names = pq.read_schema(path).names
+        wanted = _BARS_REQUIRED_COLUMNS + _BARS_OPTIONAL_COLUMNS
+        return pq.read_table(path, columns=[c for c in names if c in wanted])
+    if suffix in (".arrow", ".feather", ".ipc"):
+        return pa.ipc.open_file(pa.memory_map(str(path), "r")).read_all()
+    if suffix == ".arrows":
+        return pa.ipc.open_stream(pa.memory_map(str(path), "r")).read_all()
+    raise DataError(
+        f"cannot read {path.name}: use .arrow, .feather, .ipc, .arrows or .parquet"
+    )
+
+
+def _bars_source_to_batch(source):
+    import os
+
+    if isinstance(source, (str, os.PathLike)):
+        source = _bars_from_file(source)
+    return _df_to_bars_batch(source)
+
+
+def from_bars(
+    data,
+    symbol: Optional[str] = None,
+    *,
+    interval: str = "1m",
+    exchange: str = "DATAFRAME",
+    asset_class: str = "crypto_spot",
+) -> DataStore:
+    """Bars ready for :func:`run`, held in memory: nothing is written to disk.
+
+    The fastest way to give the engine your own bars, for a run that does not
+    need them again in another process. Arrow columns of float64 and
+    timestamp[ns] are read where they are, without a copy, and so is an
+    uncompressed Arrow file, memory-mapped: do not rewrite it while the store
+    is in use. Use :func:`import_dataframe` for a store that outlives the
+    process. Free on all tiers.
+
+    Example::
+
+        store = mbt.from_bars(df, "EURUSD", asset_class="forex")
+        store = mbt.from_bars("EURUSD_1m.arrow", "EURUSD")      # memory-mapped
+        store = mbt.from_bars({"BTCUSDT": btc, "ETHUSDT": "eth.parquet"})
+        result = mbt.run(strategy, config, store)
+
+    Args:
+        data: A pandas or polars DataFrame, a pyarrow Table or RecordBatch, a dict
+            of columns, or the path of a file: ``.arrow``, ``.feather``, ``.ipc``,
+            ``.arrows`` or ``.parquet``. Or, with ``symbol`` left out, a dict from
+            ticker to any of these. Columns are those of :func:`import_dataframe`;
+            rows must be strictly increasing in time, and anything else is refused
+            naming the row.
+        symbol: Ticker of the series. Symbols take the ids 1, 2, ... in the order
+            given; ``universe=["EURUSD"]`` is the simple way to name them.
+        interval: Bar interval of the rows (``"1s"``, ``"1m"``, ``"1h"``, ...).
+        exchange: Exchange label (default ``"DATAFRAME"``).
+        asset_class: ``crypto_spot``, ``crypto_perp``, ``equity``, ``future``,
+            ``option``, ``forex``, or ``index``.
+
+    A store in memory holds bars and nothing else, and has no path. What reads or
+    writes files beside the bars (``register_exo``, ``attach_quotes``,
+    ``bars_from_trades``, a candlestick chart) says so and asks for a store on disk;
+    so does a cloud job, whose worker cannot read it. A run asking for a tape or a
+    book falls back on the bars, as on any store that holds none.
+    """
+    if symbol is None:
+        if not isinstance(data, dict) or not all(isinstance(k, str) for k in data):
+            raise TypeError(
+                "from_bars needs a symbol, or a dict from ticker to bars: "
+                "from_bars(df, \"EURUSD\") or from_bars({\"EURUSD\": df})"
+            )
+        known = _BARS_REQUIRED_COLUMNS + _BARS_OPTIONAL_COLUMNS
+        if "timestamp" in data or any(k in known for k in data):
+            raise TypeError(
+                "this dict holds columns: name its symbol, from_bars(columns, \"EURUSD\")"
+            )
+        sources = list(data.items())
+    else:
+        sources = [(str(symbol), data)]
+    series = [(name, _bars_source_to_batch(source)) for name, source in sources]
+    try:
+        return _bars_in_memory_native(
+            series, interval=interval, exchange=exchange, asset_class=asset_class,
+        )
+    except (ValueError, RuntimeError) as exc:
+        raise _classify_error(exc) from exc
+
+
 def _ingest_single(
     *, provider, symbol, symbol_id, start, end, interval, dataset,
     data_root, metadata_db, exchange, asset_class, progress,
@@ -2124,7 +2259,13 @@ def _apply_cross_asset(strategy, config: BacktestConfig, store: DataStore):
     try:
         meta_db = store.metadata_db()
     except Exception:
-        meta_db = None
+        # In memory: the catalog itself, as there is no file to read it from.
+        try:
+            meta_db = [
+                (i, t, store.exchanges()[i]) for i, t in store.list_symbols()
+            ]
+        except Exception:
+            meta_db = None
     try:
         prepared = _prepare_cross_asset(doc, config.universe, meta_db)
     except ValueError:
@@ -2446,7 +2587,8 @@ def _run_quote_sweep(
         if lite:
             from manifoldbt._reprs import wrap_sweep_lite
 
-            return wrap_sweep_lite(_run_quote_sweep_lite_native(*args))
+            return wrap_sweep_lite(_run_quote_sweep_lite_native(*args), param_grid,
+                                   execution_grid)
         pairs = _run_quote_sweep_native(*args)
         return SweepResult(_quote_results(pairs, config), param_grid, execution_grid)
     except (ValueError, RuntimeError) as exc:
@@ -2898,9 +3040,11 @@ def run_sweep_lite(
         One :class:`BatchResultLite` per combo, in the engine's enumeration
         order: axes sorted by parameter NAME, last axis varying fastest. This
         is not the dict's insertion order, so a reshape on the dict's order
-        silently transposes the grid. :func:`manifoldbt.dataframe.grid_combos`
-        lists the combinations in this order, and
-        :func:`manifoldbt.dataframe.results_to_df` labels the results with it.
+        silently transposes the grid. The list returned knows its grid:
+        ``results.params(i)`` gives the parameters of result ``i``, and
+        ``results.to_df()`` a table with one ``param_*`` column per parameter
+        (:func:`manifoldbt.dataframe.grid_combos` and
+        :func:`manifoldbt.dataframe.results_to_df` do the same by hand).
         With an ``execution_grid``, the execution axes are slower still: one
         block of the whole parameter surface per execution combination.
 
@@ -2961,7 +3105,9 @@ def run_sweep_lite(
         return wrap_sweep_lite(
             _run_sweep_lite_native(*native_args, exec_json)
             if execution_grid
-            else _run_sweep_lite_native(*native_args)
+            else _run_sweep_lite_native(*native_args),
+            param_grid,
+            execution_grid,
         )
     except (ValueError, RuntimeError) as exc:
         raise _classify_error(exc) from exc
@@ -3085,8 +3231,10 @@ def run_walk_forward(
     Returns:
         Dict with ``folds``, ``best_params_per_fold``, ``n_folds``,
         ``folds_overlap``, ``effective_folds`` (independent folds: overlapping
-        windows count for less) and ``walk_forward_efficiency`` (Pardo's WFE,
-        mean of per-fold ``oos.cagr / is.cagr``).
+        windows count for less), ``walk_forward_efficiency`` (Pardo's WFE,
+        mean of per-fold ``oos.cagr / is.cagr``) and
+        ``walk_forward_efficiency_median`` (the median of the same ratios,
+        which one fold with a tiny training CAGR cannot drag).
 
     Each fold's OOS run is WARMED UP: it simulates from the fold's train start
     with trading suppressed until the test window, so indicators are hot at
@@ -3689,6 +3837,7 @@ Data
 ----
 store = mbt.DataStore(data_root, metadata_db)   # backend auto-detected, incl. Arrow IPC
 store.list_symbols()                           # [(id, ticker), ...]
+mbt.from_bars(df, "X", interval="1h")          # in memory, nothing on disk
 mbt.import_dataframe(df, symbol="X", symbol_id=1, interval="1h",
                     data_root=..., metadata_db=...)   # cols: timestamp/open/high/low/close/volume
 mbt.ingest(provider="binance", symbol="BTCUSDT", symbol_id=1,
@@ -3842,6 +3991,7 @@ __all__ = [
     "attach_quotes",
     "import_csv",
     "import_dataframe",
+    "from_bars",
     # Run functions
     "run",
     "run_sweep",

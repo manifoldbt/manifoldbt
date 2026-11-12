@@ -8,7 +8,7 @@ round-trips); only the repr changes.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 _MAX_SCAN = 100_000  # cap the repr's own cost on million-combo sweeps
 
@@ -40,7 +40,48 @@ class SweepLiteResults(list):
     """``run_sweep_lite`` output: a list, with a one-line repr.
 
     Printing 400 combos used to emit 400 lines of ``BatchResultLite(...)``.
+
+    A lite result does not carry its parameters. The list does: it keeps the
+    grid it was swept on, so :meth:`params` and :meth:`to_df` label each
+    result with the combination that produced it, in the engine's order.
     """
+
+    _param_grid: Optional[Dict[str, List[Any]]] = None
+    _execution_grid: Optional[Dict[str, List[Any]]] = None
+
+    def params(self, index: int) -> Dict[str, Any]:
+        """The parameters result ``index`` ran with, as plain Python values.
+
+        Read from the grid in the engine's enumeration order (axes sorted by
+        name, last axis varying fastest, execution axes slower than all of
+        them). Empty when the sweep was given no grid.
+        """
+        from manifoldbt.dataframe import grid_combos
+
+        n = len(self)
+        if not -n <= index < n:
+            raise IndexError(f"params({index}): this sweep holds {n} results")
+        combos = grid_combos(self._param_grid or {})
+        if not combos:
+            return {}
+        # The parameter surface repeats once per execution combination.
+        return dict(combos[(index % n) % len(combos)])
+
+    def to_df(self, backend: str = "auto") -> Any:
+        """One row per combination: its ``param_*`` columns, then its metrics.
+
+        Same table as ``SweepResult.to_df()`` gives for a full sweep
+        (:func:`manifoldbt.dataframe.results_to_df`), with ``exec_*`` columns
+        when an ``execution_grid`` was swept.
+        """
+        from manifoldbt.dataframe import results_to_df
+
+        return results_to_df(
+            list(self),
+            self._param_grid or None,
+            backend=backend,
+            execution_grid=self._execution_grid or None,
+        )
 
     def __repr__(self) -> str:
         n = len(self)
@@ -60,7 +101,8 @@ class SweepLiteResults(list):
         if n > _MAX_SCAN:
             parts.append(f"(range over first {_MAX_SCAN:,})")
         return ("<SweepLiteResults: " + " | ".join(parts) +
-                "\n  r[i] for one combo, mbt.sweep_columns(r, 'sharpe') for arrays>")
+                "\n  r[i] for one combo, r.params(i) for its parameters, r.to_df() for a "
+                "table, mbt.sweep_columns(r, 'sharpe') for arrays>")
 
 
 class WalkForwardResult(dict):
@@ -92,6 +134,9 @@ class WalkForwardResult(dict):
         wfe = self.get("walk_forward_efficiency")
         if wfe is not None:
             entete += f" | WFE {wfe:.2f}"
+            mediane = self.get("walk_forward_efficiency_median")
+            if mediane is not None:
+                entete += f" (median {mediane:.2f})"
         lines = [entete]
         for f in folds:
             best = f.get("best_params") or {}
@@ -107,8 +152,15 @@ class WalkForwardResult(dict):
         return "\n".join(lines)
 
 
-def wrap_sweep_lite(results: List[Any]) -> "SweepLiteResults":
-    return SweepLiteResults(results)
+def wrap_sweep_lite(
+    results: List[Any],
+    param_grid: Optional[Dict[str, List[Any]]] = None,
+    execution_grid: Optional[Dict[str, List[Any]]] = None,
+) -> "SweepLiteResults":
+    out = SweepLiteResults(results)
+    out._param_grid = dict(param_grid) if param_grid else None
+    out._execution_grid = dict(execution_grid) if execution_grid else None
+    return out
 
 
 def wrap_walk_forward(result: Dict[str, Any]) -> "WalkForwardResult":

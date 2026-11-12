@@ -177,6 +177,14 @@ def _payload(strategy, config, store, param_grid=None, rank_by="sharpe", top_n=5
     # module, so a top-level import would be circular.
     from manifoldbt import _prepared_config_json
 
+    # A job carries symbol ids and the worker reads its own store. The ids of a
+    # store in memory mean nothing there: they would run on another symbol.
+    if store.dataset() == "memory":
+        raise ValueError(
+            "this store lives in memory (mbt.from_bars), a worker cannot read it. "
+            "Use a store the worker holds."
+        )
+
     body = {
         "strategy": strategy.to_json_dict(),
         "config": json.loads(_prepared_config_json(config, strategy, store)),

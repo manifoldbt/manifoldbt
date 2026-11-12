@@ -36,13 +36,14 @@ strategy once, in a fluent Python DSL, and hand it to the engine: the whole
 backtest then runs in Rust, signals, fills, fees, slippage, funding and equity
 included. Python stays out of the hot loop.
 
-- **Fast.** 10 million bars with a full performance summary in **<!-- bench:fast_mbt -->211 ms<!-- /bench:fast_mbt -->**,
-  where vectorbt takes <!-- bench:fast_vbt -->82.2 s<!-- /bench:fast_vbt -->. 10,000 parameter sets over 200,000 bars in
-  **<!-- bench:fast_sweep_time -->3.5 s<!-- /bench:fast_sweep_time --> inside <!-- bench:fast_sweep_mem -->344 MB<!-- /bench:fast_sweep_mem -->**. Measured on a standard 4-vCPU GitHub runner,
+- **Fast.** 10 million bars with a full performance summary in **<!-- bench:fast_mbt -->209 ms<!-- /bench:fast_mbt -->**,
+  where vectorbt takes <!-- bench:fast_vbt -->81.8 s<!-- /bench:fast_vbt -->. 10,000 parameter sets over 200,000 bars in
+  **<!-- bench:fast_sweep_time -->4.5 s<!-- /bench:fast_sweep_time --> inside <!-- bench:fast_sweep_mem -->348 MB<!-- /bench:fast_sweep_mem -->**. Measured on a standard 4-vCPU GitHub runner,
   [every run linked](#performance).
-- **Checked.** Entry price, exit price and exit reason are asserted against
-  vectorbt in CI, on the wheel published to PyPI. A benchmark workload the
-  engines disagree on gets no timing at all.
+- **Checked.** Every benchmark workload must match vectorbt's results before it
+  is timed, in public CI, and a workload the engines disagree on gets no timing
+  at all. Entry price, exit price and exit reason are
+  [asserted against vectorbt](#correctness) trade by trade.
 - **Explicit.** Every fill rule is [written down](#execution-semantics),
   pessimistic wherever a choice existed.
 
@@ -57,7 +58,7 @@ Wheels for Linux (x86_64 and ARM), Windows and macOS on Apple Silicon. No Rust t
 | You want to | Go to | Start with |
 | --- | --- | --- |
 | Run a backtest | [Quick start](#quick-start) | `pip install manifoldbt` |
-| Have an agent write the strategy | [MCP docs](https://www.manifoldbt.com/mcp) | Connect `https://mcp.manifoldbt.com/docs/mcp`, no key and nothing to install |
+| Have an agent write the strategy | [MCP docs](https://www.manifoldbt.com/mcp) | Connect `https://mcp.manifoldbt.com/mcp`, no key and nothing to install |
 | Run the research method with an agent | [quant-research-skill](https://github.com/Jimmy7892/quant-research-skill) | `claude plugin marketplace add Jimmy7892/quant-research-skill` |
 | Read working strategies first | [Examples](#examples) | `python examples/13_stochastic_simulation.py` |
 | Walk through it in the browser | [Notebook](https://www.manifoldbt.com/notebook) | Strategy, sweep, walk-forward, Monte Carlo |
@@ -160,11 +161,11 @@ and only then reports how long each took.
 SMA crossover with drawdown, Sharpe, Sortino and volatility, 10M bars
   Manifold-BT  ▏                                                  0.21 s
   raptorbt     ▊                                                   1.2 s
-  vectorbt     ████████████████████████████████████████████████   82.2 s
+  vectorbt     ████████████████████████████████████████████████   81.8 s
 
 Parameter sweep, 10,000 combinations over 200,000 bars
-  Manifold-BT  █▍                                                  3.5 s
-  raptorbt     ████████████████████████████████████████████████   127.8 s
+  Manifold-BT  █▌                                                  4.5 s
+  raptorbt     ████████████████████████████████████████████████   150.4 s
   vectorbt     not run: it materialises every combination, this grid needs tens of GB
 ```
 
@@ -172,8 +173,8 @@ Parameter sweep, 10,000 combinations over 200,000 bars
 
 <!-- bench:run -->
 
-**[Run 42444246865](https://github.com/manifoldbt/manifoldbt/actions/runs/42444246865)**:
-Linux x86_64, 4 vCPU, Python 3.12, manifoldbt 0.33.0, vectorbt 0.28.4,
+**[Run 42629948200](https://github.com/manifoldbt/manifoldbt/actions/runs/42629948200)**:
+Linux x86_64, 4 vCPU, Python 3.12, manifoldbt 0.34.0, vectorbt 0.28.4,
 raptorbt 0.9.0. Seven interleaved repetitions, medians
 reported; the ratio is the median of the per-repetition ratios. All five rows below agree with vectorbt exactly (relative tolerance 1e-9).
 These figures are regenerated from the latest published run at each release; the
@@ -186,11 +187,11 @@ newest run is always the one on [manifoldbt.com/benchmarks](https://www.manifold
 
 | Workload | Bars | Manifold-BT | vectorbt | raptorbt |
 |---|---:|---:|---:|---:|
-| SMA 30/150 crossover | 10M | **198 ms** | 20.7 s (×104.0) | 1.22 s (×6.1) |
-| ...plus drawdown, Sharpe, Sortino, volatility | 10M | **211 ms** | 82.2 s (**×391**) | 1.22 s (×5.8) |
-| ...with a 5 bps fee and 2 bps slippage | 10M | **203 ms** | 21.4 s (×105.7) | not supported |
-| EMA 12/26 + RSI(14) filter, 5 bps fee | 1M | **37 ms** | 1.93 s (×51.1) | not supported |
-| Five assets in one book, 5 bps fee | 1M | **131 ms** | 2.05 s (×15.7) | not supported |
+| SMA 30/150 crossover | 10M | **196 ms** | 20.4 s (×104.0) | 1.22 s (×6.2) |
+| ...plus drawdown, Sharpe, Sortino, volatility | 10M | **209 ms** | 81.8 s (**×392**) | 1.22 s (×5.8) |
+| ...with a 5 bps fee and 2 bps slippage | 10M | **209 ms** | 21.4 s (×101.9) | not supported |
+| EMA 12/26 + RSI(14) filter, 5 bps fee | 1M | **37 ms** | 1.93 s (×50.2) | not supported |
+| Five assets in one book, 5 bps fee | 1M | **127 ms** | 2.01 s (×15.8) | not supported |
 
 <!-- /bench:table -->
 
@@ -208,29 +209,28 @@ of an empty cell.
 
 | Bars | Combinations | Manifold-BT | vectorbt | raptorbt |
 |---:|---:|---:|---:|---:|
-| 20,000 | 5,000 | **0.24 s**, 38 MB | 4.12 s, 2.5 GB | 5.15 s, 37 MB |
-| 20,000 | 20,000 | **0.90 s**, 80 MB | not run | 20.3 s, 63 MB |
-| 200,000 | 10,000 | **3.53 s**, 344 MB | not run | 128 s, 370 MB |
-| 200,000 | 150,000 | **73.0 s**, 834 MB | not run | not run |
+| 20,000 | 5,000 | **0.30 s**, 40 MB | 5.25 s, 2.5 GB | 6.54 s, 37 MB |
+| 20,000 | 20,000 | **1.46 s**, 91 MB | not run | 25.8 s, 62 MB |
+| 200,000 | 10,000 | **4.51 s**, 348 MB | not run | 150 s, 370 MB |
+| 200,000 | 150,000 | **93.2 s**, 827 MB | not run | not run |
 
 <!-- /bench:sweeps -->
 
 Past a certain grid the question stops being speed. vectorbt materialises the
-simulation per combination, 1.57 MB of it at 20,000 bars, so the larger grids
+simulation per combination (its memory column above), so the larger grids
 would ask the runner for tens of gigabytes. Each sweep is checked for parity
 before it is timed: every combination against raptorbt, and against vectorbt
 on the full grid where it fits, or on a 250-combination anchor grid where it
-does not. The sweep job runs with a paid licence, since Community sweeps stop
-at 256 combinations.
+does not. The sweep job runs on Pro.
 
 ### Where it does not win
 
-- **On a single backtest, the gap to raptorbt is about 4×, not orders of
-  magnitude.** Both are compiled engines; the large ratios in the first table
-  are against vectorbt. The <!-- bench:sweep_raptor_range -->×22 to ×36<!-- /bench:sweep_raptor_range --> on sweeps is a different story: raptorbt
+- **On a single backtest, the gap to raptorbt is a single-digit factor, not
+  orders of magnitude.** Both are compiled engines; the large ratios in the first table
+  are against vectorbt. The <!-- bench:sweep_raptor_range -->×18 to ×33<!-- /bench:sweep_raptor_range --> on sweeps is a different story: raptorbt
   has no fan-out API, so its sweep is a Python loop paying a full backtest per
   combination.
-- **Multi-asset is the smallest lead over vectorbt (<!-- bench:multi_vbt -->×15.7<!-- /bench:multi_vbt -->).** Broadcasting a
+- **Multi-asset is the smallest lead over vectorbt (<!-- bench:multi_vbt -->×15.8<!-- /bench:multi_vbt -->).** Broadcasting a
   column per asset is close to free for vectorbt, while walking five books is
   not free for anything.
 - **On a stop-loss/take-profit bracket, raptorbt comes closest** (<!-- bench:bracket_raptor_1m -->×1.2<!-- /bench:bracket_raptor_1m --> at 1M
@@ -248,7 +248,9 @@ locally. The method, the parity gate and the known divergences are in
 Each release re-runs it, and the latest results are on
 [manifoldbt.com/benchmarks](https://www.manifoldbt.com/benchmarks).
 
-Against an event-driven engine the comparison is only an order of magnitude:
+Against event-driven engines the gap is about three orders of magnitude.
+NautilusTrader runs in the same public benchmark, behind the same parity gate,
+with its results on [manifoldbt.com/benchmarks](https://www.manifoldbt.com/benchmarks).
 backtrader runs an EMA(12/26) + RSI(14) strategy on 500K 1-minute bars in
 46.9 s against 13 ms here
 ([`benchmarks/bench_vs_competitors.py`](https://github.com/manifoldbt/manifoldbt/blob/master/benchmarks/bench_vs_competitors.py),
@@ -259,11 +261,11 @@ do the same work.
 ## Correctness
 
 Speed is worth nothing if the fills are wrong. Everything in this section is a
-test in this repository, and it runs in CI against the wheel **published on
-PyPI**, not against the source, on Python 3.9 to 3.13. No licence is configured
-in that job on purpose, so what it exercises is the experience of someone who
-has just run `pip install manifoldbt`, and the run prints which tests skipped
-rather than showing a green tick that hides them.
+test in this repository. The suite runs in CI against the wheel **published on
+PyPI**, not against the source, on Python 3.9 to 3.13. The job runs the free
+tier on purpose, so what it exercises is the experience of someone who has just
+run `pip install manifoldbt`, and the run prints which tests skipped rather than
+showing a green tick that hides them.
 
 **Fill-level parity with vectorbt.**
 [`test_parity_vectorbt.py`](https://github.com/manifoldbt/manifoldbt/blob/master/python/tests/test_parity_vectorbt.py)
@@ -272,7 +274,9 @@ statistic. Each scenario is a short series built to produce one clean round
 trip, and the entry price, exit price, exit reason and final return are all
 asserted against vectorbt: market take-profit, market stop-loss,
 stop-loss/take-profit brackets, shorts and trailing stops. A further scenario
-pins the fee arithmetic across two round trips.
+pins the fee arithmetic across two round trips. It runs wherever vectorbt is
+installed (`pip install vectorbt`); the CI job above installs only the
+package's own extras, so it lists this file among the skipped ones.
 
 **Resting limit entries** have no vectorbt equivalent to compare against. They
 are pinned instead by a NumPy model that computes the fill from raw OHLC with no
@@ -342,8 +346,11 @@ runs each of these checks on the same strategy and prints what each concludes.
 **Data.** Built-in connectors, all returning a store ready for `mbt.run`:
 Binance, Bybit, Hyperliquid, dYdX, Bitstamp, Deribit, Yahoo Finance, Dukascopy
 and Polymarket on every tier, London Strategic Edge on every tier with your own free
-key, Databento and Massive with Pro. Or bring your own CSV
-(standard, MetaTrader 4 and MetaTrader 5 layouts are detected):
+key, Databento, Massive and 0xArchive (the full history of Hyperliquid and
+Lighter) with Pro. Or bring your own CSV (standard, MetaTrader 4 and
+MetaTrader 5 layouts are detected) or a pandas or Polars DataFrame
+(`mbt.import_dataframe`, or `mbt.from_bars` to backtest it without writing
+anything to disk):
 
 ```python
 store = mbt.import_csv("EURUSD_1m.csv", symbol="EURUSD", symbol_id=1,
@@ -410,16 +417,19 @@ reference, or which indicator to apply.
 **Execution.** Maker and taker fees per venue, perpetual funding, borrow costs,
 slippage, partial fills at a participation rate, limit, stop and stop-limit
 entries, brackets and trailing stops, and fills at a price the strategy
-computes. Simulation on bars from one minute up, or from one second with Pro.
+computes. Simulation on bars from one minute up, from one second with Pro, and
+down to the tick with Researcher.
 
 **Research.** Walk-forward optimization, Monte Carlo resampling, stochastic path
 simulation (GBM, Heston, Merton jump-diffusion, GARCH with jumps), multi-asset
 and multi-strategy portfolios, cross-exchange universes, exposure and risk
-checks, and HTML tearsheets.
+checks, prop-firm account rules enforced during the run (`mbt.AccountRules`),
+and HTML tearsheets.
 
 **Trades and the order book** (Researcher). Resolve stops and targets against
 the individual trades inside each bar instead of assuming the order of high and
-low, simulate a market maker on the trade clock with a queue and a latency, and
+low, fill against the real bid and ask, simulate a market maker on the trade
+clock with a queue and a latency on L2 or market-by-order (L3) books, and
 reconcile the backtest against the fills a broker actually granted.
 
 ## Examples
@@ -497,7 +507,7 @@ The base install stays light (no browser, no GUI) for scripts, servers and CI.
 `[plot]` adds plotly and a native window backend; `[all]` also pulls kaleido
 for static PNG/SVG export, which bundles a headless Chromium.
 
-The Linux and Windows x86_64 wheels already carry the CUDA kernels, so `[gpu]`
+The Linux (x86_64 and ARM glibc) and Windows x86_64 wheels already carry the CUDA kernels, so `[gpu]`
 only adds the NVIDIA runtime compiler (~180 MB) that compiles them on your
 machine. Skip it if you already have a CUDA toolkit installed. An NVIDIA driver
 is required, and GPU acceleration is a Researcher feature; everything else runs
@@ -515,7 +525,7 @@ capturing a script's stdout gets only what the script prints. They are coloured
 only on a terminal and never when `NO_COLOR` is set; `MANIFOLDBT_QUIET=1`
 silences both.
 
-## Community, Pro and Researcher
+## Community, Pro, Researcher and Firm
 
 Single backtests are free and run at full speed, with no run limit and no
 account. The
@@ -525,18 +535,25 @@ paid tiers add scale and depth. See [pricing](https://www.manifoldbt.com/#pricin
 |---|:---:|:---:|:---:|
 | Single backtests (`mbt.run`) | Unlimited, full speed | Unlimited | Unlimited |
 | Parameter sweeps and batches | Up to 256 backtests per sweep | Unlimited | Unlimited |
-| Simulation resolution (`bar_interval`) | 1 minute and coarser | Down to 1 second | Down to 1 second |
+| Engine resolution | 1 minute and coarser | Down to 1 second | Down to the tick |
 | Output resolution | Daily | Down to 1 second | Down to 1 second |
 | Monte Carlo | 1,000 simulations | Unlimited | Unlimited |
 | Walk-forward optimization | - | Yes | Yes |
 | Look-ahead detection (`detect_lookahead`) | - | Yes | Yes |
 | Exposure and risk checks (`risk_check`) | Yes | Yes | Yes |
+| Prop-firm account rules (`AccountRules`) | Yes | Yes | Yes |
 | Cross-exchange universes | - | Yes | Yes |
-| Free connectors and CSV import | Yes | Yes | Yes |
-| Databento and Massive connectors | - | Yes | Yes |
+| Free connectors, CSV and DataFrame import | Yes | Yes | Yes |
+| Databento, Massive and 0xArchive connectors | - | Yes | Yes |
 | Tearsheets and export | Yes | Yes | Yes |
 | GPU acceleration (`device="cuda"`) | - | - | Yes |
-| Trade tape, order book, queue and latency | - | - | Yes |
+| Order flow from the trade tape | - | - | Yes |
+| Real bid / ask (BBO) | - | - | Yes |
+| Tick-resolved fills | - | - | Yes |
+| L2/L3 order book and queue position | - | - | Yes |
+
+[Firm](https://www.manifoldbt.com/firm) adds distributed compute on your own
+infrastructure, connectors built for your data and a contractual SLA.
 
 ## Documentation and community
 
@@ -550,14 +567,12 @@ paid tiers add scale and depth. See [pricing](https://www.manifoldbt.com/#pricin
 
 ## License
 
-Two licences, one for each layer.
+Free to use, including commercially.
 
-- **The code in this repository**, the Python package, the examples, the tests
-  and the benchmarks, is open source under
+- **The Python package, examples, tests and benchmarks** in this repository
+  are open source under
   [Apache 2.0](https://github.com/manifoldbt/manifoldbt/blob/master/LICENSE).
-- **The compiled Rust engine** inside the wheels published on PyPI (the
-  `manifoldbt._native` module) is proprietary, see
-  [LICENSE-ENGINE](https://github.com/manifoldbt/manifoldbt/blob/master/LICENSE-ENGINE).
-  Its source is not published. It is free to use, including commercially
-  inside your own firm and on your own infrastructure; reselling it, offering
-  it as a paid hosted service or reverse engineering it is not permitted.
+- **The compiled engine** inside the wheels published on PyPI (the
+  `manifoldbt._native` module) is covered by the free
+  [Manifold-BT Engine License](https://github.com/manifoldbt/manifoldbt/blob/master/LICENSE-ENGINE):
+  no resale and no paid hosted service. The full terms are in that file.
