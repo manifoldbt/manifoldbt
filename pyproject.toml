@@ -5,16 +5,34 @@
 
 [project]
 name = "manifoldbt"
-version = "0.35.0"
-description = "Rust-powered backtesting engine for quantitative research"
+version = "0.35.1"
+description = "Fast Python backtesting with a Rust engine: parameter sweeps, walk-forward, Monte Carlo, realistic execution, Polymarket and Hyperliquid data"
 readme = "README.md"
 requires-python = ">=3.9"
 keywords = [
     "backtesting",
-    "trading",
+    "backtest",
+    "backtester",
+    "vectorbt-alternative",
+    "backtrader-alternative",
+    "parameter-sweep",
+    "parameter-optimization",
+    "walk-forward",
+    "monte-carlo",
+    "algorithmic-trading",
     "quantitative-finance",
-    "rust",
     "quant",
+    "trading",
+    "crypto",
+    "perpetuals",
+    "funding-rates",
+    "polymarket",
+    "prediction-markets",
+    "hyperliquid",
+    "rust",
+]
+authors = [
+    { name = "Manifold-BT", email = "contact@manifoldbt.com" },
 ]
 license = "Apache-2.0 AND LicenseRef-Manifold-BT-Engine"
 license-files = [
@@ -91,8 +109,11 @@ manifoldbt = "manifoldbt.cli:main"
 
 [project.urls]
 Homepage = "https://www.manifoldbt.com"
-Documentation = "https://www.manifoldbt.com/docs/documentation.html"
+Documentation = "https://www.manifoldbt.com/documentation"
 Repository = "https://github.com/manifoldbt/manifoldbt"
+Changelog = "https://github.com/manifoldbt/manifoldbt/releases"
+Benchmarks = "https://www.manifoldbt.com/benchmarks"
+Issues = "https://github.com/manifoldbt/manifoldbt/issues"
 Discord = "https://discord.gg/MTRDFu67bK"
 
 [tool.pytest.ini_options]

@@ -2856,6 +2856,23 @@ def run_sweep(
         raise _classify_error(exc) from exc
 
 
+def _strategy_jsons(strategies) -> List[str]:
+    """One JSON per strategy, serialised once per distinct object.
+
+    ``[strategy] * 150`` is the usual way to run one strategy over many
+    columns; serialising the same object 150 times was serial work done before
+    the engine started.
+    """
+    seen: Dict[int, str] = {}
+    out = []
+    for strat in strategies:
+        key = id(strat)
+        if key not in seen:
+            seen[key] = strat.to_json()
+        out.append(seen[key])
+    return out
+
+
 def run_batch(
     strategies: List[Strategy],
     config: BacktestConfig,
@@ -2905,7 +2922,7 @@ def run_batch(
         store = _resolve_store(config, store)
         cfg_json = _prepared_config_json(config, None, store)
         native_args = (
-            [strat.to_json() for strat in strategies],
+            _strategy_jsons(strategies),
             cfg_json,
             store,
             max_parallelism,
@@ -2961,7 +2978,7 @@ def run_batch_lite(
         store = _resolve_store(config, store)
         cfg_json = _prepared_config_json(config, None, store)
         return _run_batch_lite_native(
-            [strat.to_json() for strat in strategies],
+            _strategy_jsons(strategies),
             cfg_json,
             store,
             max_parallelism,

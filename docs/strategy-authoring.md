@@ -4364,6 +4364,20 @@ strategy = (
 Orders travel with the strategy, so they apply wherever it runs: `run`,
 `run_batch`, `run_sweep` and `run_portfolio`.
 
+On bars, the legs are checked from the bar after the entry on, the stop first
+when one bar reaches both:
+
+| leg | fills when | fill price | costs |
+|---|---|---|---|
+| stop-loss, trailing stop | the low (high, for a short) reaches the level | the level, or the open if the bar opened past it | taker + slippage, kept inside the bar |
+| take-profit | the high (low, for a short) reaches the level | the level, or the open if the bar opened past it and never traded it | maker, no slippage |
+
+A take-profit on a bar that opened past the target but came back through it
+still fills at the target, not at the better open: the conservative convention.
+Only a bar that never traded the target at all -- a sell at 101 on a bar spanning
+102.5 to 104 -- fills it at the open, so no fill is ever booked at a price its
+bar did not trade.
+
 In a portfolio each leg is an independent run on `initial_capital * weight`
 and the portfolio equity is the sum of the legs. Two consequences:
 `max_position_pct` clamps on the leg's equity, not the portfolio's, and with
@@ -4450,7 +4464,7 @@ price instead:
 
 | Builder method | Fills when | Fill price | Costs |
 |---|---|---|---|
-| `.limit_entry(...)` | price comes **to** the level | the level exactly | maker, no slippage |
+| `.limit_entry(...)` | price comes **to** the level | the level exactly, or the open if the bar never traded the level | maker, no slippage |
 | `.stop_entry(...)` | price breaks **through** the level | the level, or the open if the bar gapped through it | taker + slippage |
 | `.market_if_touched(...)` | price comes **to** the level | the level | taker + slippage |
 | `.stop_limit_entry(...)` | breaks through `stop`, then rests at `limit` | the limit | maker, no slippage |
@@ -4483,6 +4497,27 @@ strategy = (
     .stop_loss(pct=3.0)
 )
 ```
+
+### What an entry order does not touch
+
+An entry order shapes the orders that **open or add to** a position. A signal
+that takes exposure off -- back to flat, or a partial reduction -- is an exit,
+and leaves at the market exactly as it would without an entry order. A reversal
+opens a position on the other side, so it keeps the entry order.
+
+A passive fill stays on a price its bar traded. The level is kept when the bar
+reached it, gap or not (the conservative convention); on a bar that never traded
+the level at all -- a buy limit at 99.8 on a bar whose high is 99.5 -- the order
+was marketable from the first print and fills at the open.
+
+### Re-entering after a bracket exit
+
+A stop, target or trailing exit closes the position inside a bar. With
+`signal_delay=1`, the resting entry the strategy would post next is read from
+**that bar's** close and rests from the following bar on: none is matched
+against the exit bar, since at the close it would have been read from the
+position was still open. A market entry, which needs no resting order,
+re-enters at the exit bar's close, as it always has.
 
 ### Resting on the venue's tick grid
 

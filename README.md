@@ -36,9 +36,9 @@ strategy once, in a fluent Python DSL, and hand it to the engine: the whole
 backtest then runs in Rust, signals, fills, fees, slippage, funding and equity
 included. Python stays out of the hot loop.
 
-- **Fast.** 10 million bars with a full performance summary in **<!-- bench:fast_mbt -->209 ms<!-- /bench:fast_mbt -->**,
-  where vectorbt takes <!-- bench:fast_vbt -->81.8 s<!-- /bench:fast_vbt -->. 10,000 parameter sets over 200,000 bars in
-  **<!-- bench:fast_sweep_time -->4.5 s<!-- /bench:fast_sweep_time --> inside <!-- bench:fast_sweep_mem -->348 MB<!-- /bench:fast_sweep_mem -->**. Measured on a standard 4-vCPU GitHub runner,
+- **Fast.** 10 million bars with a full performance summary in **<!-- bench:fast_mbt -->238 ms<!-- /bench:fast_mbt -->**,
+  where vectorbt takes <!-- bench:fast_vbt -->98.6 s<!-- /bench:fast_vbt -->. 10,000 parameter sets over 200,000 bars in
+  **<!-- bench:fast_sweep_time -->3.7 s<!-- /bench:fast_sweep_time --> inside <!-- bench:fast_sweep_mem -->341 MB<!-- /bench:fast_sweep_mem -->**. Measured on a standard 4-vCPU GitHub runner,
   [every run linked](#performance).
 - **Checked.** Every benchmark workload must match vectorbt's results before it
   is timed, in public CI, and a workload the engines disagree on gets no timing
@@ -47,11 +47,21 @@ included. Python stays out of the hot loop.
 - **Explicit.** Every fill rule is [written down](#execution-semantics),
   pessimistic wherever a choice existed.
 
+**Coming from vectorbt?** Manifold-BT is not a drop-in replacement: the API is
+different, and strategies are written in its own Python DSL. It is an
+alternative for large parameter sweeps, walk-forward and Monte Carlo, with fees,
+slippage and funding simulated inside the engine. The
+[public benchmark](https://www.manifoldbt.com/benchmarks) runs both on the same
+workloads and checks that their results match before timing them.
+
 ```bash
 pip install manifoldbt
 ```
 
 Wheels for Linux (x86_64 and ARM), Windows and macOS on Apple Silicon. No Rust toolchain, no compiler, no account.
+
+First released in March 2026, with 60+ releases since; the full history is on
+[GitHub Releases](https://github.com/manifoldbt/manifoldbt/releases).
 
 ## Pick your route
 
@@ -159,13 +169,13 @@ and only then reports how long each took.
 
 ```text
 SMA crossover with drawdown, Sharpe, Sortino and volatility, 10M bars
-  Manifold-BT  ▏                                                  0.21 s
-  raptorbt     ▊                                                   1.2 s
-  vectorbt     ████████████████████████████████████████████████   81.8 s
+  Manifold-BT  ▏                                                  0.24 s
+  raptorbt     ▊                                                   1.5 s
+  vectorbt     ████████████████████████████████████████████████   98.6 s
 
 Parameter sweep, 10,000 combinations over 200,000 bars
-  Manifold-BT  █▌                                                  4.5 s
-  raptorbt     ████████████████████████████████████████████████   150.4 s
+  Manifold-BT  █▊                                                  3.7 s
+  raptorbt     ████████████████████████████████████████████████   102.4 s
   vectorbt     not run: it materialises every combination, this grid needs tens of GB
 ```
 
@@ -173,8 +183,8 @@ Parameter sweep, 10,000 combinations over 200,000 bars
 
 <!-- bench:run -->
 
-**[Run 42629948200](https://github.com/manifoldbt/manifoldbt/actions/runs/42629948200)**:
-Linux x86_64, 4 vCPU, Python 3.12, manifoldbt 0.34.0, vectorbt 0.28.4,
+**[Run 43878311737](https://github.com/manifoldbt/manifoldbt/actions/runs/43878311737)**:
+Linux x86_64, 4 vCPU, Python 3.12, manifoldbt 0.35.0, vectorbt 0.28.4,
 raptorbt 0.9.0. Seven interleaved repetitions, medians
 reported; the ratio is the median of the per-repetition ratios. All five rows below agree with vectorbt exactly (relative tolerance 1e-9).
 These figures are regenerated from the latest published run at each release; the
@@ -187,11 +197,11 @@ newest run is always the one on [manifoldbt.com/benchmarks](https://www.manifold
 
 | Workload | Bars | Manifold-BT | vectorbt | raptorbt |
 |---|---:|---:|---:|---:|
-| SMA 30/150 crossover | 10M | **196 ms** | 20.4 s (×104.0) | 1.22 s (×6.2) |
-| ...plus drawdown, Sharpe, Sortino, volatility | 10M | **209 ms** | 81.8 s (**×392**) | 1.22 s (×5.8) |
-| ...with a 5 bps fee and 2 bps slippage | 10M | **209 ms** | 21.4 s (×101.9) | not supported |
-| EMA 12/26 + RSI(14) filter, 5 bps fee | 1M | **37 ms** | 1.93 s (×50.2) | not supported |
-| Five assets in one book, 5 bps fee | 1M | **127 ms** | 2.01 s (×15.8) | not supported |
+| SMA 30/150 crossover | 10M | **232 ms** | 25.6 s (×108.4) | 1.45 s (×6.2) |
+| ...plus drawdown, Sharpe, Sortino, volatility | 10M | **238 ms** | 98.6 s (**×412**) | 1.45 s (×6.1) |
+| ...with a 5 bps fee and 2 bps slippage | 10M | **234 ms** | 25.8 s (×110.6) | not supported |
+| EMA 12/26 + RSI(14) filter, 5 bps fee | 1M | **46 ms** | 2.15 s (×46.3) | not supported |
+| Five assets in one book, 5 bps fee | 1M | **156 ms** | 2.72 s (×17.6) | not supported |
 
 <!-- /bench:table -->
 
@@ -209,10 +219,10 @@ of an empty cell.
 
 | Bars | Combinations | Manifold-BT | vectorbt | raptorbt |
 |---:|---:|---:|---:|---:|
-| 20,000 | 5,000 | **0.30 s**, 40 MB | 5.25 s, 2.5 GB | 6.54 s, 37 MB |
-| 20,000 | 20,000 | **1.46 s**, 91 MB | not run | 25.8 s, 62 MB |
-| 200,000 | 10,000 | **4.51 s**, 348 MB | not run | 150 s, 370 MB |
-| 200,000 | 150,000 | **93.2 s**, 827 MB | not run | not run |
+| 20,000 | 5,000 | **0.21 s**, 41 MB | 8.93 s, 2.5 GB | 4.32 s, 40 MB |
+| 20,000 | 20,000 | **0.83 s**, 90 MB | not run | 17.1 s, 62 MB |
+| 200,000 | 10,000 | **3.66 s**, 341 MB | not run | 102 s, 369 MB |
+| 200,000 | 150,000 | **73.4 s**, 752 MB | not run | not run |
 
 <!-- /bench:sweeps -->
 
@@ -227,14 +237,14 @@ does not. The sweep job runs on Pro.
 
 - **On a single backtest, the gap to raptorbt is a single-digit factor, not
   orders of magnitude.** Both are compiled engines; the large ratios in the first table
-  are against vectorbt. The <!-- bench:sweep_raptor_range -->×18 to ×33<!-- /bench:sweep_raptor_range --> on sweeps is a different story: raptorbt
+  are against vectorbt. The <!-- bench:sweep_raptor_range -->×20 to ×28<!-- /bench:sweep_raptor_range --> on sweeps is a different story: raptorbt
   has no fan-out API, so its sweep is a Python loop paying a full backtest per
   combination.
-- **Multi-asset is the smallest lead over vectorbt (<!-- bench:multi_vbt -->×15.8<!-- /bench:multi_vbt -->).** Broadcasting a
+- **Multi-asset is the smallest lead over vectorbt (<!-- bench:multi_vbt -->×17.6<!-- /bench:multi_vbt -->).** Broadcasting a
   column per asset is close to free for vectorbt, while walking five books is
   not free for anything.
 - **On a stop-loss/take-profit bracket, raptorbt comes closest** (<!-- bench:bracket_raptor_1m -->×1.2<!-- /bench:bracket_raptor_1m --> at 1M
-  bars, <!-- bench:bracket_raptor_10m -->×2.8<!-- /bench:bracket_raptor_10m --> at 10M). Deciding which side triggers first inside a bar is a
+  bars, <!-- bench:bracket_raptor_10m -->×3.0<!-- /bench:bracket_raptor_10m --> at 10M). Deciding which side triggers first inside a bar is a
   sequential walk in both engines. That workload is also not in the table
   above: the engines disagree on whether to re-enter on the bar a bracket
   closes, so its timing sits in the benchmark's annex with the cause written
@@ -348,9 +358,9 @@ Binance, Bybit, Hyperliquid, dYdX, Bitstamp, Deribit, Yahoo Finance, Dukascopy
 and Polymarket on every tier, London Strategic Edge on every tier with your own free
 key, Databento, Massive and 0xArchive (the full history of Hyperliquid and
 Lighter) with Pro. Or bring your own CSV (standard, MetaTrader 4 and
-MetaTrader 5 layouts are detected) or a pandas or Polars DataFrame
-(`mbt.import_dataframe`, or `mbt.from_bars` to backtest it without writing
-anything to disk):
+MetaTrader 5 layouts are detected) or a pandas or Polars DataFrame:
+`mbt.import_dataframe` saves it to the store, `mbt.from_bars` keeps it in
+memory for the current session.
 
 ```python
 store = mbt.import_csv("EURUSD_1m.csv", symbol="EURUSD", symbol_id=1,
@@ -575,4 +585,6 @@ Free to use, including commercially.
 - **The compiled engine** inside the wheels published on PyPI (the
   `manifoldbt._native` module) is covered by the free
   [Manifold-BT Engine License](https://github.com/manifoldbt/manifoldbt/blob/master/LICENSE-ENGINE):
-  no resale and no paid hosted service. The full terms are in that file.
+  free for any use, including commercial use inside your organisation; no
+  resale and no paid hosted service. Its source code is not published. The
+  full terms are in that file.
