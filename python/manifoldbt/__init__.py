@@ -1033,7 +1033,7 @@ def ingest(
     Providers (free): ``"binance"``, ``"bybit"``, ``"hyperliquid"``, ``"dydx"``,
     ``"bitstamp"``, ``"deribit"``, ``"yahoo"`` (alias ``"yfinance"``),
     ``"dukascopy"``, ``"polymarket"``. Free with your own key: ``"lse"``. Pro:
-    ``"databento"``, ``"massive"``, ``"0xarchive"``.
+    ``"databento"``, ``"massive"``, ``"0xarchive"``, ``"markethistory"``.
 
     ``"0xarchive"`` (``OXARCHIVE_API_KEY``) serves the full history of
     Hyperliquid and Lighter, where Hyperliquid's own API stops at its last
@@ -1042,6 +1042,18 @@ def ingest(
     ``"lighter/BTC"`` a Lighter market. 0xArchive's own ``"xyz:XYZ100"`` is
     accepted and stored as ``"XYZ/XYZ100"``, the name to give ``universe``.
     Intervals ``1m`` to ``1d``, and ``1w``.
+
+    ``"markethistory"`` (``MARKET_HISTORY_KEY``) serves Market History's
+    datasets: US stocks and options, global stocks and indices, FX, crypto spot
+    and perpetuals, futures, commodities, bonds, rates and more. ``dataset``
+    names one (``"stocks/us"``, ``"crypto/perps"``, ``"fx/history"``, ...; the
+    list is on getmarkethistory.com/docs/coverage), and a feed on a dataset with
+    several follows as a third segment (``"crypto/perps/bybit"``). The symbol is
+    the ticker the dataset lists, case included. Intervals run from ``"1s"`` to
+    ``"1d"``, as fine as the dataset stores. US stocks come split-adjusted, and
+    a US option's strike and expiration are read off its OSI ticker
+    (``"SPY261204C00520000"``). ``asset_class`` follows the dataset when left at
+    its default.
 
     Returns a :class:`DataStore` ready for :func:`run`.
 
@@ -1108,6 +1120,19 @@ def ingest(
     yours and so is the data: LSE allows it for your own research and trading
     and forbids passing it on, and it limits each key to one download at a
     time, so the ingest downloads its windows one after the other.
+
+    Example (any Market History dataset, with your own key in
+    ``MARKET_HISTORY_KEY``)::
+
+        store = mbt.ingest(
+            provider="markethistory",
+            symbol="BTCUSDT",
+            symbol_id=1,
+            start="2024-01-01T00:00:00Z",
+            end="2025-01-01T00:00:00Z",
+            interval="1s",
+            dataset="crypto/perps",
+        )
 
     Example (FX, metals, indices and CFDs with BOTH sides of the book, free and
     without a key, from Dukascopy Bank)::
@@ -1305,6 +1330,15 @@ def ingest_trades(
       millisecond, with the aggressor's side from the venue. Symbols as for
       :func:`ingest` (``"BTC"``, ``"HYPE-USDC"``, ``"xyz/XYZ100"``,
       ``"lighter/BTC"``); ``asset_class`` follows the market when left out.
+    * ``"markethistory"`` (``MARKET_HISTORY_KEY``): every trade of a contract
+      on the datasets that carry them, named by ``dataset``: ``"futures/tw"``
+      and ``"options/tw"`` (TAIFEX, stamped to the second, the side from the
+      tick rule; an options trade is published once per side, so each row
+      counts at half and the sum is the contracts traded), and the prints
+      recorded with the live crypto books, ``"crypto/perps"`` and
+      ``"crypto/spot"``, with the aggressor's side. Left out, ``dataset``
+      follows ``category``: ``"linear"`` the perpetuals, ``"spot"`` the spot
+      pairs. ``asset_class`` follows the dataset when left out.
 
     ``"polymarket"``, free and without a key, serves the trades of one outcome
     of a market, ``symbol="will-x-happen/Yes"``, stamped to the second. Both
@@ -1368,7 +1402,7 @@ def ingest_trades(
 
     Args:
         provider: ``"bybit"``, ``"binance"``, ``"massive"``, ``"databento"``,
-            ``"0xarchive"`` or ``"polymarket"``.
+            ``"0xarchive"``, ``"markethistory"`` or ``"polymarket"``.
         symbol: Symbol on the venue (e.g. ``"BTCUSDT"``), or
             ``"<market-slug>/<outcome>"`` on Polymarket.
         symbol_id: Store id for the symbol, the same as its book's.
@@ -1384,7 +1418,8 @@ def ingest_trades(
         category: ``"spot"``, ``"linear"`` or ``"inverse"``. A vendor's tape
             is ``"spot"``, the default.
         cache_dir: Keep Bybit's raw daily archives here and reuse them.
-        dataset: The Databento dataset; no other provider takes one.
+        dataset: The Databento dataset, or the Market History one; no other
+            provider takes one.
 
     Example::
 
@@ -1480,6 +1515,14 @@ def ingest_book(
     the ``category``, which can be left out. A day 0xArchive holds no book for
     raises a named error.
 
+    ``"markethistory"`` (``MARKET_HISTORY_KEY``) serves the crypto books Market
+    History records live from Binance, every price-level change:
+    ``category="linear"`` the perpetuals, ``"spot"`` the spot pairs. The book
+    is rebuilt from those changes and stored at each event that moves the
+    ``levels`` kept, the state carried from one day to the next; the first
+    day of the range must hold the start of a recording, where the book is
+    known in full.
+
     Each day is read from the file Bybit published for it, whichever depth
     that is. A day it did not publish raises a named error rather than
     returning nothing. One symbol is one market: a store that already holds
@@ -1507,7 +1550,7 @@ def ingest_book(
     strategy authoring guide.
 
     Args:
-        provider: ``"bybit"`` or ``"0xarchive"``.
+        provider: ``"bybit"``, ``"0xarchive"`` or ``"markethistory"``.
         symbol: Symbol on the venue (e.g. ``"BTCUSDT"``).
         symbol_id: Store id for the symbol, as for :func:`ingest`.
         start: First day, ``YYYY-MM-DD``.
@@ -1594,17 +1637,20 @@ def convert_book_to_deltas(
 
 
 def ingest_mbo(
-    path: str,
-    symbols,
-    date: str,
+    path: Optional[str] = None,
+    symbols=None,
+    date: Optional[str] = None,
     *,
+    end: Optional[str] = None,
+    provider: Optional[str] = None,
+    dataset: Optional[str] = None,
     data_root: str = "data",
     metadata_db: str = "metadata/metadata.sqlite",
-    exchange: str = "NASDAQ",
+    exchange: Optional[str] = None,
     tick_size: float = 0.01,
     progress: bool = True,
 ) -> DataStore:
-    """Ingest a day of order-by-order data (market by order) from a file.
+    """Ingest order-by-order data (market by order), from a file or a vendor.
 
     Where :func:`ingest_book` stores how much rests at each price, this
     stores every order: when it entered the book, each execution,
@@ -1625,20 +1671,36 @@ def ingest_mbo(
     the orders resting then. Orders still resting when the session ends leave
     the book then.
 
+    ``provider="markethistory"`` (``MARKET_HISTORY_KEY``) reads IEX's book
+    order by order from Market History instead of a file, every session from
+    ``date`` to ``end`` (inclusive; ``date`` alone is one session), each one
+    from an empty book. Adds, modifies, cancels and fills become the events
+    above: a modify that only lowers an order's size keeps its place in the
+    queue, any other sends it to the back. Its prints against no displayed
+    order carry no side, and are given the tick rule's. A day with no session
+    (a weekend, a holiday) is skipped. The symbols are filed under ``"IEX"``.
+
     Each day is checked as it is written: an event about an order that is
     not in the book, or taking out more than is left of it, is refused and
     the day left as it was. Ingesting a day again replaces what it covers
     and keeps the rest.
 
     Args:
-        path: The ITCH file.
-        symbols: ``{ticker: symbol_id}``, the tickers as ITCH names them.
-        date: The session's date, ``YYYY-MM-DD`` (New York).
+        path: The ITCH file; left out with ``provider``.
+        symbols: ``{ticker: symbol_id}``, the tickers as the source names
+            them.
+        date: The session's date, ``YYYY-MM-DD`` (New York); with
+            ``provider``, the first session.
+        end: With ``provider``, the last session, inclusive.
+        provider: ``"markethistory"`` to read the book from the vendor.
+        dataset: With ``provider``, Market History's dataset
+            (``"stocks/us"``, the default).
         data_root: Store root.
         metadata_db: Metadata database.
-        exchange: Venue the symbols are filed under.
+        exchange: Venue the symbols are filed under: ``"NASDAQ"`` for a file,
+            ``"IEX"`` from Market History, by default.
         tick_size: The price increment recorded for each symbol: a cent,
-            Nasdaq's increment for a price of a dollar or more.
+            the US increment for a price of a dollar or more.
         progress: Print one line per symbol.
 
     Returns:
@@ -1650,9 +1712,12 @@ def ingest_mbo(
                               date="2025-12-09")
         res = mbt.sim.run(maker, mbt.sim.Config(), store, symbols=["AAPL"],
                          start="2025-12-09", end="2025-12-10")
+        # IEX's book over a week of sessions, from Market History:
+        store = mbt.ingest_mbo(symbols={"AAPL": 1}, date="2026-11-02",
+                              end="2026-11-06", provider="markethistory")
     """
-    from manifoldbt._native import py_ingest_mbo as _native
-
+    if symbols is None or date is None:
+        raise ValueError("ingest_mbo: name the symbols and the date")
     if isinstance(symbols, dict):
         pairs = [(str(t), int(i)) for t, i in symbols.items()]
     else:
@@ -1663,8 +1728,29 @@ def ingest_mbo(
         def cb(ticker, events, days):
             print(f"  mbo {ticker}: {events} events, {days} day(s)", flush=True)
 
+    if provider is not None:
+        if path is not None:
+            raise ValueError(
+                "ingest_mbo: a file (path) or a vendor (provider), not both"
+            )
+        from manifoldbt._native import py_ingest_mbo_provider as _native_vendor
+
+        store, _ = _native_vendor(
+            str(provider), pairs, date, end or date, data_root, metadata_db,
+            exchange or "IEX", float(tick_size), dataset, cb,
+        )
+        return store
+    if path is None:
+        raise ValueError(
+            "ingest_mbo: name the ITCH file (path), or provider='markethistory'"
+        )
+    if end is not None or dataset is not None:
+        raise ValueError("ingest_mbo: end and dataset go with provider, not a file")
+    from manifoldbt._native import py_ingest_mbo as _native
+
     store, _ = _native(
-        str(path), pairs, date, data_root, metadata_db, exchange, float(tick_size), cb,
+        str(path), pairs, date, data_root, metadata_db, exchange or "NASDAQ",
+        float(tick_size), cb,
     )
     return store
 
@@ -1780,6 +1866,10 @@ def attach_quotes(
       above.
     * ``"databento"`` (``DATABENTO_API_KEY``): the ``bbo-1m`` schema of
       ``dataset``, the venue's best bid and offer at each minute close.
+    * ``"markethistory"`` (``MARKET_HISTORY_KEY``): IEX's best bid and offer
+      once a second, on US stocks (``dataset="stocks/us"``, the default). It
+      is one venue's book, not the national best bid and offer. A day with no
+      session is skipped.
 
     The quote standing at a bar close is carried across bars with no update.
     A quote with a side missing or crossed (bid above ask) leaves the bars it
@@ -1792,7 +1882,8 @@ def attach_quotes(
         symbol: The store ticker (e.g. ``"BTC-USDT:perp"``) or symbol id.
         start: First day, ``YYYY-MM-DD``.
         end: Last day, inclusive, ``YYYY-MM-DD``.
-        provider: ``"bybit"`` (free history), ``"massive"`` or ``"databento"``.
+        provider: ``"bybit"`` (free history), ``"massive"``, ``"databento"``
+            or ``"markethistory"``.
         provider_symbol: Symbol on the provider (e.g. ``"BTCUSDT"``). Derived
             from the ticker when omitted: ``BTC-USDT:perp`` -> ``BTCUSDT``.
         category: ``"linear"``, ``"inverse"`` or ``"spot"``.
@@ -1800,7 +1891,8 @@ def attach_quotes(
             directory per category (``cache_dir/linear/...``); an archive
             left directly in ``cache_dir`` is not reused.
         progress: Print one line per day.
-        dataset: The Databento dataset; no other provider takes one.
+        dataset: The Databento dataset, or the Market History one; no other
+            provider takes one.
 
     Returns:
         ``{"days", "quote_bars", "bars_updated", "version"}``.
@@ -1826,14 +1918,15 @@ def attach_quotes(
     # refusal is the accurate one. A _require_pro here would stop a Pro user
     # one layer early with the WRONG message -- an upgrade they already own.
     # Same policy as manifoldbt.ticks.
-    if provider not in ("bybit", "massive", "databento"):
+    if provider not in ("bybit", "massive", "databento", "markethistory"):
         raise ValueError(
-            f"unknown quote provider {provider!r}: 'bybit', 'massive' or 'databento'"
+            f"unknown quote provider {provider!r}: 'bybit', 'massive', 'databento' "
+            "or 'markethistory'"
         )
     vendor = provider != "bybit"
-    if dataset is not None and provider != "databento":
+    if dataset is not None and provider not in ("databento", "markethistory"):
         raise ValueError(
-            f"dataset names a Databento dataset; {provider!r} takes none"
+            f"dataset names a Databento or Market History dataset; {provider!r} takes none"
         )
 
     if isinstance(symbol, int):

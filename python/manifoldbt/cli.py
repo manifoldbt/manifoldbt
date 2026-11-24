@@ -23,7 +23,8 @@ def main() -> None:
         required=True,
         help=(
             "binance | bybit | hyperliquid | dydx | bitstamp | deribit | yahoo "
-            "| dukascopy | polymarket | lse | databento | massive | 0xarchive"
+            "| dukascopy | polymarket | lse | databento | massive | 0xarchive "
+            "| markethistory"
         ),
     )
     ing.add_argument("--symbol", required=True, help="e.g. BTCUSDT, ESH5")
@@ -31,7 +32,11 @@ def main() -> None:
     ing.add_argument("--start", required=True, help="RFC3339 start (e.g. 2025-01-01T00:00:00Z)")
     ing.add_argument("--end", required=True, help="RFC3339 end")
     ing.add_argument("--interval", default="1m", help="Bar interval: 1s, 1m, 5m, 15m, 1h, 1d (default: 1m)")
-    ing.add_argument("--dataset", default=None, help="Databento dataset (e.g. GLBX.MDP3)")
+    ing.add_argument(
+        "--dataset",
+        default=None,
+        help="Databento dataset (e.g. GLBX.MDP3) or Market History dataset (e.g. crypto/perps)",
+    )
     ing.add_argument("--data-root", default="data", help="Parquet store directory (default: data)")
     ing.add_argument("--metadata-db", default="metadata/metadata.sqlite", help="Metadata SQLite path")
     ing.add_argument("--exchange", default=None, help="Exchange name for metadata")

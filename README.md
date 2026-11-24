@@ -36,9 +36,9 @@ strategy once, in a fluent Python DSL, and hand it to the engine: the whole
 backtest then runs in Rust, signals, fills, fees, slippage, funding and equity
 included. Python stays out of the hot loop.
 
-- **Fast.** 10 million bars with a full performance summary in **<!-- bench:fast_mbt -->281 ms<!-- /bench:fast_mbt -->**,
-  where vectorbt takes <!-- bench:fast_vbt -->97.2 s<!-- /bench:fast_vbt -->. 10,000 parameter sets over 200,000 bars in
-  **<!-- bench:fast_sweep_time -->4.1 s<!-- /bench:fast_sweep_time --> inside <!-- bench:fast_sweep_mem -->323 MB<!-- /bench:fast_sweep_mem -->**. Measured on a standard 4-vCPU GitHub runner,
+- **Fast.** 10 million bars with a full performance summary in **<!-- bench:fast_mbt -->167 ms<!-- /bench:fast_mbt -->**,
+  where vectorbt takes <!-- bench:fast_vbt -->69.2 s<!-- /bench:fast_vbt -->. 10,000 parameter sets over 200,000 bars in
+  **<!-- bench:fast_sweep_time -->4.2 s<!-- /bench:fast_sweep_time --> inside <!-- bench:fast_sweep_mem -->339 MB<!-- /bench:fast_sweep_mem -->**. Measured on a standard 4-vCPU GitHub runner,
   [every run linked](#performance).
 - **Checked.** Every benchmark workload must match vectorbt's results before it
   is timed, in public CI, and a workload the engines disagree on gets no timing
@@ -169,13 +169,13 @@ and only then reports how long each took.
 
 ```text
 SMA crossover with drawdown, Sharpe, Sortino and volatility, 10M bars
-  Manifold-BT  ▏                                                  0.28 s
-  raptorbt     ▋                                                   1.2 s
-  vectorbt     ████████████████████████████████████████████████   97.2 s
+  Manifold-BT  ▏                                                  0.17 s
+  raptorbt     ▋                                                  0.96 s
+  vectorbt     ████████████████████████████████████████████████   69.2 s
 
 Parameter sweep, 10,000 combinations over 200,000 bars
-  Manifold-BT  █▎                                                  4.1 s
-  raptorbt     ████████████████████████████████████████████████   157.2 s
+  Manifold-BT  █▎                                                  4.2 s
+  raptorbt     ████████████████████████████████████████████████   163.4 s
   vectorbt     not run: it materialises every combination, this grid needs tens of GB
 ```
 
@@ -183,8 +183,8 @@ Parameter sweep, 10,000 combinations over 200,000 bars
 
 <!-- bench:run -->
 
-**[Run 43977811500](https://github.com/manifoldbt/manifoldbt/actions/runs/43977811500)**:
-Linux x86_64, 4 vCPU, Python 3.12, manifoldbt 0.35.1, vectorbt 0.28.4,
+**[Run 45211823480](https://github.com/manifoldbt/manifoldbt/actions/runs/45211823480)**:
+Linux x86_64, 4 vCPU, Python 3.12, manifoldbt 0.35.2, vectorbt 0.28.4,
 raptorbt 0.9.0. Seven interleaved repetitions, medians
 reported; the ratio is the median of the per-repetition ratios. All five rows below agree with vectorbt exactly (relative tolerance 1e-9).
 These figures are regenerated from the latest published run at each release; the
@@ -197,11 +197,11 @@ newest run is always the one on [manifoldbt.com/benchmarks](https://www.manifold
 
 | Workload | Bars | Manifold-BT | vectorbt | raptorbt |
 |---|---:|---:|---:|---:|
-| SMA 30/150 crossover | 10M | **285 ms** | 25.7 s (×90.1) | 1.23 s (×4.4) |
-| ...plus drawdown, Sharpe, Sortino, volatility | 10M | **281 ms** | 97.2 s (**×345**) | 1.24 s (×4.4) |
-| ...with a 5 bps fee and 2 bps slippage | 10M | **283 ms** | 25.4 s (×89.1) | not supported |
-| EMA 12/26 + RSI(14) filter, 5 bps fee | 1M | **45 ms** | 2.01 s (×44.9) | not supported |
-| Five assets in one book, 5 bps fee | 1M | **146 ms** | 2.71 s (×18.0) | not supported |
+| SMA 30/150 crossover | 10M | **164 ms** | 18.5 s (×107.5) | 927 ms (×5.7) |
+| ...plus drawdown, Sharpe, Sortino, volatility | 10M | **167 ms** | 69.2 s (**×420**) | 962 ms (×5.8) |
+| ...with a 5 bps fee and 2 bps slippage | 10M | **172 ms** | 19.2 s (×111.7) | not supported |
+| EMA 12/26 + RSI(14) filter, 5 bps fee | 1M | **29 ms** | 1.45 s (×51.3) | not supported |
+| Five assets in one book, 5 bps fee | 1M | **85 ms** | 2.24 s (×26.1) | not supported |
 
 <!-- /bench:table -->
 
@@ -219,10 +219,10 @@ of an empty cell.
 
 | Bars | Combinations | Manifold-BT | vectorbt | raptorbt |
 |---:|---:|---:|---:|---:|
-| 20,000 | 5,000 | **0.29 s**, 31 MB | 5.22 s, 2.5 GB | 6.53 s, 36 MB |
-| 20,000 | 20,000 | **1.13 s**, 80 MB | not run | 25.3 s, 60 MB |
-| 200,000 | 10,000 | **4.15 s**, 323 MB | not run | 157 s, 369 MB |
-| 200,000 | 150,000 | **87.1 s**, 748 MB | not run | not run |
+| 20,000 | 5,000 | **0.29 s**, 35 MB | 5.30 s, 2.5 GB | 6.49 s, 36 MB |
+| 20,000 | 20,000 | **1.11 s**, 69 MB | not run | 25.2 s, 60 MB |
+| 200,000 | 10,000 | **4.16 s**, 339 MB | not run | 163 s, 369 MB |
+| 200,000 | 150,000 | **87.3 s**, 749 MB | not run | not run |
 
 <!-- /bench:sweeps -->
 
@@ -237,14 +237,14 @@ does not. The sweep job runs on Pro.
 
 - **On a single backtest, the gap to raptorbt is a single-digit factor, not
   orders of magnitude.** Both are compiled engines; the large ratios in the first table
-  are against vectorbt. The <!-- bench:sweep_raptor_range -->×22 to ×38<!-- /bench:sweep_raptor_range --> on sweeps is a different story: raptorbt
+  are against vectorbt. The <!-- bench:sweep_raptor_range -->×23 to ×39<!-- /bench:sweep_raptor_range --> on sweeps is a different story: raptorbt
   has no fan-out API, so its sweep is a Python loop paying a full backtest per
   combination.
-- **Multi-asset is the smallest lead over vectorbt (<!-- bench:multi_vbt -->×18.0<!-- /bench:multi_vbt -->).** Broadcasting a
+- **Multi-asset is the smallest lead over vectorbt (<!-- bench:multi_vbt -->×26.1<!-- /bench:multi_vbt -->).** Broadcasting a
   column per asset is close to free for vectorbt, while walking five books is
   not free for anything.
-- **On a stop-loss/take-profit bracket, raptorbt comes closest** (<!-- bench:bracket_raptor_1m -->×1.3<!-- /bench:bracket_raptor_1m --> at 1M
-  bars, <!-- bench:bracket_raptor_10m -->×2.5<!-- /bench:bracket_raptor_10m --> at 10M). Deciding which side triggers first inside a bar is a
+- **On a stop-loss/take-profit bracket, raptorbt comes closest** (<!-- bench:bracket_raptor_1m -->×1.2<!-- /bench:bracket_raptor_1m --> at 1M
+  bars, <!-- bench:bracket_raptor_10m -->×3.0<!-- /bench:bracket_raptor_10m --> at 10M). Deciding which side triggers first inside a bar is a
   sequential walk in both engines. That workload is also not in the table
   above: the engines disagree on whether to re-enter on the bar a bracket
   closes, so its timing sits in the benchmark's annex with the cause written
@@ -356,8 +356,9 @@ runs each of these checks on the same strategy and prints what each concludes.
 **Data.** Built-in connectors, all returning a store ready for `mbt.run`:
 Binance, Bybit, Hyperliquid, dYdX, Bitstamp, Deribit, Yahoo Finance, Dukascopy
 and Polymarket on every tier, London Strategic Edge on every tier with your own free
-key, Databento, Massive and 0xArchive (the full history of Hyperliquid and
-Lighter) with Pro. Or bring your own CSV (standard, MetaTrader 4 and
+key, Databento, Massive, 0xArchive (the full history of Hyperliquid and
+Lighter) and Market History (stocks, options, futures, FX and crypto, from one
+second to one day) with Pro. Or bring your own CSV (standard, MetaTrader 4 and
 MetaTrader 5 layouts are detected) or a pandas or Polars DataFrame:
 `mbt.import_dataframe` saves it to the store, `mbt.from_bars` keeps it in
 memory for the current session.
@@ -554,7 +555,7 @@ paid tiers add scale and depth. See [pricing](https://www.manifoldbt.com/#pricin
 | Prop-firm account rules (`AccountRules`) | Yes | Yes | Yes |
 | Cross-exchange universes | - | Yes | Yes |
 | Free connectors, CSV and DataFrame import | Yes | Yes | Yes |
-| Databento, Massive and 0xArchive connectors | - | Yes | Yes |
+| Databento, Massive, 0xArchive and Market History connectors | - | Yes | Yes |
 | Tearsheets and export | Yes | Yes | Yes |
 | GPU acceleration (`device="cuda"`) | - | - | Yes |
 | Order flow from the trade tape | - | - | Yes |

@@ -85,14 +85,14 @@ def test_massive_tape_without_a_key_names_it(tmp_path, monkeypatch):
 
 def test_an_unknown_quote_provider_is_refused(tmp_path):
     store = _store(str(tmp_path))
-    with pytest.raises(ValueError, match="'bybit', 'massive' or 'databento'"):
+    with pytest.raises(ValueError, match="'bybit', 'massive', 'databento' or 'markethistory'"):
         bt.attach_quotes(store, "AAPL", "2026-10-27", "2026-10-27",
                          provider="kraken", progress=False)
 
 
 def test_quote_dataset_is_for_databento_only(tmp_path):
     store = _store(str(tmp_path))
-    with pytest.raises(ValueError, match="Databento dataset"):
+    with pytest.raises(ValueError, match="Databento or Market History dataset"):
         bt.attach_quotes(store, "AAPL", "2026-10-27", "2026-10-27",
                          provider="massive", dataset="XNAS.ITCH", progress=False)
 

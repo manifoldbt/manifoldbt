@@ -171,5 +171,22 @@ def test_the_arguments_are_checked(tmp_path):
                       progress=False)
 
 
+def test_a_file_or_a_vendor_not_both(tmp_path):
+    """The vendor path is chosen by `provider`, the file by `path`; each
+    refuses what belongs to the other before reading anything."""
+    store = dict(data_root=str(tmp_path / "d"), metadata_db=str(tmp_path / "m.sqlite"),
+                 progress=False)
+    with pytest.raises(ValueError, match="not both"):
+        bt.ingest_mbo("day.itch", {"AAPL": 1}, DATE, provider="markethistory", **store)
+    with pytest.raises(ValueError, match="name the ITCH file"):
+        bt.ingest_mbo(symbols={"AAPL": 1}, date=DATE, **store)
+    with pytest.raises(ValueError, match="go with provider"):
+        bt.ingest_mbo("day.itch", {"AAPL": 1}, DATE, end="2025-12-10", **store)
+    with pytest.raises(ValueError, match="name the symbols and the date"):
+        bt.ingest_mbo(provider="markethistory", **store)
+    with pytest.raises(ValueError, match="'markethistory' serves one"):
+        bt.ingest_mbo(symbols={"AAPL": 1}, date=DATE, provider="nasdaq", **store)
+
+
 def test_ingest_mbo_is_exported():
     assert "ingest_mbo" in bt.__all__
